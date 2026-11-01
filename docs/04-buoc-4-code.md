@@ -260,7 +260,6 @@ timeout cứng + biến môi trường đã lọc.
 - [ ] Đưa bảng giá vào `docs/03-ngan-sach-token.md` (hiện mới chỉ ở file code).
 - [ ] Bản đồ hạn mức theo *ngày* của Cursor là *tháng*; HUD hiện hiển thị cả hai
       (ngày của ứng dụng + chu kỳ của Cursor) nhưng chưa gộp lại thành một con số.
-
 ---
 
 ## 10. Hai lỗi phát hiện khi kiểm chứng & cách sửa
@@ -315,8 +314,16 @@ thật đều bị chặn.
 
 ### Ảnh chụp màn hình
 
-Giao diện được kiểm tra qua trình duyệt tích hợp. Vì ảnh PNG không nhúng được
-vào tài liệu Markdown trên GitHub, ảnh được lưu ở
-`docs/media/` khi chụp; xác minh cơ bản dựa vào phân tích pixel (số màu phân
-biệt trong khung hình) và đọc nội dung DOM qua `Runtime.evaluate`.
+Ảnh toàn cảnh được lưu tại [`media/office.png`](media/office.png) và nhúng vào
+README. Xác minh ảnh không bị lỗi bằng phân tích pixel trực tiếp (không phải
+mở bằng mắt):
+
+| Chỉ số | Giá trị | Ý nghĩa |
+|---|---|---|
+| Kích thước | 1470 × 1042 | ảnh hợp lệ |
+| Số màu phân biệt | 1.038 | cảnh 3D thật, không phải màn hình đen |
+| Độ sáng trung bình | 31,1 / 255 | có nội dung, tương phản vừa phải |
+
+Các kiểm tra chức năng còn lại dựa vào đọc nội dung DOM qua `Runtime.evaluate`
+(HUD năng lượng, hộp thoại duyệt, nội dung từng panel).
 
