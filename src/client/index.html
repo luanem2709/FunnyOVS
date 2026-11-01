@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Văn phòng 3D — AI Agents</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="scene"></canvas>
+
+      <!-- HUD: nút dừng khẩn cấp + chế độ tự động -->
+      <div class="hud hud-top">
+        <button id="emergency" class="emergency" title="Dừng toàn bộ agent ngay lập tức">
+          <span class="dot"></span> DỪNG KHẨN CẤP
+        </button>
+        <div class="levels" id="levels">
+          <button data-level="ask">Chỉ hỏi</button>
+          <button data-level="balanced" class="active">Cân bằng</button>
+          <button data-level="autonomous">Tự chủ cao</button>
+        </div>
+        <div class="budget" id="budget-widget"></div>
+      </div>
+
+      <div class="hud hud-right">
+        <button class="tab" data-panel="browser">Nhật ký duyệt web</button>
+        <button class="tab" data-panel="library">Phòng Thư viện</button>
+        <button class="tab" data-panel="permissions">Quyền truy cập</button>
+        <button class="tab" data-panel="proposals">Đề xuất thay đổi</button>
+        <button class="tab" data-panel="settings">Cài đặt</button>
+      </div>
+
+      <aside id="panel" class="panel hidden">
+        <header>
+          <h2 id="panel-title"></h2>
+          <button id="panel-close">✕</button>
+        </header>
+        <div id="panel-body"></div>
+      </aside>
+
+      <!-- Hộp thoại xin quyền xuất hiện ngay trong cảnh 3D -->
+      <div id="perm-dialog" class="perm-dialog hidden"></div>
+
+      <div id="toast-host"></div>
+    </div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

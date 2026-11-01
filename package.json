@@ -1,0 +1,38 @@
+{
+  "name": "office3d-agents",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "description": "3D office AI agents — sandboxed web browsing, knowledge base, folder permissions, controlled self-development",
+  "scripts": {
+    "dev": "concurrently -n server,client -c cyan,magenta \"npm:dev:server\" \"npm:dev:client\"",
+    "dev:server": "tsx watch src/server/main.ts",
+    "dev:client": "vite",
+    "build": "tsc -p tsconfig.json --noEmit && vite build",
+    "start": "tsx src/server/main.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.5.0",
+    "express": "^4.21.1",
+    "playwright-core": "^1.49.1",
+    "three": "^0.171.0",
+    "ws": "^8.18.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.10.2",
+    "@types/three": "^0.171.0",
+    "@types/ws": "^8.5.13",
+    "@vitejs/plugin-basic-ssl": "^1.2.0",
+    "concurrently": "^9.1.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.5",
+    "vitest": "^2.1.8"
+  }
+}
