@@ -5,6 +5,9 @@
  * không bịa tên animation.
  *
  * Chạy:  npx tsx scripts/scan-assets.ts
+ *
+ * Ngoài ra ghi `public/models/manifest.json` để client (trình duyệt) tự
+ * ánh xạ tên logic → file thật mà không phải hard-code.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -12,10 +15,12 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const MODELS_DIR = path.join(ROOT, "public", "models");
+const MANIFEST = path.join(MODELS_DIR, "manifest.json");
 
 /** Đọc header GLB rồi parse chunk JSON để lấy danh sách node/animation. */
 interface GlbInfo {
   file: string;
+  pack: string;
   sizeKb: number;
   meshes: string[];
   animations: string[];
@@ -80,6 +85,37 @@ function walk(dir: string): string[] {
   return out;
 }
 
+interface ManifestEntry {
+  /** Đường dẫn tương đối trong public/ (không có "public/"). */
+  path: string;
+  pack: string;
+  sizeKb: number;
+  meshes: string[];
+  animations: string[];
+  materials: string[];
+  hasSkeleton: boolean;
+}
+
+function writeManifest(infos: GlbInfo[]): void {
+  const manifest = {
+    generatedAt: new Date().toISOString(),
+    count: infos.length,
+    assets: infos
+      .filter((i) => !i.error)
+      .map<ManifestEntry>((i) => ({
+        path: i.file.replace(/^public\//, ""),
+        pack: i.pack,
+        sizeKb: i.sizeKb,
+        meshes: i.meshes,
+        animations: i.animations,
+        materials: i.materials,
+        hasSkeleton: i.hasSkeleton,
+      })),
+  };
+  fs.writeFileSync(MANIFEST, JSON.stringify(manifest, null, 2), "utf8");
+  console.log(`→ Đã ghi manifest: ${path.relative(ROOT, MANIFEST)} (${manifest.assets.length} asset)`);
+}
+
 function main(): void {
   console.log(`\n=== Quét asset: ${MODELS_DIR} ===\n`);
   if (!fs.existsSync(MODELS_DIR)) {
@@ -94,7 +130,13 @@ function main(): void {
     process.exit(0);
   }
 
-  const infos = files.map(readGlbInfo);
+  const infos = files.map((f) => {
+    const rel = path.dirname(f).replace(/\\/g, "/");
+    const pack = rel.replace(/^public\/models\/?/, "") || "(gốc)";
+    const info = readGlbInfo(f);
+    info.pack = pack;
+    return info;
+  });
 
   // Gom theo thư mục con (thường là từng gói Kenney)
   const byPack = new Map<string, GlbInfo[]>();
@@ -137,6 +179,8 @@ function main(): void {
     console.log(`\n=== File lỗi (${failed.length}) ===`);
     for (const f of failed) console.log(`  - ${path.basename(f.file)}: ${f.error}`);
   }
+
+  if (infos.length) writeManifest(infos);
   console.log();
 }
 

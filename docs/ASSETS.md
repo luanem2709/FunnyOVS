@@ -1,28 +1,74 @@
-# Danh mục asset 3D — Kenney (CC0)
+# Danh mục asset 3D
 
-Mọi asset dùng trong dự án đều đến từ **Kenney** — giấy phép **CC0 1.0**
-(public domain, dùng thương mại OK, không cần ghi nguồn, không cần xin phép).
+Dự án dùng **hai loại** tài nguyên 3D:
 
-> Quy tắc bất di bất dịch của dự án: **không tải asset từ nguồn khác**,
-> **không tự tạo model phức tạp bằng code**. Asset phải là file `.glb` tải
-> tay, đặt vào `public/models/`.
+1. **Nhân vật — chibi rig procedural** (`src/client/assets/chibiRig.js`):
+   xương thật, tóc, mắt nhấp nháy, pose theo trạng thái. Không cần tải file.
+2. **Đồ đạc — Kenney CC0** (tuỳ chọn): nếu bạn tải vào `public/models/`,
+   hệ thống sẽ tự dùng model thật thay cho hình dựng thủ công.
+
+> Quy tắc: asset bên ngoài **chỉ lấy từ Kenney** (CC0 1.0). Không tải từ
+> nguồn khác. Nhân vật **không** dùng file tải về — được dựng bằng code theo
+> bản quyền MIT của repo tham khảo (xem mục 5).
 
 ---
 
-## 1. Nguồn tải
+## 1. Nhân vật (đã hoàn thành)
+
+### 1.1. Chibi rig
+
+File: `src/client/assets/chibiRig.js` (port từ `references/my-office`,
+MIT License, © 2026 khanh020905) + wrapper `src/client/assets/chibi.ts`.
+
+Rig gồm: hông → gối → giày, thân → cổ → đầu, vai → khuỷu → tay; tóc bịt
+(6 kiểu), mắt có lớp mắt + chân mắt + đồng tử + lông mi, miệng cười/hình tròn,
+trang phục áo/hoodie/com-lê, phụ kiện kính/chống nắng/mũ.
+
+Hai kiểu dáng: `toy` (đồ chơi, ~2 đầu) và `pixar` (hoạt hình, ~2.6 đầu).
+
+### 1.2. Ánh xạ trạng thái → pose
+
+| Trạng thái agent | Pose | Mô tả |
+|---|---|---|
+| `idle` | `idle` | đứng nghỉ, thở, tay đung đưa nhẹ |
+| `working` | `type` | ngồi gõ bàn phím, tay dùng IK 2 khớp với đúng bàn |
+| `researching` | `read` | cầm sách, cúi đầu |
+| `learning` | `read` | như trên |
+| `waiting` | `wave` | giơ tay chờ duyệt |
+| `blocked` | `sweat` | căng thẳng, giọt mồ hôi, miệng hình tròn |
+| `stopped` | `idle` | đứng yên |
+
+Mỗi agent có bảng màu riêng (áo, tóc, da, kiểu tóc, trang phục, phụ kiện) —
+8 người nhìn là biết ai là ai, xem `src/client/assets/chibi.ts`.
+
+### 1.3. Kenney Animated Characters (tuỳ chọn)
+
+Nếu bạn tải gói này vào `public/models/characters/`, hệ thống sẽ **ưu tiên
+model GLB có rig** thay cho chibi, dùng đúng tên animation có thật trong file
+(xem `src/client/assets/characterRig.ts` — có bảng ưu tiên + so khớp không phân
+biệt hoa/thường).
+
+| Gói | Nguồn | Link |
+|---|---|---|
+| Kenney Animated Characters | kenney.nl | <https://kenney.nl/assets/animated-characters-3> |
+
+Quy tắc: **không bịa tên animation.** Nếu file không có clip "gõ máy",
+hệ thống dùng clip *ngồi* + hiệu ứng màn hình nhấp nháy.
+
+---
+
+## 2. Đồ đạc — Kenney (tuỳ chọn)
+
+### 2.1. Nguồn tải
 
 | Gói | Nguồn | Link |
 |---|---|---|
 | Kenney Furniture Kit | kenney.nl | <https://kenney.nl/assets/furniture-kit> |
 | Kenney Building Kit | kenney-assets.itch.io | <https://kenney-assets.itch.io/building-kit> |
-| Kenney Animated Characters | kenney.nl | <https://kenney.nl/assets/animated-characters-3> |
 
-Tải bản **GLB** (không phải FBX/OBJ) — Three.js `GLTFLoader` đọc GLB trực tiếp,
-một file = một model + texture + animation.
+Tải bản **GLB** (không phải FBX/OBJ).
 
----
-
-## 2. Cấu trúc thư mục mong đợi
+### 2.2. Cấu trúc thư mục
 
 ```
 public/
@@ -35,152 +81,73 @@ public/
 Sau khi tải xong, chạy:
 
 ```bash
-npx tsx scripts/scan-assets.ts
+npm run scan:assets
 ```
 
-Script sẽ in ra: danh sách mesh của từng file, **tên animation có thật** bên
-trong file nhân vật, và các file có rig. Tên file/animation thực tế sẽ được
-lấy từ kết quả đó — **không đoán mò**.
+Script in ra: mesh của từng file, **tên animation có thật**, file có rig; đồng
+thời ghi `public/models/manifest.json` để client tự ánh xạ tên → file thật
+(không hard-code tên file).
+
+### 2.3. Danh sách nhu cầu theo phòng
+
+| Phòng | Nhu cầu |
+|---|---|
+| **Giao việc** (mẫu) | `Desk`, `Chair`, `Computer`, `Whiteboard` (roadmap), `Bookcase`, `Lamp` |
+| Khách hàng | `Desk`, `Chair`, `Computer`, `Telephone`, `Cabinet`, `Sofa`, `Table` |
+| Bán hàng | `Desk`, `Chair`, `Computer`, `Whiteboard` (phễu), `Bookcase` |
+| Marketing | `Desk`, `Chair`, `Computer`, `Whiteboard`, `Lamp` |
+| Tài chính | `Desk`, `Chair`, `Computer`, `Table`, `Cabinet` |
+| Đội AI | `Desk`, `Chair`, `Computer`, `Whiteboard`, `Bookcase`, `Lamp` |
+| Tự động | `Desk` ×2, `Chair` ×3, `Computer` ×3, `Cabinet`, `Lamp` |
+| Thư viện | `Bookcase` ×4, `Table`, `Chair` ×2, `Desk`, `Computer`, `Lamp` |
+| Dự án | `Desk`, `Chair`, `Computer`, `Whiteboard`, `Bookcase` |
+
+### 2.4. Hành vi khi không có model
+
+Nếu thiếu file, hệ thống dùng hình dựng thủ công với **đúng tỷ lệ** mà
+chibi rig cần (`src/client/assets/roomBuilder.ts`):
+
+- mặt bàn cao độ **0.78**
+- mặt ghế cao độ **0.49**
+- màn hình đặt trên bàn, cao độ **0.81**
+- bàn rộng 1.7, ghế 0.58, phòng 7–9 đơn vị
+
+Nên cảnh luôn đúng bố cục, chỉ khác chất liệu.
 
 ---
 
-## 3. Danh sách model theo từng phòng
-
-Đây là danh sách **nhu cầu chức năng**. Tên file cụ thể sẽ chốt sau khi quét
-thực tế (vì tên file trong gói Kenney có thể khác nhau giữa các bản phát hành).
-
-### 3.1. Phòng Giao việc — **phòng mẫu, làm trước**
-
-| Nhu cầu | Gợi ý trong Furniture Kit | Ghi chú |
-|---|---|---|
-| Bàn làm việc của bạn | `Desk` / `Computer desk` | Bàn lớn nhất phòng |
-| Ghế của bạn | `Chair` | Có bản `Chair swivel` nếu có |
-| Máy tính | `Computer` / `Monitor` | Màn hình sẽ được gắn texture động của ta |
-| Bàn phụ + ghế | `Desk`, `Chair` | Cho 2 nhân vật phụ trợ |
-| Tủ sách / kệ | `Bookcase` | Chứa "roadmap" |
-| Đèn bàn | `Lamp` | Bổ sung ánh sáng cục bộ |
-| Tường / sàn | Building Kit: `Wall`, `Floor` | Kiểm tra phòng mẫu |
-
-### 3.2. Phòng Khách hàng
-
-| Nhu cầu | Gợi ý |
-|---|---|
-| Bàn tiếp khách | `Table` (tròn hoặc vuông) |
-| Ghế khách ×2–3 | `Chair` |
-| Sofa | `Sofa` |
-| Bàn làm việc + ghế + máy tính | `Desk`, `Chair`, `Computer` |
-| Tủ / kệ | `Cabinet` |
-| Điện thoại bàn | `Telephone` (nếu có) |
-
-### 3.3. Phòng Bán hàng
-
-| Nhu cầu | Gợi ý |
-|---|---|
-| Bàn làm việc + ghế + máy tính | `Desk`, `Chair`, `Computer` |
-| Bảng phễu (bảng trắng) | `Whiteboard` / `Blackboard` |
-| Ghế khách | `Chair` |
-| Kệ | `Bookcase` / `Cabinet` |
-
-### 3.4. Phòng Marketing
-
-| Nhu cầu | Gợi ý |
-|---|---|
-| Bàn làm việc + ghế + máy tính | `Desk`, `Chair`, `Computer` |
-| Bảng nội dung / whiteboard | `Whiteboard` |
-| Ghế khách ×2 | `Chair` |
-| Đèn | `Lamp` |
-
-### 3.5. Phòng Tài chính
-
-| Nhu cầu | Gợi ý |
-|---|---|
-| Bàn làm việc + ghế + máy tính | `Desk`, `Chair`, `Computer` |
-| Bàn phụ để chồng giấy tờ | `Table` + instance `Paper`/`Sheet` |
-| Ghế khách | `Chair` |
-| Tủ kho | `Cabinet` |
-
-### 3.6. Phòng Đội AI
-
-| Nhu cầu | Gợi ý |
-|---|---|
-| Bàn tròn họp + ghế ×4 | `Table` (round), `Chair` |
-| Bảng trắng lớn | `Whiteboard` |
-| Kệ | `Bookcase` |
-| Đèn treo | `Lamp` (ceiling) |
-
-### 3.7. Phòng Làm việc tự động
-
-| Nhu cầu | Gợi ý |
-|---|---|
-| Bàn dài + nhiều ghế | `Desk` ×2, `Chair` ×3 |
-| Máy tính ×3 | `Computer` (mỗi cái 1 màn hình có texture riêng) |
-| Tủ rack / kệ | `Cabinet` / `Bookcase` |
-| Đèn | `Lamp` |
-
-### 3.8. Phòng Thư viện
-
-| Nhu cầu | Gợi ý |
-|---|---|
-| Tủ sách ×3–4 (đặt dọc tường) | `Bookcase` |
-| Bàn đọc + ghế ×2 | `Table`, `Chair` |
-| Bàn làm việc + máy tính | `Desk`, `Computer` |
-| Đèn đọc | `Lamp` |
-
-### 3.9. Phòng Dự án mở rộng
-
-| Nhu cầu | Gợi ý |
-|---|---|
-| Bàn + ghế + máy tính | `Desk`, `Chair`, `Computer` |
-| Bảng trắng | `Whiteboard` |
-| Kệ | `Bookcase` |
-
----
-
-## 4. Nhân vật
-
-- **1 file nhân vật** từ Kenney Animated Characters, dùng lại cho cả 8 nhân vật
-  (clone + đổi màu vật liệu). Không cần tải 8 file.
-- Mỗi nhân vật một màu/skin khác nhau, theo bảng màu đã có trong code:
-  Mai `#4f9cf9`, Long `#f7b32b`, Huy `#ef6f8e`, Thu `#43c59e`, Ban `#8f7bf0`,
-  An `#3fb6c8`, Tri `#d0a35c`, Minh `#6fd67a`.
-
-### Animation cần dùng
-
-| Trạng thái trong game | Animation cần | Có sẵn trong gói? |
-|---|---|---|
-| `idle` — rảnh | đứng yên / thở | ⬜ chờ quét |
-| `working` — đang làm việc | **gõ máy** | ⬜ chờ quét |
-| `researching` — duyệt web | ngồi + màn hình nhấp nháy | ⬜ chờ quét |
-| `waiting` — chờ duyệt | giơ tay / đứng | ⬜ chờ quét |
-| `blocked` — lỗi | ngồi thu / cúi đầu | ⬜ chờ quét |
-
-> **Quy tắc:** nếu gói **không có** animation "gõ máy" thì **không bịa**.
-> Khi đó dùng animation *ngồi* (nếu có) + hiệu ứng màn hình nhấp nháy để biểu
-> thị trạng thái `working`. Mọi animation thực sự có sẽ được xác nhận từ
-> kết quả `scan-assets.ts` trước khi viết code.
-
-### Biểu tượng trên đầu (giữ nguyên cách hiện tại)
-
-- Vòng tròn dưới chân đổi màu theo trạng thái (đã có, giữ nguyên).
-- Thêm icon 3D nhỏ nổi trên đầu: `!` (chờ duyệt), `?` (lỗi), `…` (đang làm).
-  Làm bằng sprite/canvas — không phải model phức tạp, không vi phạm quy tắc.
-
----
-
-## 5. Ánh sáng (Phase 5 của nâng cấp)
+## 3. Ánh sáng (đã áp dụng)
 
 | Hạng mục | Thay đổi |
 |---|---|
-| Nền | từ `#0d1117` → nền sáng hơn, có gradient trời |
-| Ánh sáng môi trường | thêm `HemisphereLight` (sky/ground) |
-| Bóng | `PCFSoftShadowMap`, shadow map 2048, bias tinh chỉnh |
-| Màn hình máy tính | thêm `PointLight` nhỏ (màu theo trạng thái agent) |
-| Ánh sáng trong phòng | `Lamp` của Kenney → gắn `PointLight` nhẹ |
-| Nhãn phòng | tăng cỡ chữ, thêm viền tương phản để đọc được trên nền sáng |
+| Nền | `#0d1117` → `#cdd9e6` (nền sáng) + fog cùng tông |
+| Ánh sáng môi trường | `HemisphereLight` (trời xanh / đất be), cường độ 1.05 |
+| Mặt trời | `DirectionalLight` 2.1, shadow map 2048, PCF mềm, bias tinh chỉnh |
+| Ánh sáng phụ | `DirectionalLight` 0.55 từ hướng ngược lại |
+| Đèn trần phòng | `PointLight` ấm, mỗi phòng một cái |
+| Đèn trạng thái | `PointLight` gắn nhân vật, màu đổi theo trạng thái |
+| Màn hình máy tính | texture động + `emissive` |
+| Nhãn phòng | chữ 52px, nền trắng, viền xanh `#1f6feb` |
+
+File: `src/client/assets/lighting.ts`.
 
 ---
 
-## 6. Nhật ký tải
+## 4. Kiểm thử ảnh
+
+```bash
+npm run dev                      # chạy server + client
+npx tsx scripts/verify-scene.ts dispatch   # phân tích pixel cảnh
+npx tsx scripts/closeup.ts minh 3.0        # cận cảnh 1 nhân vật
+npx tsx scripts/states.ts                  # ảnh từng trạng thái agent
+```
+
+Ghi chú: ảnh WebGL cần `?capture=1` trên URL (bật `preserveDrawingBuffer`).
+Script dùng Chrome tại `C:\Program Files\Google\Chrome\Application\chrome.exe`.
+
+---
+
+## 5. Nhật ký tải
 
 | Gói | Phiên bản | Ngày tải | Nguồn | Giấy phép |
 |---|---|---|---|---|
@@ -188,15 +155,13 @@ thực tế (vì tên file trong gói Kenney có thể khác nhau giữa các b�
 | Kenney Building Kit | | | kenney-assets.itch.io/building-kit | CC0 1.0 |
 | Kenney Animated Characters | | | kenney.nl/assets/animated-characters-3 | CC0 1.0 |
 
-*(Cập nhật sau khi tải — xem mục "Ngày tải" trong `docs/ASSETS.md`.)*
+*(Chưa tải — bản nhân vật chibi hiện dùng bản quyền MIT từ repo tham khảo.)*
 
----
+### Nguồn code chibi rig
 
-## 7. Quy trình làm
+| Thành phần | Nguồn | Giấy phép |
+|---|---|---|
+| `src/client/assets/chibiRig.js` | `references/my-office` (`src/office/people/chibi-rig.js`) | MIT — © 2026 khanh020905 |
 
-1. ⬜ Bạn tải 3 gói → đặt GLB vào `public/models/{furniture,building,characters}/`
-2. ⬜ Chạy `npx tsx scripts/scan-assets.ts` → tôi báo cáo model + animation thực tế
-3. ⬜ Tôi dựng **Phòng Giao việc** (phòng mẫu) + 1 nhân vật
-4. ⬜ Bạn duyệt ảnh/phong cách
-5. ⬜ Tôi nhân ra 8 phòng còn lại
-6. ⬜ Commit + push
+Đã chỉnh sửa cho phù hợp: bỏ phụ thuộc i18n, đổi nhãn sang tiếng Việt,
+ghi rõ nguồn gốc ở đầu file.

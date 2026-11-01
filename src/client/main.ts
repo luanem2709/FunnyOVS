@@ -3,6 +3,23 @@
  * hộp thoại xin quyền + xin duyệt ngay trong cảnh, thanh năng lượng token.
  */
 import * as THREE from "three";
+import {
+  loadManifest,
+  findCharacter,
+  type Manifest,
+  type ManifestAsset,
+} from "./assets/manifest.js";
+import { preloadAssets, peekAsset } from "./assets/loader.js";
+import { setupLighting } from "./assets/lighting.js";
+import { buildFurniture, deskLayout, propLayout, DESK_TOP_Y } from "./assets/roomBuilder.js";
+import {
+  createAgentVisual,
+  applyAgentStatus,
+  updateAgentVisual,
+  AGENT_TINTS,
+  type AgentVisual,
+} from "./assets/characterFactory.js";
+import type { AgentStatus as RigStatus } from "./assets/characterRig.js";
 
 // ---------------- Types ----------------
 type AgentStatus =
@@ -177,48 +194,100 @@ function toast(msg: string, kind: "info" | "warn" | "danger" = "info"): void {
 
 // ---------------- Three.js scene ----------------
 const canvas = document.getElementById("scene") as HTMLCanvasElement;
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+// `?capture=1` bật preserveDrawingBuffer để script kiểm thử đọc được ảnh canvas.
+const CAPTURE_MODE = new URLSearchParams(location.search).has("capture");
+const renderer = new THREE.WebGLRenderer({
+  canvas,
+  antialias: true,
+  preserveDrawingBuffer: CAPTURE_MODE,
+});
 renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75));
 renderer.setSize(innerWidth, innerHeight);
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x0d1117);
-scene.fog = new THREE.Fog(0x0d1117, 26, 62);
 
 const camera = new THREE.PerspectiveCamera(52, innerWidth / innerHeight, 0.1, 220);
 camera.position.set(0, 12, 18);
 
-const ambient = new THREE.AmbientLight(0xffffff, 0.6);
-scene.add(ambient);
-const dir = new THREE.DirectionalLight(0xffffff, 0.85);
-dir.position.set(10, 18, 12);
-dir.castShadow = true;
-dir.shadow.mapSize.set(1024, 1024);
-dir.shadow.camera.left = -34;
-dir.shadow.camera.right = 34;
-dir.shadow.camera.top = 34;
-dir.shadow.camera.bottom = -34;
-scene.add(dir);
+// Ánh sáng: nền sáng + hemisphere + bóng mềm (xem assets/lighting.ts)
+setupLighting(scene);
 
 // Sàn chung
 const floor = new THREE.Mesh(
-  new THREE.PlaneGeometry(90, 90),
-  new THREE.MeshStandardMaterial({ color: 0x14181f, roughness: 0.95 }),
+  new THREE.PlaneGeometry(140, 140),
+  new THREE.MeshStandardMaterial({ color: 0x9aa3a8, roughness: 0.95 }),
 );
 floor.rotation.x = -Math.PI / 2;
 floor.receiveShadow = true;
 scene.add(floor);
 
+// Hook cho script kiểm thử ảnh (không ảnh hưởng runtime).
+(window as any).__threeInfo = {
+  webgl2: renderer.capabilities.isWebGL2,
+  drawCalls: renderer.info.render.calls,
+  triangles: renderer.info.render.triangles,
+  programs: renderer.info.programs?.length ?? 0,
+  sceneChildren: scene.children.length,
+};
+(window as any).__captureFrame = (): { dataUrl: string; diag: unknown } => {
+  renderer.render(scene, camera);
+  const gl = renderer.getContext();
+  const px = new Uint8Array(4);
+  gl.readPixels(
+    Math.floor(canvas.width / 2),
+    Math.floor(canvas.height / 2),
+    1,
+    1,
+    gl.RGBA,
+    gl.UNSIGNED_BYTE,
+    px,
+  );
+  return {
+    dataUrl: canvas.toDataURL("image/png"),
+    diag: {
+      contextLost: gl.isContextLost(),
+      centerPixel: Array.from(px),
+      calls: renderer.info.render.calls,
+      triangles: renderer.info.render.triangles,
+      sceneChildren: scene.children.length,
+      camera: camera.position.toArray(),
+      target: target.toArray(),
+      background: (scene.background as THREE.Color | null)?.getHexString?.() ?? null,
+      fog: scene.fog ? (scene.fog as THREE.Fog).color.getHexString() : null,
+      agents: [...agents.values()].map((r) => ({
+        id: r.state.id,
+        name: r.state.name,
+        pos: r.visual.root.position.toArray(),
+        animated: r.visual.animated,
+        kind: r.visual.chibi ? "chibi" : r.visual.rig ? "glb" : "capsule",
+      })),
+    },
+  };
+};
+
+/** Đưa camera tới gần một agent (dùng cho kiểm thử ảnh). */
+(window as any).__focusAgent = (id: string, camDist = 3.2): void => {
+  const rec = agents.get(id);
+  if (!rec) return;
+  target.set(rec.visual.root.position.x, 1.0, rec.visual.root.position.z);
+  yaw = 0.4;
+  pitch = 0.18;
+  dist = camDist;
+};
+
 // Vật liệu dùng chung (tái sử dụng để giảm draw call — Phase 5)
+// Bảng màu sáng: tường kem, sàn gỗ, đồ gỗ ấm — hợp phong cách low-poly Kenney.
 const MAT = {
-  wall: new THREE.MeshStandardMaterial({ color: 0x1d222b, roughness: 0.9 }),
-  desk: new THREE.MeshStandardMaterial({ color: 0x30363d, roughness: 0.7 }),
-  leg: new THREE.MeshStandardMaterial({ color: 0x21262d, roughness: 0.8 }),
-  screen: new THREE.MeshStandardMaterial({ color: 0x0d1117, emissive: 0x101820 }),
-  prop: new THREE.MeshStandardMaterial({ color: 0x2a3038, roughness: 0.8 }),
-  accent: new THREE.MeshStandardMaterial({ color: 0x4f9cf9, roughness: 0.5 }),
+  wall: new THREE.MeshStandardMaterial({ color: 0xe8e2d6, roughness: 0.92 }),
+  desk: new THREE.MeshStandardMaterial({ color: 0x8a6a45, roughness: 0.7 }),
+  leg: new THREE.MeshStandardMaterial({ color: 0x5f4a33, roughness: 0.8 }),
+  screen: new THREE.MeshStandardMaterial({ color: 0x1b2430, emissive: 0x2a3646 }),
+  prop: new THREE.MeshStandardMaterial({ color: 0x6b7f8f, roughness: 0.8 }),
+  accent: new THREE.MeshStandardMaterial({ color: 0x1f6feb, roughness: 0.5 }),
+  /** Màu dùng cho vật thể dự phòng khi chưa có model Kenney. */
+  propColor: 0xb0a08c,
 };
 
 const GEO = {
@@ -262,119 +331,19 @@ function makeSign(text: string, w: number, h: number, color = "#4f9cf9"): THREE.
   return spr;
 }
 
-function deskAt(x: number, z: number, rotY = 0): THREE.Group {
-  const g = new THREE.Group();
-  const top = new THREE.Mesh(GEO.deskTop, MAT.desk);
-  top.position.y = 1.1;
-  top.castShadow = true;
-  g.add(top);
-  for (const dx of [-1.3, 1.3]) {
-    const leg = new THREE.Mesh(GEO.deskLeg, MAT.leg);
-    leg.position.set(dx, 0.55, 0);
-    g.add(leg);
-  }
-  const mon = new THREE.Mesh(GEO.monitor, MAT.screen);
-  mon.position.set(0, 1.7, -0.5);
-  g.add(mon);
-  g.position.set(x, 0, z);
-  g.rotation.y = rotY;
-  scene.add(g);
-  return g;
-}
-
-/** Trang trí đặc trưng cho từng phòng. */
+/**
+ * Trang trí đặc trưng cho từng phòng.
+ * Dùng model Kenney thật (Furniture Kit) nếu manifest có, không thì hộp dự phòng.
+ */
 function buildProps(dept: Department): void {
   const { center, props } = dept;
-  for (const p of props) {
-    const g = new THREE.Group();
-    switch (p) {
-      case "phone": {
-        const box = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.4, 0.9), MAT.prop);
-        box.position.y = 0.7;
-        g.add(box);
-        break;
-      }
-      case "funnel": {
-        for (let i = 0; i < 4; i++) {
-          const c = new THREE.Mesh(
-            new THREE.CylinderGeometry(1.4 - i * 0.28, 1.6 - i * 0.28, 0.35, 20, 1, true),
-            new THREE.MeshStandardMaterial({ color: 0x3a332c, side: THREE.DoubleSide }),
-          );
-          c.position.set(0, 0.2 + i * 0.42, 0);
-          g.add(c);
-        }
-        break;
-      }
-      case "content": {
-        const board = new THREE.Mesh(new THREE.BoxGeometry(3.2, 1.8, 0.12), MAT.accent);
-        board.position.set(0, 2, -1);
-        g.add(board);
-        break;
-      }
-      case "chart": {
-        for (let i = 0; i < 5; i++) {
-          const b = new THREE.Mesh(
-            new THREE.BoxGeometry(0.5, 0.6 + i * 0.35, 0.5),
-            new THREE.MeshStandardMaterial({ color: i === 4 ? 0x43c59e : 0x2f3a44 }),
-          );
-          b.position.set(-1.2 + i * 0.62, (0.6 + i * 0.35) / 2, 0);
-          g.add(b);
-        }
-        break;
-      }
-      case "router": {
-        const hub = new THREE.Mesh(new THREE.IcosahedronGeometry(0.8, 0), MAT.accent);
-        hub.position.y = 1.4;
-        g.add(hub);
-        for (let i = 0; i < 6; i++) {
-          const a = (i / 6) * Math.PI * 2;
-          const link = new THREE.Mesh(
-            new THREE.BoxGeometry(1.6, 0.08, 0.08),
-            new THREE.MeshStandardMaterial({ color: 0x8f7bf0 }),
-          );
-          link.position.set(Math.cos(a) * 0.8, 1.4, Math.sin(a) * 0.8);
-          link.rotation.y = -a;
-          g.add(link);
-        }
-        break;
-      }
-      case "terminal": {
-        for (let i = 0; i < 3; i++) {
-          const m = new THREE.Mesh(GEO.monitor, MAT.screen);
-          m.position.set(-1.8 + i * 1.8, 1.8, 0);
-          g.add(m);
-          const stand = new THREE.Mesh(new THREE.BoxGeometry(0.2, 1.2, 0.2), MAT.leg);
-          stand.position.set(-1.8 + i * 1.8, 0.9, 0);
-          g.add(stand);
-        }
-        break;
-      }
-      case "books": {
-        const shelf = new THREE.Mesh(new THREE.BoxGeometry(6, 2.6, 0.6), MAT.prop);
-        shelf.position.y = 1.3;
-        g.add(shelf);
-        const colors = [0x4f9cf9, 0x43c59e, 0xf7b32b, 0xef6f8e, 0x8f7bf0];
-        for (let i = 0; i < 9; i++) {
-          const book = new THREE.Mesh(
-            new THREE.BoxGeometry(0.42, 0.62, 0.3),
-            new THREE.MeshStandardMaterial({ color: colors[i % colors.length] }),
-          );
-          book.position.set(-2.4 + i * 0.6, 1.9, 0.34);
-          g.add(book);
-        }
-        break;
-      }
-      case "roadmap": {
-        const board = new THREE.Mesh(new THREE.BoxGeometry(4.2, 1.4, 0.1), MAT.prop);
-        board.position.set(0, 2.1, -2.2);
-        g.add(board);
-        break;
-      }
-      default:
-        break;
-    }
-    g.position.set(center.x, 0, center.z - dept.size.d / 2 + 1.6);
-    scene.add(g);
+  for (const p of props as string[]) {
+    const placements = propLayout(p as never, dept.size.w, dept.size.d);
+    if (!placements.length) continue;
+    const group = new THREE.Group();
+    group.position.set(center.x, 0, center.z);
+    scene.add(group);
+    buildFurniture(group, placements, manifest, MAT.propColor);
   }
 }
 
@@ -391,8 +360,8 @@ function buildRoom(dept: Department): void {
   floorMesh.userData.department = dept.id;
   scene.add(floorMesh);
 
-  // Tường 3 mặt (mở mặt trước để nhìn vào)
-  const wallH = 2.4;
+  // Tường 3 mặt (mở mặt trước để nhìn vào) — nền sáng, dễ đọc nhãn phòng.
+  const wallH = 3.2;
   const wallT = 0.16;
   const back = new THREE.Mesh(new THREE.BoxGeometry(size.w, wallH, wallT), MAT.wall);
   back.position.set(center.x, wallH / 2, center.z - size.d / 2);
@@ -406,52 +375,37 @@ function buildRoom(dept: Department): void {
     scene.add(w);
   }
 
-  const sign = makeSign(dept.name.toUpperCase(), Math.min(size.w * 0.7, 6.5), 0.75);
-  sign.position.set(center.x, wallH + 0.6, center.z - size.d / 2);
+  // Nhãn phòng — chữ to, tương phản cao trên nền sáng.
+  const sign = makeSign(dept.name.toUpperCase(), Math.min(size.w * 0.78, 7.5), 1.0, "#1f6feb");
+  sign.position.set(center.x, wallH + 0.75, center.z - size.d / 2);
   scene.add(sign);
+
+  // Đèn trần nhẹ cho phòng (phát sáng màn hình + đồ đạc).
+  const lamp = new THREE.PointLight(0xffe9c4, 0.5, Math.max(size.w, size.d) * 0.8, 2);
+  lamp.position.set(center.x, wallH - 0.3, center.z);
+  scene.add(lamp);
 
   buildProps(dept);
 }
 
-/** Nhân vật: thân + đầu + mắt + vòng trạng thái + nhãn tên. */
-function makeAgent(color: string): THREE.Group {
-  const g = new THREE.Group();
-  const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.6 });
-  const body = new THREE.Mesh(GEO.body, mat);
-  body.position.y = 0.95;
-  body.castShadow = true;
-  g.add(body);
-
-  const head = new THREE.Mesh(GEO.head, mat);
-  head.position.y = 1.85;
-  head.castShadow = true;
-  g.add(head);
-
-  const eyeMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-  for (const dx of [-0.11, 0.11]) {
-    const eye = new THREE.Mesh(GEO.eye, eyeMat);
-    eye.position.set(dx, 1.9, 0.26);
-    g.add(eye);
-  }
-
-  const ring = new THREE.Mesh(
-    GEO.ring,
-    new THREE.MeshBasicMaterial({ color: STATUS_COLOR.idle, transparent: true, opacity: 0.85 }),
-  );
-  ring.rotation.x = -Math.PI / 2;
-  ring.position.y = 0.03;
-  g.add(ring);
-
-  const nameTag = makeSign("", 2.2, 0.4, "#e6edf3");
-  nameTag.position.set(0, 2.5, 0);
-  g.add(nameTag);
-
-  g.userData.ring = ring;
-  g.userData.tag = nameTag;
-  return g;
+/**
+ * Nhân vật: dùng model Kenney Animated Characters nếu có (có rig + animation),
+ * không thì fallback về capsule. Mỗi agent một màu riêng.
+ */
+function makeAgent(index: number, status: AgentStatus, name: string): AgentVisual {
+  const tint = AGENT_TINTS[index % AGENT_TINTS.length];
+  const visual = createAgentVisual(characterAsset, tint, status, index, name);
+  const nameTag = makeSign("", 2.4, 0.45, "#1f2937");
+  nameTag.position.set(0, visual.animated ? 2.35 : 2.5, 0);
+  visual.root.add(nameTag);
+  visual.tag = nameTag;
+  return visual;
 }
 
-/** Màn hình máy tính: texture cập nhật với hoạt động đang hiển thị. */
+/**
+ * Màn hình máy tính: texture cập nhật với hoạt động đang hiển thị.
+ * Gắn đúng vị trí màn hình trên bàn (cao độ DESK_TOP_Y + 0.43).
+ */
 class Screen {
   readonly mesh: THREE.Mesh;
   private ctx: CanvasRenderingContext2D;
@@ -466,10 +420,12 @@ class Screen {
     this.tex = new THREE.CanvasTexture(cvs);
     this.tex.minFilter = THREE.LinearFilter;
     this.mesh = new THREE.Mesh(
-      new THREE.PlaneGeometry(1.55, 0.9),
+      new THREE.PlaneGeometry(0.68, 0.4),
       new THREE.MeshBasicMaterial({ map: this.tex }),
     );
-    this.mesh.position.set(x, 1.7, z - 0.47);
+    // Màn hình nằm trên bàn, quay mặt về phía người ngồi (+Z).
+    this.mesh.position.set(x, DESK_TOP_Y + 0.43, z);
+    this.mesh.rotation.y = Math.PI;
     this.drawIdle();
   }
 
@@ -562,11 +518,17 @@ class Screen {
 // ---------------- Scene state ----------------
 interface AgentRecord {
   state: AgentState;
-  mesh: THREE.Group;
+  visual: AgentVisual;
   screen: Screen;
 }
 const agents = new Map<string, AgentRecord>();
 const rooms = new Map<string, Department>();
+/** Manifest asset (do scan-assets.ts sinh) — null nếu chưa tải Kenney. */
+let manifest: Manifest | null = null;
+/** Asset nhân vật có rig — null nếu chưa có. */
+let characterAsset: ManifestAsset | null = null;
+/** Bảng alias clip nếu tên animation trong file không khớp (xem docs/ASSETS.md). */
+let clipAliases: Record<string, string> = {};
 let browserLogs: BrowserLogEntry[] = [];
 let tasks: TaskRecord[] = [];
 let pendingApproval: { id: string; taskId: string; title: string; agentName: string; reason: string; estimation?: { estimatedTokens: number } } | null =
@@ -603,23 +565,54 @@ function renderRoomNav(): void {
 }
 
 function setupAgents(list: AgentState[]): void {
+  let index = 0;
   for (const a of list) {
     if (agents.has(a.id)) continue;
-    deskAt(a.position.x, a.position.z - 1.1);
-    const mesh = makeAgent(a.color);
-    mesh.position.set(a.position.x, 0, a.position.z);
-    scene.add(mesh);
-    const screen = new Screen(a.position.x, a.position.z - 1.1);
+    const visual = makeAgent(index++, a.status, a.name);
+    visual.root.position.set(a.position.x, 0, a.position.z);
+    // Nhân vật ngồi tại bàn, quay mặt về phía bàn (bàn ở -Z → xoay 180°).
+    if (visual.chibi) visual.chibi.sit = true;
+    visual.root.rotation.y = Math.PI;
+    scene.add(visual.root);
+    const screen = new Screen(a.position.x, a.position.z - 1.13);
     scene.add(screen.mesh);
-    agents.set(a.id, { state: a, mesh, screen });
+    agents.set(a.id, { state: a, visual, screen });
     updateAgentTag(a);
+  }
+}
+
+/**
+ * Dựng bàn + ghế + màn hình cho mỗi nhân vật.
+ * Bàn đặt phía trước nhân vật (hướng -Z), nhân vật quay mặt về bàn.
+ */
+const builtDeskRooms = new Set<string>();
+function buildDesks(list: AgentState[]): void {
+  for (const a of list) {
+    const dept = rooms.get(a.department);
+    if (!dept) continue;
+    const key = `${dept.id}:${a.id}`;
+    if (builtDeskRooms.has(key)) continue;
+    builtDeskRooms.add(key);
+
+    const layouts = deskLayout(1, dept.size.w)[0];
+    const group = new THREE.Group();
+    group.position.set(a.position.x, 0, a.position.z);
+    scene.add(group);
+
+    // Dùng chính vị trí agent làm gốc: bàn ở z = -0.95, ghế tại 0.
+    const placements = [
+      { ...layouts.desk, x: 0, z: -0.95 },
+      { ...layouts.chair, x: 0, z: 0, rotY: 0 },
+      { ...layouts.screen, x: 0, z: -1.13 },
+    ];
+    buildFurniture(group, placements, manifest, MAT.propColor);
   }
 }
 
 function updateAgentTag(a: AgentState): void {
   const rec = agents.get(a.id);
   if (!rec) return;
-  const tag = rec.mesh.userData.tag as THREE.Sprite;
+  const tag = rec.visual.tag;
   const label = a.name;
   if (tag.userData.label === label) return;
   tag.userData.label = label;
@@ -628,10 +621,10 @@ function updateAgentTag(a: AgentState): void {
   if (!canvasEl) return;
   const ctx = canvasEl.getContext("2d")!;
   ctx.clearRect(0, 0, 512, 128);
-  ctx.fillStyle = "rgba(13,17,23,0.86)";
+  ctx.fillStyle = "rgba(255,255,255,0.92)";
   ctx.fillRect(0, 0, 512, 128);
-  ctx.fillStyle = "#e6edf3";
-  ctx.font = "bold 44px sans-serif";
+  ctx.fillStyle = "#1f2937";
+  ctx.font = "bold 52px sans-serif";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText(label, 256, 66);
@@ -642,10 +635,18 @@ function applyStatus(a: AgentState): void {
   const rec = agents.get(a.id);
   if (!rec) return;
   rec.state = a;
-  const ring = rec.mesh.userData.ring as THREE.Mesh;
-  (ring.material as THREE.MeshBasicMaterial).color.setHex(STATUS_COLOR[a.status] ?? STATUS_COLOR.idle);
+  applyAgentStatus(
+    rec.visual,
+    a.status as RigStatus,
+    STATUS_COLOR[a.status] ?? STATUS_COLOR.idle,
+    clipAliases,
+  );
   updateAgentTag(a);
 }
+
+/** Hook kiểm thử: đổi trạng thái agent ngay trong scene. */
+(window as any).__agents = agents;
+(window as any).__applyStatus = applyStatus;
 
 // ---------------- Camera orbit ----------------
 let yaw = 0;
@@ -713,12 +714,13 @@ function animate(): void {
   );
   camera.lookAt(target.x, 1, target.z);
 
-  for (const { mesh, state } of agents.values()) {
-    const bob = state.status === "idle" || state.status === "stopped" ? 0 : Math.sin(t * 2.5) * 0.05;
-    mesh.position.y = bob;
-    mesh.rotation.y = Math.sin(t * 0.6 + mesh.position.x) * 0.14;
-    const ring = mesh.userData.ring as THREE.Mesh;
-    const pulse = state.status === "waiting" || state.status === "blocked" ? 0.6 + Math.abs(Math.sin(t * 3)) * 0.4 : 0.85;
+  for (const { visual, state } of agents.values()) {
+    updateAgentVisual(visual, 1 / 60);
+    const ring = visual.ring;
+    const pulse =
+      state.status === "waiting" || state.status === "blocked"
+        ? 0.6 + Math.abs(Math.sin(t * 3)) * 0.4
+        : 0.85;
     (ring.material as THREE.MeshBasicMaterial).opacity = pulse;
   }
   renderer.render(scene, camera);
@@ -1146,6 +1148,7 @@ function connectWs(): void {
         const st = data as any;
         setupRooms(st.departments ?? []);
         setupAgents(st.agents ?? []);
+        buildDesks(st.agents ?? []);
         break;
       }
       case "agent:update":
@@ -1291,10 +1294,37 @@ win.saveSettings = async () => {
 };
 
 // ---------------- Boot ----------------
+
+/** Nạp asset Kenney (nếu có) trước khi dựng cảnh. */
+async function loadAssets(): Promise<void> {
+  manifest = await loadManifest();
+  if (!manifest || !manifest.assets.length) {
+    console.info("[assets] Chưa có manifest.json — dùng mô hình dự phòng. Chạy `npm run scan:assets` sau khi tải Kenney.");
+    return;
+  }
+  characterAsset = findCharacter(manifest);
+  console.info(
+    `[assets] ${manifest.assets.length} model · nhân vật: ${characterAsset?.path ?? "(không có rig)"}`,
+  );
+  if (characterAsset) {
+    console.info(`[assets] animation nhân vật: ${characterAsset.animations.join(", ") || "(không có)"}`);
+  }
+  // Nạp trước toàn bộ model để tránh hiện tượng "pop-in" khi người dùng xoay camera.
+  const paths = manifest.assets.map((a) => a.path);
+  await preloadAssets(paths, (done, total) => {
+    if (done === 0 || done === total) {
+      console.info(`[assets] Đã nạp ${done}/${total} model.`);
+    }
+  });
+}
+
 (async function boot(): Promise<void> {
+  await loadAssets();
+
   const state = await api<any>("/api/state");
   setupRooms(state.departments ?? []);
   setupAgents(state.agents ?? []);
+  buildDesks(state.agents ?? []);
   tasks = state.tasks ?? [];
   renderBudget(state.budget);
   document.querySelectorAll<HTMLButtonElement>("#levels button").forEach((b) => {

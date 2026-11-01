@@ -39,14 +39,14 @@ interface AgentDef {
 }
 
 const DEFS: AgentDef[] = [
-  { id: "mai", name: "Mai", role: "Chăm sóc khách hàng", department: "support", offset: { x: 0, z: 1.2 }, color: "#4f9cf9" },
-  { id: "long", name: "Long", role: "Phễu bán hàng", department: "sales", offset: { x: 0, z: 1.2 }, color: "#f7b32b" },
-  { id: "huy", name: "Huy", role: "Nội dung & xu hướng", department: "marketing", offset: { x: 0, z: 1.2 }, color: "#ef6f8e" },
-  { id: "thu", name: "Thu", role: "Sổ sách & báo cáo", department: "finance", offset: { x: 0, z: 1.2 }, color: "#43c59e" },
-  { id: "ban", name: "Ban", role: "Điều phối AI", department: "ai-team", offset: { x: 0, z: 1.4 }, color: "#8f7bf0" },
-  { id: "an", name: "An", role: "Nghiên cứu web", department: "automation", offset: { x: 0, z: 1.2 }, color: "#3fb6c8" },
-  { id: "tri", name: "Tri", role: "Tri thức & bài học", department: "library", offset: { x: 0, z: 1.2 }, color: "#d0a35c" },
-  { id: "minh", name: "Minh", role: "Lập trình & triển khai", department: "dispatch", offset: { x: -2.4, z: 1.6 }, color: "#6fd67a" },
+  { id: "mai", name: "Mai", role: "Chăm sóc khách hàng", department: "support", offset: { x: 0, z: 0.4 }, color: "#4f9cf9" },
+  { id: "long", name: "Long", role: "Phễu bán hàng", department: "sales", offset: { x: 0, z: 0.4 }, color: "#f7b32b" },
+  { id: "huy", name: "Huy", role: "Nội dung & xu hướng", department: "marketing", offset: { x: 0, z: 0.4 }, color: "#ef6f8e" },
+  { id: "thu", name: "Thu", role: "Sổ sách & báo cáo", department: "finance", offset: { x: 0, z: 0.4 }, color: "#43c59e" },
+  { id: "ban", name: "Ban", role: "Điều phối AI", department: "ai-team", offset: { x: 0, z: 0.4 }, color: "#8f7bf0" },
+  { id: "an", name: "An", role: "Nghiên cứu web", department: "automation", offset: { x: 0, z: 0.4 }, color: "#3fb6c8" },
+  { id: "tri", name: "Tri", role: "Tri thức & bài học", department: "library", offset: { x: 0, z: 0.4 }, color: "#d0a35c" },
+  { id: "minh", name: "Minh", role: "Lập trình & triển khai", department: "dispatch", offset: { x: -2.2, z: 0.4 }, color: "#6fd67a" },
 ];
 
 export class AgentRegistry {
