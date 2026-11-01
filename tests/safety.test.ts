@@ -8,7 +8,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { checkPath, isHardBlocked, WORKSPACE_ROOT } from "../src/server/sandbox/pathGuard.js";
+import { checkPath, isHardBlocked, workspaceRoot } from "../src/server/sandbox/pathGuard.js";
 import { PermissionManager } from "../src/server/security/permissions.js";
 import { GuardedFs } from "../src/server/security/guardedFs.js";
 import { detectInjection, asUntrustedData } from "../src/server/browser/sandboxBrowser.js";
@@ -176,7 +176,7 @@ describe("B. Vùng chặn cứng (hệ thống / bí mật)", () => {
     expect(perms.isManuallyUnlocked(target)).toBe(true);
     const res = perms.check({ agentId: "ana", agentName: "Ana", target, reason: "read" });
     expect(res.allowed).toBe(false);
-    expect(res.needsRequest).toBe(true);
+    expect("needsRequest" in res && res.needsRequest).toBe(true);
   });
 });
 
@@ -270,7 +270,7 @@ describe("E. Ngân sách token (lớp bị khoá, agent không sửa được)",
     expect(Object.isFrozen(b)).toBe(true);
     // Không có token → configure() bị từ chối
     expect(b.configure({ dailyLimit: 9_999_999 })).toBe(false);
-    expect(b.getUsage("normal").limit).toBe(500_000);
+    expect(b.getUsage("normal").limit).toBe(150_000);
   });
 
   it("agent không có token không thể tăng hạn mức hay mở rộng quyền", () => {

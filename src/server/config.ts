@@ -20,6 +20,22 @@ export interface AppConfig {
     intervalMinutes: number;
   };
   dailyTokenLimit: number;
+  /** Trần token/tuần. */
+  weeklyTokenLimit: number;
+  /** Trần token mỗi tác vụ. */
+  perTaskTokenLimit: number;
+  /** Ngưỡng cảnh báo (0..1). */
+  warnRatio: number;
+  /** Backend LLM: "cursor-agent" (dùng pool gói Cursor) hoặc "rule". */
+  llmBackend: "cursor-agent" | "rule";
+  /** Model mặc định gửi cho Cursor CLI. Gói Free chỉ cho phép "auto". */
+  cursorModel: string;
+  /** Chỉ dùng model thuộc bucket "auto" của gói (true với gói Free). */
+  freeTierOnly: boolean;
+  /** Đọc hạn mức Cursor từ API nội bộ (có thể bị đổi bất cứ lúc nào). */
+  cursorQuotaEnabled: boolean;
+  /** Chu kỳ poll hạn mức (ms). */
+  cursorQuotaPollMs: number;
 }
 
 export class ConfigStore {
@@ -41,7 +57,15 @@ export class ConfigStore {
         topics: ["TypeScript best practices", "agent architecture patterns", "SQLite best practices"],
         intervalMinutes: 30,
       },
-      dailyTokenLimit: 500_000,
+      dailyTokenLimit: 150_000,
+      weeklyTokenLimit: 900_000,
+      perTaskTokenLimit: 200_000,
+      warnRatio: 0.8,
+      llmBackend: "cursor-agent",
+      cursorModel: "auto",
+      freeTierOnly: true,
+      cursorQuotaEnabled: true,
+      cursorQuotaPollMs: 60_000,
     };
     try {
       const raw = fs.readFileSync(this.configPath, "utf8");

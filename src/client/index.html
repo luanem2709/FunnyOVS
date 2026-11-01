@@ -10,7 +10,7 @@
     <div id="app">
       <canvas id="scene"></canvas>
 
-      <!-- HUD: nút dừng khẩn cấp + chế độ tự động -->
+      <!-- HUD: nút dừng khẩn cấp + chế độ tự động + thanh năng lượng token -->
       <div class="hud hud-top">
         <button id="emergency" class="emergency" title="Dừng toàn bộ agent ngay lập tức">
           <span class="dot"></span> DỪNG KHẨN CẤP
@@ -24,12 +24,17 @@
       </div>
 
       <div class="hud hud-right">
+        <button class="tab" data-panel="tasks">Tác vụ &amp; chi tiêu</button>
+        <button class="tab" data-panel="activity">Nhật ký hoạt động</button>
         <button class="tab" data-panel="browser">Nhật ký duyệt web</button>
         <button class="tab" data-panel="library">Phòng Thư viện</button>
         <button class="tab" data-panel="permissions">Quyền truy cập</button>
         <button class="tab" data-panel="proposals">Đề xuất thay đổi</button>
         <button class="tab" data-panel="settings">Cài đặt</button>
       </div>
+
+      <!-- Điều hướng nhanh giữa 9 phòng ban -->
+      <nav class="hud room-nav" id="room-nav"></nav>
 
       <aside id="panel" class="panel hidden">
         <header>
@@ -41,6 +46,9 @@
 
       <!-- Hộp thoại xin quyền xuất hiện ngay trong cảnh 3D -->
       <div id="perm-dialog" class="perm-dialog hidden"></div>
+
+      <!-- Hộp thoại xin duyệt tác vụ tốn nhiều token -->
+      <div id="approval-dialog" class="perm-dialog hidden"></div>
 
       <div id="toast-host"></div>
     </div>

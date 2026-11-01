@@ -271,7 +271,7 @@ export class SandboxBrowser extends EventEmitter {
     const results: Array<{ title: string; url: string; snippet: string }> = [];
     const re = /result__a[^>]*href="([^"]+)"[^>]*>(.*?)<\/a>/gs;
     let m: RegExpExecArray | null;
-    while ((m = re.exec(text)) !== undefined && results.length < 10) {
+    while ((m = re.exec(text)) !== null && results.length < 10) {
       const clean = m[1].replace(/\\/g, "").replace(/^\/\/duckduckgo\.com\/l\/\?uddg=/, "");
       const decoded = decodeURIComponent(clean.split("&rut=")[0]);
       results.push({ title: m[2].replace(/<[^>]+>/g, "").trim(), url: decoded, snippet: "" });

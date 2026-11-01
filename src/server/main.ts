@@ -12,11 +12,18 @@ import { ConfigStore } from "./config.js";
 import { PermissionManager } from "./security/permissions.js";
 import { GuardedFs } from "./security/guardedFs.js";
 import { TokenBudget } from "./budget/tokenBudget.js";
+import { TokenLedger } from "./budget/tokenLedger.js";
+import { fetchCursorQuota, fetchPlanInfo } from "./budget/cursorQuota.js";
+import { describeCursorAuth } from "./budget/cursorAuth.js";
+import { resolveAgentExe } from "./budget/cursorAgent.js";
 import { SandboxBrowser } from "./browser/sandboxBrowser.js";
 import { KnowledgeBase } from "./knowledge/knowledgeBase.js";
 import { ResearchEngine } from "./learning/researchEngine.js";
 import { ProposalStore } from "./selfdev/proposalStore.js";
 import { AgentRegistry } from "./agents/agentRegistry.js";
+import { DEPARTMENTS } from "./agents/departments.js";
+import { TaskRunner } from "./tasks/taskRunner.js";
+import { ActivityLog } from "./activity/activityLog.js";
 import { policyForLevel, type AutomationLevel } from "./automation/automationPolicy.js";
 import { loadLlmConfig } from "./llm.js";
 
@@ -34,17 +41,28 @@ process.env.OFFICE_WORKSPACE = config.workspace;
 
 const perms = new PermissionManager(DATA_DIR);
 const fsGuard = new GuardedFs(perms);
+const ledger = new TokenLedger(DATA_DIR);
 const budget = new TokenBudget(true);
-budget.configure({
-  dailyLimit: config.dailyTokenLimit,
-  learningPercent: config.learning.learningPercent,
-});
+const budgetToken = budget.issueConfigToken();
+budget.configure(
+  {
+    dailyLimit: config.dailyTokenLimit,
+    weeklyLimit: config.weeklyTokenLimit,
+    learningPercent: config.learning.learningPercent,
+    perTaskLimit: config.perTaskTokenLimit,
+    warnRatio: config.warnRatio,
+  },
+  budgetToken,
+);
+// Khôi phục số liệu hôm nay từ ledger (server khởi động lại không mất số).
+budget.restoreFromLedger(ledger);
 
 const browser = new SandboxBrowser({ dataDir: DATA_DIR, policy: config.browser });
 const kb = new KnowledgeBase(DATA_DIR);
 const research = new ResearchEngine({ browser, kb, budget });
 const proposals = new ProposalStore(ROOT);
 const registry = new AgentRegistry();
+const activity = new ActivityLog();
 
 let emergencyStop = false;
 
@@ -65,6 +83,76 @@ function broadcast(event: string, data: unknown): void {
   }
 }
 
+// ---- Task runner (điều phối tác vụ + duyệt trước khi tốn nhiều token) ----
+const tasks = new TaskRunner({
+  budget,
+  ledger,
+  workspace: config.workspace,
+  defaultModel: config.cursorModel,
+  freeTierOnly: config.freeTierOnly,
+  getCursorPercentUsed: () => budget.getQuota()?.totalPercentUsed,
+  onUpdate: (t) => {
+    broadcast("task:update", t);
+    const agent = registry.get(t.agentId);
+    if (t.status === "running") {
+      activity.record({ kind: "task", actor: t.agentName, message: `Bắt đầu: ${t.title}` });
+    } else if (t.status === "done") {
+      activity.record({
+        kind: "task",
+        actor: t.agentName,
+        message: `Xong: ${t.title}`,
+        detail: `${t.tokens ?? 0} token · ${((t.costCents ?? 0) / 100).toFixed(4)} USD`,
+      });
+    } else if (t.status === "failed") {
+      activity.record({
+        kind: "task",
+        actor: t.agentName,
+        message: `Lỗi: ${t.title}`,
+        detail: t.error,
+        level: "danger",
+      });
+    }
+    if (agent) {
+      if (t.status === "running") registry.setStatus(t.agentId, "working", t.title);
+      else if (t.status === "awaiting-approval") registry.setStatus(t.agentId, "waiting", t.title);
+      else if (t.status === "done" || t.status === "failed") {
+        registry.setStatus(t.agentId, "idle");
+        registry.recordUsage(t.agentId, t.tokens ?? 0);
+        broadcast("agent:update", registry.get(t.agentId));
+      }
+    }
+  },
+  onApprovalNeeded: (req) => {
+    broadcast("task:approval", req);
+    activity.record({
+      kind: "approval",
+      actor: req.agentName,
+      message: `Cần duyệt: ${req.title}`,
+      detail: req.reason,
+      level: "warn",
+    });
+    registry.setStatus(req.agentId, "waiting", req.reason);
+    broadcast("agent:update", registry.get(req.agentId));
+  },
+  onSelfPropose: (p) => {
+    // Self-dev: chỉ TẠO đề xuất, không tự sửa mã nguồn.
+    const prop = proposals.create({
+      agentId: p.agentId,
+      agentName: p.agentName,
+      title: p.title,
+      rationale: p.rationale,
+      files: [],
+    });
+    activity.record({
+      kind: "proposal",
+      actor: p.agentName,
+      message: `Tự đề xuất sửa lỗi: ${p.title}`,
+      detail: prop.id,
+      level: "warn",
+    });
+  },
+});
+
 perms.on("request", (req) => broadcast("permission:request", req));
 perms.on("decided", (req) => broadcast("permission:decided", req));
 perms.on("log", (entry) => broadcast("access:log", entry));
@@ -77,21 +165,103 @@ proposals.on("applied", (p) => broadcast("proposal:applied", p));
 proposals.on("reverted", (p) => broadcast("proposal:reverted", p));
 proposals.on("rejected", (p) => broadcast("proposal:rejected", p));
 budget.onChange((s) => broadcast("budget", s));
+activity.on("activity", (e) => broadcast("activity", e));
+
+// Ghi nhật ký cho các sự kiện quan trọng
+perms.on("decided", (req) =>
+  activity.record({
+    kind: "permission",
+    actor: req.agentName,
+    message: `Quyền "${req.reason}" cho ${req.path} → ${req.status}`,
+    level: req.status === "denied" ? "warn" : "info",
+  }),
+);
+browser.on("log", (e) =>
+  activity.record({
+    kind: "browser",
+    actor: e.agentName,
+    message: `Mở ${e.url}`,
+    detail: e.title,
+    level: e.status === "blocked" ? "warn" : "info",
+  }),
+);
+research.on("injection", (p) =>
+  activity.record({
+    kind: "browser",
+    actor: "hệ thống",
+    message: `Chặn prompt injection tại ${p.url}`,
+    level: "danger",
+  }),
+);
+proposals.on("proposal", (p) =>
+  activity.record({
+    kind: "proposal",
+    actor: p.agentName,
+    message: `Đề xuất mới: ${p.title}`,
+    level: "info",
+  }),
+);
+
+// ---- Đọc hạn mức Cursor (API nội bộ, có fallback) ----
+async function pollCursorQuota(): Promise<void> {
+  if (!configStore.get().cursorQuotaEnabled) return;
+  const q = await fetchCursorQuota();
+  const plan = await fetchPlanInfo();
+  budget.setQuota({
+    available: q.available,
+    planName: plan.planName ?? q.planName,
+    autoPercentUsed: q.autoPercentUsed,
+    apiPercentUsed: q.apiPercentUsed,
+    totalPercentUsed: q.totalPercentUsed,
+    cycleEnd: q.cycleEnd,
+    includedLimitZero: q.includedLimitZero,
+    error: q.error ?? plan.error,
+    readAt: new Date().toISOString(),
+  });
+  broadcast("quota", { ...q, planName: plan.planName });
+}
+
+let quotaTimer: NodeJS.Timeout | null = null;
+function startQuotaLoop(): void {
+  if (quotaTimer) clearInterval(quotaTimer);
+  void pollCursorQuota();
+  quotaTimer = setInterval(() => void pollCursorQuota(), configStore.get().cursorQuotaPollMs);
+}
+startQuotaLoop();
 
 // ---- API ----
 app.get("/api/state", (_req, res) => {
   res.json({
     agents: registry.list(),
+    departments: DEPARTMENTS,
     config: configStore.get(),
     emergencyStop,
-    budget: { total: budget.getUsage("normal"), learning: budget.getUsage("learning") },
+    budget: budget.snapshot(),
+    quota: budget.getQuota(),
     permissions: perms.getState(),
     pendingRequests: perms.listPending(),
     proposals: proposals.list(),
+    tasks: tasks.list(),
+    approvals: tasks.listApprovals(),
   });
 });
 
 app.get("/api/agents", (_req, res) => res.json(registry.list()));
+
+app.get("/api/departments", (_req, res) =>
+  res.json(
+    DEPARTMENTS.map((d) => ({
+      ...d,
+      agents: registry.listByDepartment(d.id),
+      spend: ledger.totalsByDepartment().find((t) => t.department === d.id) ?? {
+        department: d.id,
+        tokens: 0,
+        cents: 0,
+        calls: 0,
+      },
+    })),
+  ),
+);
 
 app.post("/api/agents/:id/status", (req, res) => {
   const a = registry.setStatus(req.params.id, req.body.status ?? "idle", req.body.task);
@@ -222,20 +392,103 @@ app.post("/api/research", async (req, res) => {
   res.json(result);
 });
 
+// --- Nhật ký hoạt động ---
+app.get("/api/activity", (req, res) => {
+  const { limit, kind } = req.query as any;
+  res.json(activity.list(Number(limit ?? 120), kind));
+});
+
 // --- Ngân sách token ---
-app.get("/api/budget", (_req, res) =>
-  res.json({ total: budget.getUsage("normal"), learning: budget.getUsage("learning") }),
-);
+app.get("/api/budget", (_req, res) => res.json(budget.snapshot()));
 
 app.post("/api/budget", (req, res) => {
-  const { dailyLimit, learningPercent } = req.body as any;
-  budget.configure({ dailyLimit, learningPercent });
+  const { dailyLimit, weeklyLimit, learningPercent, perTaskLimit, warnRatio } = req.body as any;
+  budget.configure(
+    { dailyLimit, weeklyLimit, learningPercent, perTaskLimit, warnRatio },
+    budgetToken,
+  );
   const c = configStore.get();
   configStore.update({
     dailyTokenLimit: dailyLimit ?? c.dailyTokenLimit,
+    weeklyTokenLimit: weeklyLimit ?? c.weeklyTokenLimit,
+    perTaskTokenLimit: perTaskLimit ?? c.perTaskTokenLimit,
+    warnRatio: warnRatio ?? c.warnRatio,
     learning: { ...c.learning, learningPercent: learningPercent ?? c.learning.learningPercent },
   });
-  res.json({ total: budget.getUsage("normal"), learning: budget.getUsage("learning") });
+  res.json(budget.snapshot());
+});
+
+// --- Nhật ký chi tiêu token ---
+app.get("/api/budget/ledger", (req, res) => {
+  const { limit, wallet, agentId } = req.query as any;
+  res.json({
+    entries: ledger.list(Number(limit ?? 100), { wallet, agentId }),
+    totals: ledger.totalsToday(),
+    byDepartment: ledger.totalsByDepartment(),
+  });
+});
+
+// --- Hạn mức Cursor (đọc trực tiếp từ API của Cursor) ---
+app.get("/api/quota", async (_req, res) => {
+  const q = await fetchCursorQuota();
+  const plan = await fetchPlanInfo();
+  res.json({ ...q, plan });
+});
+
+app.post("/api/quota/refresh", async (_req, res) => {
+  await pollCursorQuota();
+  res.json(budget.getQuota() ?? { available: false });
+});
+
+// --- Tác vụ ---
+app.get("/api/tasks", (_req, res) => res.json(tasks.list()));
+
+app.post("/api/tasks", async (req, res) => {
+  if (emergencyStop) return res.status(423).json({ error: "Đang bật chế độ dừng khẩn cấp." });
+  const body = req.body as any;
+  const agent = registry.get(body.agentId);
+  const task = await tasks.submit({
+    title: body.title ?? "Tác vụ mới",
+    prompt: body.prompt ?? "",
+    agentId: body.agentId ?? "minh",
+    agentName: agent?.name ?? body.agentName ?? "Agent",
+    department: body.department ?? agent?.department ?? "dispatch",
+    context: body.context,
+    toolSteps: body.toolSteps,
+    mode: body.mode,
+    wallet: body.wallet,
+  });
+  res.json(task);
+});
+
+app.post("/api/tasks/:id/approve", async (req, res) => {
+  // Id yêu cầu duyệt có dạng "apr_<taskId>".
+  const t = await tasks.approve(`apr_${req.params.id}`);
+  if (!t) return res.status(404).json({ error: "Không tìm thấy yêu cầu duyệt." });
+  res.json(t);
+});
+
+app.post("/api/tasks/:id/reject", (req, res) => {
+  const t = tasks.reject(`apr_${req.params.id}`);
+  if (!t) return res.status(404).json({ error: "Không tìm thấy yêu cầu duyệt." });
+  res.json(t);
+});
+
+app.post("/api/tasks/:id/cancel", (req, res) => {
+  const t = tasks.cancel(req.params.id);
+  if (!t) return res.status(404).json({ error: "Không tìm thấy tác vụ." });
+  res.json(t);
+});
+
+/** Trạng thái hệ thống LLM: đã đăng nhập Cursor chưa, CLI có tồn tại không. */
+app.get("/api/llm/status", (_req, res) => {
+  res.json({
+    cursorCli: !!resolveAgentExe(),
+    cursorAuth: describeCursorAuth(),
+    backend: configStore.get().llmBackend,
+    model: configStore.get().cursorModel,
+    freeTierOnly: configStore.get().freeTierOnly,
+  });
 });
 
 // --- Đề xuất thay đổi ---
@@ -263,7 +516,16 @@ app.get("/api/config", (_req, res) => res.json(configStore.get()));
 app.put("/api/config", (req, res) => {
   const c = configStore.update(req.body ?? {});
   browser.setPolicy(c.browser);
-  budget.configure({ dailyLimit: c.dailyTokenLimit, learningPercent: c.learning.learningPercent });
+  budget.configure(
+    {
+      dailyLimit: c.dailyTokenLimit,
+      weeklyLimit: c.weeklyTokenLimit,
+      learningPercent: c.learning.learningPercent,
+      perTaskLimit: c.perTaskTokenLimit,
+      warnRatio: c.warnRatio,
+    },
+    budgetToken,
+  );
   broadcast("config", c);
   res.json(c);
 });
@@ -278,11 +540,36 @@ app.post("/api/automation-level", (req, res) => {
 // --- Dừng khẩn cấp ---
 app.post("/api/emergency-stop", (_req, res) => {
   emergencyStop = !emergencyStop;
+  if (emergencyStop) {
+    // Dừng mọi agent: về trạng thái stopped và huỷ tác vụ đang chờ duyệt.
+    for (const a of registry.list()) {
+      registry.setStatus(a.id, "stopped");
+      broadcast("agent:update", registry.get(a.id));
+    }
+    for (const t of tasks.list()) {
+      if (t.status === "pending" || t.status === "awaiting-approval" || t.status === "running") {
+        tasks.cancel(t.id);
+      }
+    }
+  } else {
+    for (const a of registry.list()) {
+      registry.setStatus(a.id, "idle");
+      broadcast("agent:update", registry.get(a.id));
+    }
+  }
   broadcast("emergency", { emergencyStop });
+  activity.record({
+    kind: "emergency",
+    actor: "bạn",
+    message: emergencyStop ? "DỪNG KHẨN CẤP" : "Tiếp tục hoạt động",
+    level: emergencyStop ? "danger" : "info",
+  });
   res.json({ emergencyStop });
 });
 
 // --- Tự học định kỳ ---
+// Tự học đi qua TaskRunner để: (1) dùng ví "learning" riêng, (2) được ghi
+// vào ledger, (3) vẫn phải ước lượng và hỏi nếu vượt ngưỡng.
 let learningTimer: NodeJS.Timeout | null = null;
 
 function startLearningLoop(): void {
@@ -292,15 +579,27 @@ function startLearningLoop(): void {
     const c = configStore.get();
     if (!c.learning.enabled || emergencyStop) return;
     if (c.automationLevel === "ask") return; // Chỉ hỏi → không tự học
-    const agent = registry.list()[0];
+    const agent = registry.leadOf("library") ?? registry.list()[0];
     if (!agent) return;
     const topic = c.learning.topics[Math.floor(Math.random() * c.learning.topics.length)];
-    void research
-      .research({ agent, topic, learningMode: true }, policyForLevel(c.automationLevel))
-      .then(() => {
+
+    void tasks
+      .submit({
+        title: `Tự học: ${topic}`,
+        prompt:
+          `Nghiên cứu chủ đề "${topic}" bằng công cụ duyệt web sandbox, ` +
+          `tóm tắt thành 5 gạch đầu dòng và ghi vào Thư viện Tri thức.`,
+        agentId: agent.id,
+        agentName: agent.name,
+        department: agent.department,
+        mode: "ask",
+        wallet: "learning",
+      })
+      .then(async (t) => {
+        if (t.status !== "done") return;
         registry.update(agent.id, { learned: (registry.get(agent.id)?.learned ?? 0) + 1 });
         const ret = kb.saveRetrospective({
-          taskId: `learn_${Date.now()}`,
+          taskId: t.id,
           agentId: agent.id,
           agentName: agent.name,
           didWell: `Nghiên cứu "${topic}" và lưu vào Thư viện Tri thức.`,
@@ -308,6 +607,16 @@ function startLearningLoop(): void {
           nextTime: "Tìm thêm 2 nguồn độc lập trước khi kết luận.",
         });
         broadcast("kb:retrospective", ret);
+        kb.add({
+          kind: "note",
+          agentId: agent.id,
+          title: topic,
+          body: String(t.result ?? "").slice(0, 4000),
+          sources: [],
+          confidence: 0.55,
+          fromWeb: true,
+          tags: ["tự học"],
+        });
       })
       .catch(() => {});
   }, minutes * 60_000);
@@ -329,7 +638,17 @@ wss.on("connection", (ws) => {
     if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ event, data }));
   };
   listeners.add(listener);
-  ws.send(JSON.stringify({ event: "state", data: { agents: registry.list(), config: configStore.get() } }));
+  ws.send(
+    JSON.stringify({
+      event: "state",
+      data: {
+        agents: registry.list(),
+        departments: DEPARTMENTS,
+        config: configStore.get(),
+        budget: budget.snapshot(),
+      },
+    }),
+  );
   ws.on("close", () => listeners.delete(listener));
 });
 
