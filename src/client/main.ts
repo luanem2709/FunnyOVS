@@ -256,13 +256,29 @@ scene.add(floor);
       target: target.toArray(),
       background: (scene.background as THREE.Color | null)?.getHexString?.() ?? null,
       fog: scene.fog ? (scene.fog as THREE.Fog).color.getHexString() : null,
-      agents: [...agents.values()].map((r) => ({
-        id: r.state.id,
-        name: r.state.name,
-        pos: r.visual.root.position.toArray(),
-        animated: r.visual.animated,
-        kind: r.visual.chibi ? "chibi" : r.visual.rig ? "glb" : "capsule",
-      })),
+      agents: [...agents.values()].map((r) => {
+        const box = new THREE.Box3().setFromObject(r.visual.root);
+        const cbox = r.visual.chibi
+          ? new THREE.Box3().setFromObject(r.visual.chibi.root)
+          : null;
+        let meshCount = 0;
+        r.visual.chibi?.root.traverse((o) => {
+          if ((o as THREE.Mesh).isMesh) meshCount++;
+        });
+        return {
+          id: r.state.id,
+          name: r.state.name,
+          animated: r.visual.animated,
+          kind: r.visual.chibi ? "chibi" : r.visual.rig ? "glb" : "capsule",
+          anim: r.visual.chibi?.anim ?? null,
+          sit: r.visual.chibi?.sit ?? null,
+          meshCount,
+          bodyH: cbox
+            ? [+cbox.min.y.toFixed(2), +cbox.max.y.toFixed(2)]
+            : null,
+          bodyW: cbox ? +(cbox.max.x - cbox.min.x).toFixed(2) : null,
+        };
+      }),
     },
   };
 };
@@ -272,8 +288,9 @@ scene.add(floor);
   const rec = agents.get(id);
   if (!rec) return;
   target.set(rec.visual.root.position.x, 1.0, rec.visual.root.position.z);
+  // Nhân vật quay mặt về +Z → camera đứng phía trước mặt.
   yaw = 0.4;
-  pitch = 0.18;
+  pitch = 0.3;
   dist = camDist;
 };
 
@@ -396,7 +413,8 @@ function makeAgent(index: number, status: AgentStatus, name: string): AgentVisua
   const tint = AGENT_TINTS[index % AGENT_TINTS.length];
   const visual = createAgentVisual(characterAsset, tint, status, index, name);
   const nameTag = makeSign("", 2.4, 0.45, "#1f2937");
-  nameTag.position.set(0, visual.animated ? 2.35 : 2.5, 0);
+  // Nhân vật chibi ngồi: đầu ở cao độ ~1.4 → nhãn đặt ngay trên đỉnh đầu.
+  nameTag.position.set(0, visual.chibi ? 1.78 : visual.animated ? 2.35 : 2.5, 0);
   visual.root.add(nameTag);
   visual.tag = nameTag;
   return visual;
@@ -423,8 +441,9 @@ class Screen {
       new THREE.PlaneGeometry(0.68, 0.4),
       new THREE.MeshBasicMaterial({ map: this.tex }),
     );
-    // Màn hình nằm trên bàn, quay mặt về phía người ngồi (+Z).
-    this.mesh.position.set(x, DESK_TOP_Y + 0.43, z);
+    // Màn hình nằm trên bàn. Panel của monitor hướng -Z sau khi xoay PI → đặt
+    // texture ngay trước panel (z nhỏ hơn) để không bị vỏ màn hình che.
+    this.mesh.position.set(x, DESK_TOP_Y + 0.43, z - 0.03);
     this.mesh.rotation.y = Math.PI;
     this.drawIdle();
   }
@@ -570,11 +589,10 @@ function setupAgents(list: AgentState[]): void {
     if (agents.has(a.id)) continue;
     const visual = makeAgent(index++, a.status, a.name);
     visual.root.position.set(a.position.x, 0, a.position.z);
-    // Nhân vật ngồi tại bàn, quay mặt về phía bàn (bàn ở -Z → xoay 180°).
+    // Nhân vật ngồi tại bàn, quay mặt về phía bàn (+Z) → thấy mặt từ camera mặc định.
     if (visual.chibi) visual.chibi.sit = true;
-    visual.root.rotation.y = Math.PI;
     scene.add(visual.root);
-    const screen = new Screen(a.position.x, a.position.z - 1.13);
+    const screen = new Screen(a.position.x + 0.52, a.position.z + 0.72);
     scene.add(screen.mesh);
     agents.set(a.id, { state: a, visual, screen });
     updateAgentTag(a);
@@ -601,9 +619,12 @@ function buildDesks(list: AgentState[]): void {
 
     // Dùng chính vị trí agent làm gốc: bàn ở z = -0.95, ghế tại 0.
     const placements = [
-      { ...layouts.desk, x: 0, z: -0.95 },
-      { ...layouts.chair, x: 0, z: 0, rotY: 0 },
-      { ...layouts.screen, x: 0, z: -1.13 },
+      // Bàn ở phía trước (+Z): nhân vật ngồi quay mặt về bàn, tay gõ xuống mặt bàn.
+      { ...layouts.desk, x: 0, z: 0.62 },
+      // Ghế lùi về sau, lưng ghế ở -Z.
+      { ...layouts.chair, x: 0, z: -0.12, rotY: 0 },
+      // Màn hình đặt lệch sang bên phải để không che mặt nhân vật.
+      { ...layouts.screen, x: 0.52, z: 0.72, rotY: Math.PI },
     ];
     buildFurniture(group, placements, manifest, MAT.propColor);
   }
@@ -647,6 +668,25 @@ function applyStatus(a: AgentState): void {
 /** Hook kiểm thử: đổi trạng thái agent ngay trong scene. */
 (window as any).__agents = agents;
 (window as any).__applyStatus = applyStatus;
+
+/** Hook kiểm thử: vật thể nào nằm ở giữa khung hình. */
+(window as any).__pickCenter = (): string[] => {
+  const rc = new THREE.Raycaster();
+  rc.setFromCamera(new THREE.Vector2(0, 0), camera);
+  return rc
+    .intersectObjects(scene.children, true)
+    .slice(0, 6)
+    .map((h) => {
+      const names: string[] = [];
+      h.object.traverseAncestors((o) => {
+        if (o.name) names.push(o.name);
+      });
+      const mesh = h.object as THREE.Mesh;
+      const mat = mesh.material;
+      const matType = Array.isArray(mat) ? (mat[0]?.type ?? "-") : (mat?.type ?? "-");
+      return `${mesh.type}[${matType}] d=${h.distance.toFixed(2)} ${names.join("<")}`;
+    });
+};
 
 // ---------------- Camera orbit ----------------
 let yaw = 0;

@@ -299,7 +299,8 @@ function buildChair(): THREE.Group {
   g.add(stem);
 
   const seat = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.1, 0.54), M.seat);
-  seat.position.y = SEAT_Y;
+  // Mặt ghế phải nằm đúng cao độ SEAT_Y (0.49) — chibi ngồi dựa vào đây.
+  seat.position.y = SEAT_Y - 0.05;
   seat.castShadow = true;
   seat.receiveShadow = true;
   g.add(seat);
