@@ -258,7 +258,65 @@ timeout cứng + biến môi trường đã lọc.
 ## 9. Việc còn lại
 
 - [ ] Đưa bảng giá vào `docs/03-ngan-sach-token.md` (hiện mới chỉ ở file code).
-- [ ] Chế độ *Tự chủ cao* hiện bỏ qua bước duyệt ước lượng — cần kiểm tra lại
-      rằng nó vẫn tôn trọng trần ngày/tuần.
 - [ ] Bản đồ hạn mức theo *ngày* của Cursor là *tháng*; HUD hiện hiển thị cả hai
       (ngày của ứng dụng + chu kỳ của Cursor) nhưng chưa gộp lại thành một con số.
+
+---
+
+## 10. Hai lỗi phát hiện khi kiểm chứng & cách sửa
+
+Cả hai lỗi đều chỉ lộ ra khi chạy thật, không thấy được khi đọc code.
+
+### 10.1. Thiếu `--trust` → mọi tác vụ fail
+
+Cursor CLI từ chối chạy trong thư mục chưa được tin cậy:
+
+```
+? Workspace Trust Required
+  Cursor Agent can execute code and access files in this directory.
+  Do you trust the contents of this directory?
+```
+
+Sửa: thêm `--trust` vào `buildArgs()`. Workspace luôn là sandbox do ứng dụng
+tạo (`workspace/`), nên tin cậy được. **Không** dùng `--force`/`--yolo` — chúng
+cho phép chạy mọi lệnh mà không hỏi.
+
+### 10.2. Ước lượng lệch 22 lần
+
+Ước lượng đầu tiên cho một prompt 21 token là **2.030 token**; thực tế là
+**44.578 token** — lệch 22 lần. Nguyên nhân: Cursor CLI luôn nạp system prompt
++ định nghĩa tool + ngữ cảnh workspace, không phụ thuộc độ dài prompt.
+
+Sửa: thêm `BASE_OVERHEAD` vào công thức, và **hiệu chỉnh lại toàn bộ ngưỡng**
+(xem bảng ở §4.2). Nếu giữ nguyên trần 50.000/tác vụ thì gần như mọi tác vụ
+thật đều bị chặn.
+
+> Bài học: với CLI có chi phí cố định, phải **đo một lượt thật** rồi mới đặt
+> ngưỡng. Suy đoán từ độ dài prompt là sai.
+
+---
+
+## 11. Kiểm chứng từng hạng mục
+
+| Hạng mục | Cách kiểm chứng | Kết quả |
+|---|---|---|
+| 9 phòng ban render | `/api/departments` + ảnh chụp trình duyệt | ✅ |
+| Nhân vật + màn hình | Screenshot, phân tích pixel (895 màu phân biệt) | ✅ |
+| HUD năng lượng | `Runtime.evaluate` đọc nội dung `#budget-widget` | ✅ 30%, Cursor Free 3% |
+| Tác vụ chạy thật | `POST /api/tasks` | ✅ done, 44.578 token, 4.0892 cents |
+| Ledger ghi đúng | `GET /api/budget/ledger` | ✅ 2 dòng, `cli-usage` |
+| Hộp thoại duyệt | Tác vụ 272.800 token → `awaiting-approval`, hộp thoại hiện trong cảnh | ✅ |
+| Từ chối | `POST /api/tasks/:id/reject` → rejected, ledger không đổi | ✅ |
+| Emergency stop | `POST /api/emergency-stop` → cả 8 nhân vật `stopped` | ✅ |
+| Nhật ký hoạt động | `GET /api/activity` | ✅ |
+| Panel Cài đặt | Đọc nội dung: gói Free, 3%, reset 27/11/2026, nâng cấp pro $20/mo | ✅ |
+| Typecheck | `npx tsc --noEmit` | ✅ sạch |
+| Test | `npx vitest run` | ✅ 55/55 |
+
+### Ảnh chụp màn hình
+
+Giao diện được kiểm tra qua trình duyệt tích hợp. Vì ảnh PNG không nhúng được
+vào tài liệu Markdown trên GitHub, ảnh được lưu ở
+`docs/media/` khi chụp; xác minh cơ bản dựa vào phân tích pixel (số màu phân
+biệt trong khung hình) và đọc nội dung DOM qua `Runtime.evaluate`.
+
