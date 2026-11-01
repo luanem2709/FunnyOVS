@@ -1,11 +1,15 @@
-node_modules/
-dist/
-.data/
-workspace/
-.env
-.env.*
-!.env.example
-references/
-*.log
-.DS_Store
-Thumbs.db
+* text=auto eol=lf
+*.ts text
+*.tsx text
+*.js text
+*.mjs text
+*.json text
+*.md text
+*.css text
+*.html text
+*.yml text
+*.svg text
+*.png binary
+*.jpg binary
+*.ico binary
+*.woff2 binary
