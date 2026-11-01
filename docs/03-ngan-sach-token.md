@@ -1,194 +1,427 @@
 # Bước 3 — Ngân sách token: khả thi hay không
 
-> Ngày khảo sát: 2026-11-01 · Cursor phiên bản **3.22.12** trên máy bạn.
-> Tài liệu chính thức: `cursor.com/docs` → *Models & Pricing*.
+> Khảo sát: 2026-11-01 · Cursor IDE **3.22.12** · Cursor CLI **2026.10.22-27dcf5f**
+> Tài liệu chính thức: `cursor.com/docs` → *Models & Pricing*
+
+## Quy ước ghi chú
+
+| Nhãn | Ý nghĩa |
+|---|---|
+| ✅ **ĐÃ KIỂM CHỨNG** | Chạy thật trên máy, có output quan sát được |
+| 📄 **TÀI LIỆU** | Lấy từ `cursor.com/docs` (chưa chạy thử) |
+| 🔢 **ƯỚC LƯỢNG** | Ta tự tính, không phải số Cursor công bố |
 
 ---
 
 ## 1. Câu trả lời thẳng
 
-> *"Ứng dụng có thể gọi trực tiếp hạn mức Cursor của tôi không?"*
+> *"Ứng dụng có thể dùng token từ gói Cursor của tôi không?"*
 
-### 1.1 Dùng **token của gói Cursor** làm nguồn LLM cho ứng dụng: **KHÔNG khả thi theo cách an toàn**
+### 1.1 Có — và giờ đã **đọc được cả số dư hạn mức**
 
-Lý do, dựa trên tài liệu chính thức:
+✅ **ĐÃ KIỂM CHỨNG.** Ba phát hiện thay đổi bản chất thiết kế:
 
-1. **Gói chỉ hỗ trợ đúng 4 model của Cursor**: Grok 4.7, Grok 4.6, Grok 4.5 và
-   Composer 2.5. Tài liệu ghi rõ:
-   > *"The pool covers Grok 4.7, Grok 4.6, Grok 4.5, and Composer 2.5."*
+| Phát hiện | Bằng chứng |
+|---|---|
+| **CLI gọi được model thật** | `agent -p --model auto --output-format json` → trả về kết quả đúng, kèm `usage: {inputTokens, outputTokens, cacheReadTokens}` |
+| **Đọc được % đã dùng** | `POST api2.cursor.sh/aiserver.v1.DashboardService/GetCurrentPeriodUsage` → `autoPercentUsed`, `apiPercentUsed`, `totalPercentUsed` |
+| **Đọc được token từng lượt** | `GetAggregatedUsageEvents` / `GetFilteredUsageEvents` → `inputTokens`, `outputTokens`, `cacheReadTokens`, `totalCents` |
 
-2. **Model bên thứ ba (Claude, GPT, Gemini) KHÔNG nằm trong gói**:
-   > *"Third-party models like Claude, GPT, and Gemini aren't part of the included
-   > pool. On Premium and above, they're available in Cursor at the model's API
-   > list price from the first request, paid from your prepaid credit."*
+→ Không cần ước lượng token nữa. App đọc được số thật từ Cursor.
 
-   → Dùng Claude hay GPT trong ứng dụng của bạn là **tiền thật**, không lấy từ
-   hạn mức gói.
+### 1.2 Nhưng tài khoản của bạn thực ra là **Free**, không phải Pro
 
-3. **Quy mô gói rất nhỏ**. Giá gói hiện tại (The X Subscription):
-   | Gói | Giá | Lượng dùng tích hợp |
-   |---|---|---|
-   | Plus | $8/tháng | 1× |
-   | Premium | $30/tháng | 4× |
-   | Super | $100/tháng | 15× |
-   | Ultra | $200/tháng | 50× |
+Đây là điểm quan trọng nhất và ngược với kỳ vọng:
 
-   Một lượt "1×" tương đương một lượt Agent tiêu chuẩn. Ứng dụng chạy nền
-   với nhiều agent sẽ hết pool trong **vài giờ**.
+| Nguồn | Kết quả |
+|---|---|
+| `cursorAuth/stripeMembershipType` trong IDE (local) | `pro` |
+| `agent about --format json` (server) | `"subscriptionTier": "Free"` |
+| `auth/full_stripe_profile` (server) | `"membershipType": "free"`, `"individualMembershipType": "free"` |
+| `DashboardService/GetPlanInfo` (server) | `planName: "Free"`, `nextUpgrade: {tier: "pro", price: "$20/mo"}` |
 
-4. **Pool làm mới theo TUẦN, không theo ngày** → không khớp với mô hình "hạn
-   mức ngày + ví tự học 10%" mà bạn yêu cầu.
+**Server là nguồn sự thật.** Tài khoản đang ở tier Free, đã dùng thử và hết hạn
+mức, nhưng IDE vẫn cache `pro` từ lần đăng nhập cũ.
 
-### 1.2 Nhưng có **một đường khả thi**: Cursor CLI (`cursor agent`)
+Hệ quả trực tiếp — mọi model bị từ chối, trừ `auto`:
 
-Tài liệu chính thức xác nhận CLI là một "Cursor model" được hưởng pool:
+```
+$ agent -p --model composer-2.5 ...
+Error: Model unavailable on Free
+  Free includes Grok 4.7, Grok 4.6, and Auto with fixed settings.
 
-> *"The pool is shared across everything on your subscription: Agent in the
-> editor, **CLI**, Cloud Agents, Grok Bot, and the Grok apps."*
+$ agent -p --model grok-4.7-low ...
+Error: Model unavailable on Free        ← tên model đúng vẫn bị từ chối
 
-**Cơ chế khả thi (đã kiểm chứng trên máy bạn):**
-
-```bash
-# Cài Cursor CLI (riêng biệt, không ảnh hưởng IDE)
-irm 'https://cursor.com/install?win32=true' | iex
-
-# Chạy tác vụ không tương tác, trả về text
-agent -p "tóm tắt file này" --output-format text
+$ agent -p --model auto ...
+✅ thành công
 ```
 
-Tài liệu xác nhận print mode:
-> *"Use print mode for non-interactive scenarios like scripts, CI pipelines, or
-> automation: `agent -p "find and fix performance issues" --model "gpt-5"`"*
+Lưu ý: `grok-4.7-low` **có** trong danh sách model của tài khoản, nhưng Free tier
+gói cứng chỉ cho dùng qua bucket `auto` với thiết lập cố định (Fast tắt, effort
+= medium). Tài liệu mô tả đúng hành vi này cho tier Plus, nhưng gói Free bị hạn
+chế hơn (chỉ Grok 4.7 / 4.6 / Auto).
 
-**Kết luận Bước 3:**
-- ✅ **Dùng `cursor agent -p` làm backend LLM → tiêu token từ pool gói của bạn.**
-- ⚠️ Nhưng phải hiểu rõ giới hạn: pool tuần, chỉ 4 model Cursor, và mỗi lượt
-  CLI vẫn là **một lượt Agent** — nhiều agent chạy song song sẽ đốt pool rất nhanh.
-- ➡️ Vì vậy kiến trúc phải có **lớp Token Budget riêng** làm bộ đệm, và CLI
-  Cursor chỉ nên là **một trong nhiều backend**.
+**Hành động đề xuất:** nâng lên Pro (`$20/mo` theo `GetPlanInfo`, hoặc $30/mo
+Premium theo bảng giá hiện hành) để mở Composer 2.5 + Grok 4.5, mở Fast mode và
+chọn effort. Nếu giữ Free, ứng dụng **bắt buộc** chỉ dùng `auto`.
 
-### 1.3 Đọc số dư hạn mức: **chưa có API công khai**
+### 1.3 Chu kỳ làm mới hạn mức: **THEO THÁNG**, không theo tuần
 
-Tôi đã dò trên máy bạn:
+✅ **ĐÃ KIỂM CHỨNG** (từ chính API, không phải tài liệu):
 
-| Đầu mối | Kết quả |
+```json
+// GetCurrentPeriodUsage
+"billingCycleStart": "1793092334300",   // 2026-10-29
+"billingCycleEnd":   "1795770734300"    // 2026-11-27
+```
+
+```json
+// GetPlanInfo
+"nextUpgrade": { "includedUsagePeriod": "INCLUDED_USAGE_PERIOD_MONTHLY" }
+```
+
+```json
+// GetSandUsageStatus
+"currentPeriodStart": "2026-10-29T00:00:00Z",
+"includedLimitZero": true
+```
+
+→ Tài khoản Free của bạn dùng **pool theo tháng**, reset ngày 27 hằng tháng.
+📄 Tài liệu mô tả gói Plus mới bằng pool **theo tuần** — đây là hành vi của
+gói mới (The X Subscription), không áp dụng cho gói legacy mà bạn đang dùng.
+
+Vậy mô hình "hạn mức ngày + ví tự học 10%" của ta vẫn dùng được, nhưng phải
+**ánh xạ**: giới hạn nội bộ theo ngày, còn trần thực là pool tháng của Cursor.
+
+### 1.4 Không có API công khai — nhưng có API nội bộ (đã kiểm chứng)
+
+✅ **ĐÃ KIỂM CHỨNG** trên máy:
+
+| Endpoint (POST) | Kết quả |
 |---|---|
-| `cursor.com/api/usage` | **401 Unauthorized** → cần token đăng nhập, không có endpoint công khai |
-| `api2.cursor.sh/aiserver.v1.AiServerService/GetUsageInfo` | **404** → endpoint này không tồn tại ở bản 3.22.12 |
-| `api.cursor.sh` | DNS không phân giải |
-| Mã nguồn IDE (`workbench.desktop.main.js`, 38 MB) | có `api2/3/4.cursor.sh`, `agent.api5.cursor.sh`; có `usageLimitPolicyStatusService` với các trạng thái `slow_pool` / `auto_switch` / `hard_block` — nhưng **không** có RPC công khai đọc số dư |
-| Tài liệu chính thức | *"Your remaining usage and next reset date are shown in your **editor settings** and under **Usage at grok.com/dashboard**"* → chỉ qua giao diện, không có API |
+| `aiserver.v1.DashboardService/GetCurrentPeriodUsage` | **200** — % đã dùng + chu kỳ |
+| `aiserver.v1.DashboardService/GetAggregatedUsageEvents` | **200** — tổng token + tiền |
+| `aiserver.v1.DashboardService/GetFilteredUsageEvents` | **200** — chi tiết từng lượt |
+| `aiserver.v1.DashboardService/GetPlanInfo` | **200** — tên gói + giá nâng cấp |
+| `aiserver.v1.DashboardService/GetSandUsageStatus` | **200** — trạng thái pool |
+| `aiserver.v1.DashboardService/GetUsageLimitStatusAndActiveGrants` | **200** — grant on-demand |
+| `aiserver.v1.DashboardService/GetHardLimit` | **200** — `noUsageBasedAllowed` |
+| `auth/full_stripe_profile` | **200** — membershipType |
+| `aiserver.v1.AiServerService/GetUsageInfo` (GET) | 404 — route không tồn tại |
+| `cursor.com/api/usage` | 401 — cần auth, không có route công khai |
 
-**Kết luận:** app của bạn **không thể** lấy số dư hạn mức Cursor bằng API.
-→ Ta phải **tự đếm token** (ước lượng từ số ký tự) và hiển thị trong 3D.
-→ Đây chính là lý do lớp Token Budget là bắt buộc, không phải tuỳ chọn.
+Đây là **API nội bộ (không công khai)**. Rủi ro: Cursor có thể đổi route bất cứ
+lúc nào. → Ta phải có **fallback**: nếu API lỗi, tự đếm token từ output của CLI
+(`usage` trong JSON) và báo trạng thái "không đọc được số dư".
 
 ---
 
-## 2. Kiến trúc Token Budget
+## 2. Cơ chế đăng nhập (đã kiểm chứng)
 
-### 2.1 Nguyên tắc: một lớp trung tâm, nhiều backend
+✅ **ĐÃ KIỂM CHỨNG.**
+
+### 2.1 CLI cần token, và token của IDE **không** dùng được như API key
 
 ```
-                    ┌──────────────────────┐
-                    │    TokenBudget       │  ← bất biến, agent không sửa được
-                    │  (đóng băng + token) │
-                    └──────────┬───────────┘
-                               │
-          ┌────────────────────┼────────────────────┐
-          │                    │                    │
-    ┌─────▼─────┐      ┌───────▼───────┐    ┌───────▼───────┐
-    │ Ví chính  │      │  Ví học       │    │  Bộ đếm nội  │
-    │ (tác vụ)  │      │ (tự học 10%)  │    │  bị đóng băng│
-    └─────┬─────┘      └───────┬───────┘    └───────┬───────┘
-          │                    │                    │
-          └────────────┬───────┴────────────────────┘
-                       │
-              ┌────────▼─────────┐
-              │  Backend (chọn)  │
-              ├──────────────────┤
-              │ 1. cursor-agent  │  ← dùng pool gói Cursor
-              │ 2. openai-compat │  ← API key riêng
-              │ 3. local/rule    │  ← không cần key
-              └──────────────────┘
+$ agent status                 → "Not logged in"
+$ agent --list-models          → "Error: Authentication required."
 ```
 
-**Điểm mấu chốt:** Token Budget đo và kiểm soát **trước** khi gọi backend nào.
-Đổi backend = đổi cấu hình, không phải viết lại logic.
+Thử 2 cách dùng token `cursorAuth/accessToken` lấy từ
+`%APPDATA%\Cursor\User\globalStorage\state.vscdb`:
 
-### 2.2 Cấu trúc dữ liệu
+| Cách | Kết quả |
+|---|---|
+| `CURSOR_API_KEY=<accessToken>` | ❌ `⚠ Warning: The provided API key is invalid.` |
+| `CURSOR_AUTH_TOKEN=<accessToken>` | ✅ **Thành công** — liệt kê được 274 model, gọi được API |
 
-```ts
-interface TokenBudget {
-  // Bất biến — không agent nào sửa được
-  readonly dailyLimit: number;       // tổng token/ngày
-  readonly weeklyLimit: number;      // tổng token/tuần
-  readonly learningPercent: number;  // % dành cho tự học (0-50)
-  readonly perTaskLimit: number;     // trần mỗi tác vụ
-  readonly perDepartmentLimit: number; // trần mỗi phòng ban
-  readonly warnThreshold: number;    // 0.8
-  readonly hardLimit: number;        // 1.0
+→ Bắt buộc dùng biến **`CURSOR_AUTH_TOKEN`**, không phải `CURSOR_API_KEY`.
 
-  // Đếm
-  usedToday: number;
-  usedWeek: number;
-  learningUsed: number;
+### 2.2 Token dạng gì
+
+✅ **ĐÃ KIỂM CHỨNG.** accessToken là JWT HS256 (3 phần), payload:
+
+```json
+{
+  "sub": "google-oauth2|user_...",
+  "iss": "https://authentication.cursor.sh",
+  "aud": "https://cursor.com",
+  "scope": "openid profile email offline_access",
+  "type": "session",
+  "exp": 1798355520
 }
 ```
 
-### 2.3 Ví học (learning wallet) — tách biệt nhưng chung trần
+Hạn dùng ~28/12/2026. `agent login` cũng tạo file
+`%USERPROFILE%\.cursor\cli-config.json` chứa `authInfo` — nhưng file này IDE
+đang khoá nên đọc bằng cách ghi đè sẽ lỗi `EPERM` (đã gặp, đã xử lý bằng
+cách lấy token từ SQLite của IDE).
+
+### 2.3 Chuỗi khởi động an toàn
 
 ```
-Ví học có hạn mức RIÊNG:  learningLimit = dailyLimit × learningPercent / 100
-Nhưng KHÔNG vượt tổng:   usedToday + learningUsed ≤ dailyLimit
-                        usedWeek + learningUsed ≤ weeklyLimit
+%APPDATA%\Cursor\User\globalStorage\state.vscdb
+  → bảng ItemTable, khóa "cursorAuth/accessToken"
+  → gán vào biến môi trường CURSOR_AUTH_TOKEN
+  → gọi %LOCALAPPDATA%\cursor-agent\agent.cmd
 ```
 
-→ Học không ăn vào ví chính, nhưng học cũng không thể làm vượt trần tổng.
-→ Hết ví học → agent dừng tự học, **không** đụng ví chính.
+⚠️ Token **không** được ghi vào file log, ledger, hay commit. Chỉ nằm trong RAM
+của tiến trình con.
 
-### 2.4 Tự hạ cấp model (model routing)
+---
 
-Độ khó tác vụ được ước lượng từ: độ dài input + số bước tool + loại tác vụ.
+## 3. Cờ CLI — xác nhận từ `agent --help`
 
-| Độ khó | Tiêu chí | Backend | Model |
-|---|---|---|---|
-| `trivial` | trích xuất, đếm, phân loại | cursor-agent | Composer 2.5 (rẻ nhất: $0.5/$2.5) |
-| `normal` | tóm tắt, so sánh nhiều nguồn | cursor-agent | Grok 4.5 |
-| `hard` | viết code, thiết kế | cursor-agent | Grok 4.7 |
-| `huge` | > 200k token ngữ cảnh | cursor-agent | Grok 4.7 500k (2× giá) |
+✅ **ĐÃ KIỂM CHỨNG** (chạy `agent --help` thật).
 
-⚠️ Chỉ dùng **model thuộc gói** (Grok 4.5/4.6/4.7, Composer 2.5). Nếu bật
-model bên thứ ba → phải chuyển sang backend API key riêng, và cảnh báo bạn.
+| Cờ | Tồn tại? | Ghi chú thực tế |
+|---|---|---|
+| `-p, --print` | ✅ | In ra console, cho script. Mặc định `false` |
+| `--output-format <fmt>` | ✅ | `text` \| `json` \| `stream-json`. Chỉ có tác dụng kèm `--print` |
+| `--model <id>` | ✅ | Nhận cả id đơn giản và id có override trong ngoặc vuông |
+| `--mode <mode>` | ✅ | Chỉ **2** lựa chọn: `plan`, `ask`. Không có `agent` (đó là mặc định) |
+| `--sandbox <mode>` | ✅ **NHƯNG KHÔNG DÙNG ĐƯỢC** | `enabled` \| `disabled`. **Windows không hỗ trợ sandbox** |
+| `--workspace <path>` | ✅ | Mặc định = thư mục hiện tại |
+| `--trust` | ✅ | Tin workspace, không hỏi |
+| `--api-key <key>` | ✅ | Hoặc `CURSOR_API_KEY` — **không dùng được với session token** |
+| `--header <h>` | ✅ | Header tuỳ biến, dùng nhiều lần được |
+| `--endpoint <url>` | ✅ | Mặc định `https://api2.cursor.sh` |
+| `--auto-review` | ✅ | Server classifier tự duyệt tool call an toàn |
+| `-f, --force` / `--yolo` | ✅ | Cho phép mọi lệnh — **không dùng** |
+| `--list-models` | ✅ | Liệt kê model tài khoản được |
+| `--stream-partial-output` | ✅ | Chỉ với `--print --output-format stream-json` |
 
-### 2.5 Ước lượng TRƯỚC khi chạy
+### 3.1 Sandbox trên Windows: **không khả dụng** — đây là điểm an toàn quan trọng
+
+✅ **ĐÃ KIỂM CHỨNG.** Chạy `--sandbox enabled`:
 
 ```
-ƯỚC LƯỢNG:  inputTokens + outputTokens × 3   (output thường dài hơn)
-            + 2000 (system prompt + lịch sử công cụ)
+Error: Sandbox mode is enabled but not available on this system.
+       Sandbox requires macOS or Linux.
+Run 'agent sandbox disable' to switch to allowlist mode.
+```
+
+→ Trên Windows, CLI **luôn** chạy không sandbox. Ta **không được** dựa vào
+`--sandbox` để cô lập. Phải tự cô lập:
+
+| Lớp | Cách làm |
+|---|---|
+| Chỉ cho CLI đọc workspace | `--workspace <thư mục sandbox>` + `--add-dir` **không** dùng |
+| Chế độ chỉ đọc | `--mode ask` hoặc `--mode plan` (không sửa file) |
+| Cấm lệnh nguy hiểm | `--mode plan` cho mọi tác vụ chỉ cần đọc |
+| Dừng an toàn | Timeout cứng, kill process tree |
+| Env sạch | Chỉ giữ `PATH`, `HOME` trỏ thư mục sandbox, xoá biến môi trường khác |
+| Không `--force`/`--yolo` | Tuyệt đối không dùng |
+
+### 3.2 Bảng an toàn (đã sửa theo `--help` thật)
+
+| Rủi ro | Cách chặn (đã kiểm chứng cờ tồn tại) |
+|---|---|
+| CLI đọc/ghi file ngoài workspace | `--workspace <dir>` + `--mode ask/plan`; **không** dựa vào `--sandbox` (Windows không có) |
+| CLI tự chạy lệnh nguy hiểm | `--mode plan` (read-only) cho tác vụ chỉ đọc; không dùng `--force`/`--yolo` |
+| CLI treo | Timeout cứng (mặc định 120s) + kill process tree |
+| CLI đọc khoá của bạn | Env sạch, `HOME` trỏ thư mục sandbox, không truyền token qua tham số dòng lệnh |
+| Chi phí vượt hạn mức | Token Budget kiểm tra **trước** + đọc `GetCurrentPeriodUsage` |
+
+### 3.3 Cờ **không** tồn tại (đã loại khỏi tài liệu cũ)
+
+- ❌ Không có `--output-format stream` (chỉ `text` \| `json` \| `stream-json`)
+- ❌ Không có `--mode agent` (agent là mặc định, chỉ `plan` và `ask` là lựa chọn)
+- ❌ Không có cờ nào để **đọc** hạn mức — phải gọi API `DashboardService`
+- ❌ `--sandbox enabled` không hoạt động trên Windows
+
+---
+
+## 4. Kết quả chạy thử (1 lượt duy nhất)
+
+✅ **ĐÃ KIỂM CHỨNG.**
+
+Lệnh:
+```bash
+agent -p --model auto --output-format json --mode ask --workspace <repo> \
+  "Tra lai thu muc docs/ va tra ve danh sach ten file kem so dong."
+```
+
+Output:
+```json
+{
+  "type": "result",
+  "subtype": "success",
+  "is_error": false,
+  "duration_ms": 10307,
+  "duration_api_ms": 10307,
+  "result": "…3 file: 01-phan-tich.md (240 dòng), 02-thiet-ke.md (408), 03-ngan-sach-token.md (306)…",
+  "session_id": "<đã lược bỏ>",
+  "request_id": "<đã lược bỏ>",
+  "usage": {
+    "inputTokens": 22970,
+    "outputTokens": 503,
+    "cacheReadTokens": 25472,
+    "cacheWriteTokens": 0
+  }
+}
+```
+
+### 4.1 Token đã tốn
+
+| Loại | Token |
+|---|---|
+| Input | **22.970** |
+| Output | **503** |
+| Cache read | **25.472** |
+| Cache write | 0 |
+| **Tổng tính phí** | **48.945** |
+
+Đối chiếu `GetFilteredUsageEvents` (cùng lượt đó):
+```json
+"requestsCosts": 1.5,
+"tokenUsage": { "inputTokens": 22970, "outputTokens": 503, "cacheReadTokens": 25472, "totalCents": 6.1694 },
+"chargedCents": 3.80985,
+"isChargeable": true,
+"subscriptionProductId": "free"
+```
+
+### 4.2 Kiểm chứng bảng giá trong tài liệu
+
+🔢 **TÍNH TAY** từ giá Grok 4.7 trong tài liệu ($2/M input, $0.5/M cache read,
+$6/M output):
+
+```
+22.970 × $2/M   = $0.045940
+25.472 × $0.5/M = $0.012736
+   503 × $6/M   = $0.003018
+                  --------
+                   $0.061694  =  6.1694 cents
+```
+
+→ **Khớp chính xác** `totalCents: 6.1694`. Bảng giá trong tài liệu là chính xác
+cho Grok 4.7. Lưu ý `chargedCents: 3.80985` (≈62%) là phần thực trừ vào pool
+thực tế, không bằng giá niêm yết.
+
+### 4.3 Trạng thái hạn mức sau lượt chạy
+
+✅ **ĐÃ KIỂM CHỨNG** từ `GetCurrentPeriodUsage`:
+
+```json
+"planUsage": {
+  "totalSpend": 4, "bonusSpend": 4,
+  "autoPercentUsed": 4, "apiPercentUsed": 0, "totalPercentUsed": 2
+},
+"spendLimitUsage": {
+  "pooledLimit": "0", "pooledRemaining": "0",
+  "individualLimit": 0, "limitType": "user",
+  "overallLimit": 0, "overallRemaining": 0
+},
+"displayMessage": "You've used 0% of your included usage",
+"autoModelSelectedDisplayMessage": "You've used 2% of your included total usage"
+```
+
+**Điểm quan trọng:** `includedLimitZero: true` và mọi `spendLimitUsage` đều **0**
+→ pool Free **không có trần định lượng** bằng token, chỉ có giới hạn theo
+số lượt. Vì vậy `totalPercentUsed: 2` là **phần trăm tương đối** so với một
+mốc ẩn, không phải "đã dùng 2% của 100.000 token".
+
+→ Hệ quả thiết kế: Token Budget của ta **không được** dùng `totalPercentUsed`
+làm trần cứng. Ta dùng nó làm **tín hiệu cảnh báo**, còn trần thật do **ta tự
+đặt** (theo ngày / theo tác vụ) để tránh đốt sạch pool.
+
+### 4.4 Model nào thuộc bucket `auto`
+
+✅ **ĐÃ KIỂM CHỨNG** (`autoBucketModels` trong `GetCurrentPeriodUsage`):
+48 id, gồm `composer-1` → `composer-2.5`, `composer-2.5-fast`, `grok-4.5`,
+`grok-4.6`, `grok-4.7` (mọi mức low/medium/high/xhigh/fast), `vega-*`, và `default`.
+
+→ **Tự hạ cấp model chỉ được dùng model trong danh sách này.** Model bên thứ ba
+(Claude, GPT, Gemini) không có trong pool → bị từ chối hoặc tính phí riêng.
+
+---
+
+## 5. Kiến trúc Token Budget (cập nhật)
+
+```
+                    ┌────────────────────────────┐
+                    │        TokenBudget         │
+                    │  (đóng băng + capability   │
+                    │        token bắt buộc)      │
+                    └─────────────┬──────────────┘
+                                  │
+         ┌────────────────────────┼────────────────────────┐
+         │                        │                        │
+   ┌─────▼─────┐          ┌───────▼───────┐        ┌───────▼───────┐
+   │ Ví chính  │          │  Ví học 10%   │        │  CursorQuota  │
+   │ (tác vụ)  │          │  (tách riêng) │        │  (đọc API)    │
+   └─────┬─────┘          └───────┬───────┘        └───────┬───────┘
+         │                        │                        │
+         └────────────┬───────────┴────────────────────────┘
+                      │
+         ┌────────────▼─────────────┐
+         │  Backend LLM (chọn)      │
+         ├──────────────────────────┤
+         │ 1. cursor-agent  ← ưu tiên│
+         │ 2. api-key       ← dự phòng│
+         │ 3. local/rule    ← không cần│
+         └──────────────────────────┘
+```
+
+### 5.1 Hai nguồn số liệu, độ tin cậy khác nhau
+
+| Nguồn | Dùng để | Tần suất |
+|---|---|---|
+| `usage` trong JSON của CLI | Token **thật** của từng lượt, ghi vào ledger ngay | Mỗi lượt |
+| `GetCurrentPeriodUsage` | % đã dùng, chu kỳ reset, cảnh báo sớm | Mỗi 60s + khi ≥80% |
+| Tự đếm của ta | Fallback khi API lỗi | Luôn |
+
+Ưu tiên 1 > 2 > 3. Nếu 1 và 2 lệch >20% → ghi cảnh báo vào ledger.
+
+### 5.2 Ví học (learning wallet)
+
+```
+learningLimit = dailyLimit × learningPercent / 100
+Ràng buộc chéo:  usedToday + learningUsed ≤ dailyLimit
+                  usedWeek + learningUsed ≤ weeklyLimit
+```
+Hết ví học → agent dừng tự học, **không** đụng ví chính.
+
+### 5.3 Tự hạ cấp model (chỉ trong bucket `auto`)
+
+| Độ khó | Tiêu chí | Model |
+|---|---|---|
+| `trivial` | trích xuất, đếm, phân loại | `composer-2.5` |
+| `normal` | tóm tắt, so sánh nhiều nguồn | `grok-4.5-medium` |
+| `hard` | viết code, thiết kế | `grok-4.7-high` |
+| `huge` | > 200k ngữ cảnh | `grok-4.7` + `--model 'grok-4.7[context=500k]'` |
+
+⚠️ Trên tier Free: **chỉ `auto`**. Bộ chuyển đổi tự động gộp mọi mức về
+`auto` và báo bạn.
+
+### 5.4 Ước lượng TRƯỚC khi chạy
+
+🔢 ƯỚC LƯỢNG (ta tự tính):
+```
+estimate = inputTokens + outputTokens × 3 + 2000 (system prompt + lịch sử tool)
 ```
 
 | Ước lượng | Hành động |
 |---|---|
-| ≤ 20.000 | Chạy luôn, không hỏi |
-| 20.000 – 80.000 | Chạy luôn, hiện con số "ước ~X token" trên 3D |
+| ≤ 20.000 | Chạy luôn |
+| 20.000 – 80.000 | Chạy, hiện con số ước trên 3D |
 | > 80.000 | **HỎI BẠN** trong hộp thoại 3D trước khi chạy |
-| > perTaskLimit | Chặn, đề xuất chia nhỏ tác vụ |
+| > perTaskLimit | Chặn, đề xuất chia nhỏ |
 
-### 2.6 Chống đốt token
+### 5.5 Chống đốt token
 
 | Kỹ thuật | Chi tiết |
 |---|---|
-| **Cache** | Cache theo `sha256(systemPrompt + userPrompt)` → LRU 500 mục, TTL 1h. Cache hit = 0 token. |
-| **Tóm tắt ngữ cảnh** | Giữ 5 lượt gần nhất đầy đủ; các lượt cũ hơn → 1 dòng tóm tắt. |
-| **Giới hạn vòng lặp** | `maxIterations` mỗi tác vụ (8 ở mức Cân bằng). |
-| **Cắt nội dung trang** | 6.000 ký tự/trang; tóm tắt trước khi lưu KB. |
-| **Cắt tool output** | 4.000 ký tự/lần gọi tool. |
-| **Dừng khi chạm ngưỡng** | ≥80% → cảnh báo; =100% → khoá, mọi agent dừng. |
+| Cache | `sha256(systemPrompt + userPrompt)` → LRU 500 mục, TTL 1h. Hit = 0 token |
+| Tóm tắt ngữ cảnh | Giữ 5 lượt gần nhất; lượt cũ hơn → 1 dòng tóm tắt |
+| Giới hạn vòng lặp | `maxIterations` mỗi tác vụ (8 ở mức Cân bằng) |
+| Cắt nội dung trang | 6.000 ký tự/trang |
+| Cắt tool output | 4.000 ký tự/lần gọi tool |
+| Ngưỡng | ≥80% cảnh báo · =100% khoá, mọi agent dừng |
 
-### 2.7 Nhật ký chi tiêu
-
-Bảng `token_ledger` (SQLite):
+### 5.6 Nhật ký chi tiêu (SQLite `token_ledger`)
 
 | Cột | Ý nghĩa |
 |---|---|
@@ -196,77 +429,30 @@ Bảng `token_ledger` (SQLite):
 | `task_id` | mã tác vụ |
 | `department` | phòng ban |
 | `agent_id` | nhân vật |
-| `model` | model đã dùng |
-| `backend` | cursor-agent / api / local |
-| `input_tokens`, `output_tokens` | số token thật |
+| `model` | model đã dùng (`auto` hay tên cụ thể) |
+| `backend` | `cursor-agent` / `api` / `local` |
+| `input_tokens`, `output_tokens`, `cache_read_tokens` | số token thật từ `usage` |
 | `cached` | có cache hit không |
-| `cost_usd` | ước lượng theo bảng giá Cursor |
+| `cost_cents` | `totalCents` từ Cursor |
 | `wallet` | `normal` / `learning` |
-
-Bảng giá lấy từ tài liệu chính thức (Grok 4.7: $2/M input, $6/M output;
-Composer 2.5: $0.5/M input, $2.5/M output; cache read = 10% giá input).
-
----
-
-## 3. Backend `cursor-agent` — chi tiết triển khai
-
-### 3.1 Cài đặt (một lần)
-
-```powershell
-irm 'https://cursor.com/install?win32=true' | iex
-```
-
-Gói tải về `~/.cursor/versions/<version>/`, có launcher `cursor-agent.cmd`.
-Khoảng 80 MB.
-
-### 3.2 Gọi từ ứng dụng
-
-```ts
-// src/server/llm/cursorAgent.ts
-async function runCursorAgent(prompt: string, opts: {
-  cwd: string; model?: string; timeoutMs?: number;
-}): Promise<{ text: string; ok: boolean; error?: string }> {
-  const exe = resolveCursorAgentExe();      // ~/.cursor/cursor-agent.cmd
-  const args = ["-p", prompt, "--output-format", "text"];
-  if (opts.model) args.push("--model", opts.model);
-  // chạy trong sandbox riêng, cwd = workspace
-}
-```
-
-### 3.3 An toàn khi gọi CLI
-
-| Rủi ro | Cách chặn |
-|---|---|
-| CLI đọc/ghi file ngoài workspace | Luôn chạy với `cwd = /workspace`; thêm `--sandbox` |
-| CLI tự chạy lệnh nguy hiểm | `--mode=ask` hoặc `--mode=plan` cho các tác vụ không cần sửa file |
-| CLI treo | Timeout cứng (mặc định 120s), kill process tree |
-| CLI đọc khoá của bạn | Chạy với env sạch: chỉ giữ `PATH`, `HOME` trỏ về thư mục sandbox |
-| Chi phí vượt hạn mức | Token Budget kiểm tra **trước**, giới hạn số lượt gọi |
-
-### 3.4 Đường dẫn CLI đã kiểm chứng trên máy bạn
-
-```
-Cursor IDE : C:\Users\Xiata\AppData\Local\Programs\cursor\
-             resources\app\bin\cursor.cmd      (có subcommand `agent`)
-CLI riêng  : %USERPROFILE%\.cursor\versions\<ver>\cursor-agent.cmd
-             (chưa cài — sẽ cài ở Bước 4)
-```
+| `cursor_percent_used` | snapshot `totalPercentUsed` tại thời điểm ghi |
+| `quota_source` | `cli-usage` / `api` / `estimated` — để biết độ tin cậy |
 
 ---
 
-## 4. Cấu hình đề xuất
+## 6. Cấu hình đề xuất
 
 ```env
 # --- Backend LLM ---
-# ưu tiên 1: dùng pool gói Cursor
 OFFICE_LLM_BACKEND=cursor-agent
-CURSOR_AGENT_MODEL=grok-4.5
-CURSOR_AGENT_FALLBACK_MODEL=composer-2.5
+CURSOR_AGENT_MODEL=auto              # bắt buộc với tier Free
+CURSOR_AGENT_FALLBACK_MODEL=auto
 
-# ưu tiên 2: API key riêng (dùng khi hết pool hoặc cần model mạnh hơn)
-OFFICE_LLM_BASE_URL=
-OFFICE_LLM_API_KEY=
-OFFICE_LLM_MODEL=
+# --- Cursor quota ---
+CURSOR_QUOTA_ENABLED=1
+CURSOR_QUOTA_POLL_MS=60000
+CURSOR_QUOTA_ENDPOINT=https://api2.cursor.sh
+# token lấy từ %APPDATA%\Cursor\User\globalStorage\state.vscdb (runtime, không commit)
 
 # --- Token Budget ---
 OFFICE_BUDGET_DAILY=50000
@@ -274,32 +460,51 @@ OFFICE_BUDGET_WEEKLY=350000
 OFFICE_BUDGET_LEARNING_PERCENT=10
 OFFICE_BUDGET_PER_TASK=50000
 OFFICE_BUDGET_WARN=0.8
+OFFICE_BUDGET_LOCK=1.0
 ```
 
-> Lưu ý về con số: 500.000 token/ngày như bản thiết kế ban đầu là **quá lớn** so
-> với pool của gói Plus ($8/tháng). Con số mặc định mới nên bắt đầu **thấp**
-> (50.000/ngày) và nâng dần khi bạn thấy ổn — hệ thống báo bạn khi nào sắp chạm.
+> **Về con số hạn mức:** 500.000 token/ngày như bản thiết kế ban đầu là **quá lớn**
+> cho pool Free (không trần, nhưng số lượt có hạn). Mặc định mới đề xuất
+> **50.000 token/ngày** và **50.000 token/tác vụ**. Hệ thống báo bạn khi nào sắp
+> chạm ngưỡng; bạn tăng/giảm bằng 1 lệnh.
 
 ---
 
-## 5. Câu hỏi cần bạn xác nhận
+## 7. Đường dẫn trên máy (KHÔNG commit vào repo)
 
-1. **Gói Cursor của bạn là gì?** (Plus / Premium / Super / Ultra / Team / Enterprise)
-   → quyết định hạn mức mặc định hợp lý và có dùng được Composer 2.5 (rẻ nhất) không.
-2. **Cho phép tôi cài Cursor CLI (`cursor agent`)?** Nó tải ~80 MB vào `~/.cursor/`.
-   Đây là con đường duy nhất để ứng dụng dùng **token từ gói của bạn**.
-3. **Cho phép tôi chạy thử `cursor agent -p` một lần** để kiểm chứng nó hoạt
-   động và trả về text (dùng ~1 lượt Agent trong pool của bạn).
+Các đường dẫn dưới đây **không** được đưa vào file sẽ commit. Trong mã nguồn
+dùng biến môi trường:
+
+| Mục đích | Biến | Giá trị trên máy |
+|---|---|---|
+| Token đăng nhập | `CURSOR_AUTH_TOKEN` | đọc runtime từ `state.vscdb` |
+| CLI | `CURSOR_AGENT_EXE` | `%LOCALAPPDATA%\cursor-agent\agent.cmd` |
+| Nơi lưu CLI | — | `%LOCALAPPDATA%\cursor-agent\versions\<ver>\` |
+| DB của IDE | — | `%APPDATA%\Cursor\User\globalStorage\state.vscdb` |
+| Endpoint | `CURSOR_QUOTA_ENDPOINT` | `https://api2.cursor.sh` |
+| Workspace sandbox | `OFFICE_WORKSPACE` | thư mục sandbox của ứng dụng |
 
 ---
 
-## 6. Tóm tắt
+## 8. Tóm tắt
 
 | Câu hỏi | Trả lời |
 |---|---|
-| App có gọi trực tiếp hạn mức Cursor được không? | **Không** qua API công khai — `cursor.com/api/usage` trả 401, không có RPC đọc số dư. |
-| App có dùng token từ gói Cursor được không? | **Có**, qua `cursor agent -p` (CLI chính thức, tài liệu xác nhận CLI dùng chung pool). |
-| Model nào dùng được từ gói? | Chỉ Grok 4.5/4.6/4.7 + Composer 2.5. Model bên thứ ba phải trả tiền riêng. |
-| Pool làm mới bao lâu? | **Theo tuần**, không theo ngày. |
-| Có cần Token Budget riêng không? | **Bắt buộc** — vì app không đọc được số dư, nên phải tự đếm. |
-| Có làm hỏng gói không? | Không, nếu giữ hạn mức thấp và ưu tiên Composer 2.5 / Grok 4.5. |
+| Dùng token từ gói Cursor được không? | ✅ **Có** — `agent -p --model auto` (đã chạy thật) |
+| Đọc được số dư hạn mức không? | ✅ **Có** — `GetCurrentPeriodUsage`, `GetAggregatedUsageEvents` (đã kiểm chứng) |
+| Gói của bạn là gì? | **Free** theo server (IDE cache nhầm `pro`) |
+| Model nào dùng được? | Chỉ `auto` (bucket gồm Grok 4.5/4.6/4.7 + Composer 1→2.5) |
+| Pool làm mới khi nào? | **Theo tháng**, reset ngày 27 (đã kiểm chứng) |
+| Sandbox có dùng được trên Windows không? | ❌ Không — phải tự cô lập bằng `--workspace` + `--mode` |
+| 1 lượt thử tốn bao nhiêu? | 22.970 in + 503 out + 25.472 cache read = **48.945 token**, 6.17 cents niêm yết |
+| Cần Token Budget riêng không? | ✅ **Bắt buộc** — pool Free không có trần token, ta phải tự đặt trần |
+
+---
+
+## 9. Việc cần làm trước Bước 4
+
+1. **Nâng gói Pro** — mở Composer 2.5, Fast mode, chọn effort; pool lớn hơn
+   nhiều. Hiện tại `auto` bị ghim Fast tắt / effort medium.
+2. **Chọn trần ngân sách** — 50.000 token/ngày có hợp lý không?
+3. **Xác nhận** có cho phép đọc `state.vscdb` của IDE để lấy token tự động, hay
+   bạn muốn đặt `CURSOR_AUTH_TOKEN` thủ công bằng `agent login`?
