@@ -455,18 +455,25 @@ CURSOR_QUOTA_ENDPOINT=https://api2.cursor.sh
 # token lấy từ %APPDATA%\Cursor\User\globalStorage\state.vscdb (runtime, không commit)
 
 # --- Token Budget ---
-OFFICE_BUDGET_DAILY=50000
-OFFICE_BUDGET_WEEKLY=350000
+OFFICE_BUDGET_DAILY=150000
+OFFICE_BUDGET_WEEKLY=900000
 OFFICE_BUDGET_LEARNING_PERCENT=10
-OFFICE_BUDGET_PER_TASK=50000
+OFFICE_BUDGET_PER_TASK=200000
 OFFICE_BUDGET_WARN=0.8
 OFFICE_BUDGET_LOCK=1.0
 ```
 
-> **Về con số hạn mức:** 500.000 token/ngày như bản thiết kế ban đầu là **quá lớn**
-> cho pool Free (không trần, nhưng số lượt có hạn). Mặc định mới đề xuất
-> **50.000 token/ngày** và **50.000 token/tác vụ**. Hệ thống báo bạn khi nào sắp
-> chạm ngưỡng; bạn tăng/giảm bằng 1 lệnh.
+> **Về con số hạn mức — đã hiệu chỉnh sau khi đo thật (2026-11-01):**
+> Một lượt `cursor-agent` tốn **tối thiểu ~23.000 token** và lượt thực tế đo
+> được là **44.578 token** (in 10.356 · out 558 · cache read 33.664), vì CLI luôn
+> nạp system prompt + định nghĩa tool + ngữ cảnh workspace.
+>
+> Vì vậy con số **50.000 token/ngày** mà Bước 3 đề xuất là quá nhỏ — chỉ được
+> ~1 lượt CLI/ngày. Mặc định đã nâng lên **150.000 token/ngày**,
+> **900.000 token/tuần**, **200.000 token/tác vụ**.
+>
+> Ngưỡng hỏi người dùng cũng được nâng: chạy luôn nếu ≤ 60.000, hỏi nếu
+> > 120.000. Chi tiết và số đo đầy đủ: [`04-buoc-4-code.md`](04-buoc-4-code.md).
 
 ---
 
