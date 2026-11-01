@@ -70,8 +70,12 @@ export interface TaskRunnerDeps {
   freeTierOnly?: boolean;
   /** Có cho phép tự chủ cao không (bỏ qua bước duyệt ước lượng). */
   autonomous?: boolean;
+  /** Đọc động chế độ tự động hiện tại (để đổi lúc runtime không cần restart). */
+  isAutonomous?: () => boolean;
   /** Được gọi khi tác vụ thất bại — để tạo đề xuất tự sửa (không tự áp dụng). */
   onSelfPropose?: (p: { agentId: string; agentName: string; title: string; rationale: string }) => void;
+  /** Gọi LLM. Mặc định dùng Cursor CLI; test có thể thay bằng hàm giả. */
+  runLlm?: typeof runCursorAgent;
 }
 
 export class TaskRunner {
@@ -131,7 +135,8 @@ export class TaskRunner {
     this.tasks.set(id, task);
 
     // Bước 1: cần người dùng duyệt?
-    if (estimation.needsApproval && !this.deps.autonomous) {
+    const autonomous = this.deps.isAutonomous?.() ?? this.deps.autonomous ?? false;
+    if (estimation.needsApproval && !autonomous) {
       task.status = "awaiting-approval";
       task.approvalReason = estimation.reason;
       const req: ApprovalRequest = {
@@ -196,6 +201,18 @@ export class TaskRunner {
   async #run(task: TaskRecord, mode?: CursorAgentMode): Promise<void> {
     // Bước 2: kiểm tra ngân sách
     const est = task.estimation!;
+
+    // Trần mỗi tác vụ là chốt chặn CỨNG — kể cả ở chế độ tự chủ cao,
+    // nếu không thì một yêu cầu khổng lồ sẽ đốt sạch hạn mức.
+    const perTaskLimit = this.deps.budget.getPerTaskLimit();
+    if (est.estimatedTokens > perTaskLimit) {
+      task.status = "failed";
+      task.error = `Ước lượng ${est.estimatedTokens.toLocaleString()} token vượt trần mỗi tác vụ (${perTaskLimit.toLocaleString()}). Hãy chia nhỏ tác vụ.`;
+      task.finishedAt = new Date().toISOString();
+      this.#emit(task);
+      return;
+    }
+
     if (!this.deps.budget.canSpend(task.wallet, est.estimatedTokens)) {
       task.status = "failed";
       task.error = "Không đủ hạn mức token để chạy tác vụ này.";
@@ -210,7 +227,7 @@ export class TaskRunner {
     task.backend = "cursor-agent";
     this.#emit(task);
 
-    const result = await runCursorAgent({
+    const result = await (this.deps.runLlm ?? runCursorAgent)({
       prompt: task.prompt,
       workspace: this.deps.workspace,
       model: task.model,

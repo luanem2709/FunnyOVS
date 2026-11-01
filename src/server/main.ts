@@ -90,6 +90,7 @@ const tasks = new TaskRunner({
   workspace: config.workspace,
   defaultModel: config.cursorModel,
   freeTierOnly: config.freeTierOnly,
+  isAutonomous: () => configStore.get().automationLevel === "autonomous",
   getCursorPercentUsed: () => budget.getQuota()?.totalPercentUsed,
   onUpdate: (t) => {
     broadcast("task:update", t);

@@ -213,8 +213,7 @@ describe("K. Bộ điều phối tác vụ không gọi LLM khi chưa được d
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
-  it("từ chối thì tác vụ kết thúc mà không chạy", async () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "office3d-task2-"));
+  it("từ chối thì tác vụ kết thúc mà không chạy", async () => {    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "office3d-task2-"));
     const ledger = new TokenLedger(dir);
     const budget = new TokenBudget(true);
     const t = budget.issueConfigToken();
@@ -231,6 +230,69 @@ describe("K. Bộ điều phối tác vụ không gọi LLM khi chưa được d
     const rejected = runner.reject(`apr_${task.id}`);
     expect(rejected?.status).toBe("rejected");
     expect(ledger.list()).toHaveLength(0);
+    ledger.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("chế độ tự chủ cao bỏ qua bước duyệt nhưng vẫn kín trần tác vụ", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "office3d-task3-"));
+    const ledger = new TokenLedger(dir);
+    const budget = new TokenBudget(true);
+    const t = budget.issueConfigToken();
+    budget.configure({ dailyLimit: 1_000_000, perTaskLimit: 200_000 }, t);
+
+    const runner = new TaskRunner({
+      budget,
+      ledger,
+      workspace: dir,
+      isAutonomous: () => true,
+    });
+
+    const task = await runner.submit({
+      title: "Tác vụ rất lớn",
+      prompt: "x ".repeat(600_000),
+      agentId: "minh",
+      agentName: "Minh",
+      department: "dispatch",
+    });
+    // Không hỏi duyệt, nhưng trần cứng 200k vẫn chặn → fail, không gọi LLM.
+    expect(task.status).toBe("failed");
+    expect(task.error).toContain("trần mỗi tác vụ");
+    expect(ledger.list()).toHaveLength(0);
+    ledger.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("tự chủ cao với tác vụ vừa phải thì chạy thẳng", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "office3d-task4-"));
+    const ledger = new TokenLedger(dir);
+    const budget = new TokenBudget(true);
+    const t = budget.issueConfigToken();
+    budget.configure({ dailyLimit: 1_000_000, perTaskLimit: 200_000 }, t);
+
+    const runner = new TaskRunner({
+      budget,
+      ledger,
+      workspace: dir,
+      isAutonomous: () => true,
+      runLlm: async () => ({
+        ok: true,
+        text: "kết quả giả",
+        usage: { inputTokens: 100, outputTokens: 50, cacheReadTokens: 0, cacheWriteTokens: 0 },
+        durationMs: 1,
+      }),
+    });
+    const task = await runner.submit({
+      title: "Tác vụ nhỏ",
+      prompt: "Tóm tắt ngắn",
+      agentId: "minh",
+      agentName: "Minh",
+      department: "dispatch",
+    });
+    // Không cần duyệt → chạy thẳng và ghi ledger.
+    expect(task.status).toBe("done");
+    expect(task.tokens).toBe(150);
+    expect(ledger.list()).toHaveLength(1);
     ledger.close();
     fs.rmSync(dir, { recursive: true, force: true });
   });
