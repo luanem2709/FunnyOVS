@@ -236,6 +236,9 @@ const focusManager = new FocusManager();
 /** Group của từng phòng (dùng để cập nhật đồ đạc động). */
 const roomGroups = new Map<string, THREE.Group>();
 
+/** Đèn trần của từng phòng — chỉ bật đèn của phòng đang xem. */
+const roomLamps = new Map<string, THREE.PointLight>();
+
 /**
  * Lưới điều hướng cho nhân viên đi lại.
  * Tường phòng được thêm vào khi dựng phòng (xem buildRoom).
@@ -475,9 +478,18 @@ function buildRoom(dept: Department): void {
   room.add(sign);
 
   // Đèn trần nhẹ cho phòng (phát sáng màn hình + đồ đạc).
+  //
+  // Về hiệu năng: mỗi PointLight làm tăng chi phí shader của mọi vật liệu
+  // trong cảnh. Với 9 phòng × 2 đèn (trần + sàn) cộng 8 đèn nhân vật + 8 đèn
+  // màn hình thì tổng cộng 38 đèn → shader nặng, khó chạy mượt. Vì vậy:
+  //   - Đèn trần phòng chỉ dùng vật liệu phát sáng (không phải đèn thật).
+  //   - Đèn sàn giữ làm đèn thật (chỉ 1/phòng) → giữ được cảm giác ấm.
+  //   - Đèn nhân vật + đèn màn hình giữ lại (phân biệt trạng thái).
   const lamp = new THREE.PointLight(0xffe9c4, 0.5, Math.max(size.w, size.d) * 0.8, 2);
   lamp.position.set(0, wallH + 0.9, 0);
   room.add(lamp);
+  // Chỉ phòng đang xem mới bật đèn trần → giảm số đèn hoạt động.
+  roomLamps.set(dept.id, lamp);
 
   // Cây xanh + đèn sàn cho phòng (port từ repo tham khảo).
   furnishRoom(room, size.w, size.d, hashSeed(dept.id));
@@ -768,6 +780,16 @@ function buildDesks(list: AgentState[]): void {
       { ...layouts.screen, x: 0.52, z: 0.72, rotY: Math.PI },
     ];
     buildFurniture(group, placements, manifest, MAT.propColor);
+
+    // Chặn bàn + ghế trong lưới điều hướng để nhân viên không đi xuyên qua
+    // khi ra vào bàn. Bàn ở z = +0.62, ghế ở z = -0.12 (tương đối tâm bàn).
+    navGrid.addBlocker(
+      a.position.x - 0.95,
+      a.position.z + 0.62 - 0.5,
+      a.position.x + 0.95,
+      a.position.z + 0.62 + 0.5,
+      0.05,
+    );
   }
 }
 
@@ -796,6 +818,7 @@ function updateAgentTag(a: AgentState): void {
 function applyStatus(a: AgentState): void {
   const rec = agents.get(a.id);
   if (!rec) return;
+  const prev = rec.state;
   rec.state = a;
   applyAgentStatus(
     rec.visual,
@@ -805,6 +828,15 @@ function applyStatus(a: AgentState): void {
   );
   // Đèn màn hình đổi màu theo trạng thái → phân biệt ai đang hoạt động.
   rec.screen.setStatus(a.status);
+  // Nhân viên nhận việc mới (chuyển sang "working"/"researching") → bỏ chỗ
+  // đang đi nghỉ và quay về bàn (vẫn đi bộ về, không dịch chuyển tức thì).
+  if (
+    prev.status !== a.status &&
+    (a.status === "working" || a.status === "researching" || a.status === "learning")
+  ) {
+    const p = rec.visual.root.position;
+    rec.walker.recall(p, navGrid);
+  }
   updateAgentTag(a);
 }
 
@@ -1010,6 +1042,14 @@ function animate(): void {
   // Mờ các tường chắn giữa camera và phòng đang xem.
   wallCuller.update(camera, target, agentPositions());
   focusManager.update(1 / 60);
+
+  // Chỉ phòng đang xem bật đèn trần → giảm số đèn hoạt động (shader rẻ hơn).
+  // Ở chế độ toàn cảnh (focus = null) tắt hết đèn phòng, ánh sáng mặt trời
+  // + hemisphere đủ để nhìn rõ.
+  const focused = focusManager.current;
+  for (const [id, lamp] of roomLamps) {
+    lamp.visible = focused === id;
+  }
 
   for (const rec of agents.values()) {
     const { visual, state } = rec;

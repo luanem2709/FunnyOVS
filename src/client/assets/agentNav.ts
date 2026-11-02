@@ -27,6 +27,8 @@ interface Blocker {
   z0: number;
   x1: number;
   z1: number;
+  /** Lề an toàn thêm vào (mặc định bán kính người). */
+  pad: number;
 }
 
 /** Vị trí trên mặt sàn. */
@@ -55,12 +57,13 @@ export class NavGrid {
   }
 
   /** Thêm vật cản (tường). */
-  addBlocker(x0: number, z0: number, x1: number, z1: number): void {
+  addBlocker(x0: number, z0: number, x1: number, z1: number, pad = AGENT_RADIUS): void {
     this.blockers.push({
       x0: Math.min(x0, x1),
       z0: Math.min(z0, z1),
       x1: Math.max(x0, x1),
       z1: Math.max(z0, z1),
+      pad,
     });
   }
 
@@ -73,10 +76,10 @@ export class NavGrid {
         let hit = 0;
         for (const b of this.blockers) {
           if (
-            x >= b.x0 - AGENT_RADIUS &&
-            x <= b.x1 + AGENT_RADIUS &&
-            z >= b.z0 - AGENT_RADIUS &&
-            z <= b.z1 + AGENT_RADIUS
+            x >= b.x0 - b.pad &&
+            x <= b.x1 + b.pad &&
+            z >= b.z0 - b.pad &&
+            z <= b.z1 + b.pad
           ) {
             hit = 1;
             break;
@@ -357,6 +360,18 @@ export class Walker {
     this.path = [];
     this.pathIndex = 0;
     this.timer = this.workMin + Math.random() * (this.workMax - this.workMin);
+  }
+
+  /**
+   * Gọi nhân viên về bàn (nhận việc mới) — vẫn đi bộ về, không dịch chuyển tức thì.
+   * @param pos vị trí hiện tại
+   * @param grid lưới điều hướng
+   */
+  recall(pos: { x: number; z: number }, grid: NavGrid): void {
+    this.target = null;
+    this.startPath(pos, grid, null);
+    this.phase = this.path.length ? "returning" : "work";
+    if (this.phase === "work") this.reset();
   }
 
   /**

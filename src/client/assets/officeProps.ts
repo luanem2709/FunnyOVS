@@ -38,6 +38,38 @@ const MATS = {
   }),
 };
 
+/** Vật liệu tờ giấy ghim dùng chung. */
+const NOTE_MAT_CACHE = new Map<number, THREE.MeshStandardMaterial>();
+
+function noteMaterial(color: number): THREE.MeshStandardMaterial {
+  let m = NOTE_MAT_CACHE.get(color);
+  if (!m) {
+    m = new THREE.MeshStandardMaterial({ color, roughness: 0.9 });
+    NOTE_MAT_CACHE.set(color, m);
+  }
+  return m;
+}
+
+/** Vật liệu bánh donut dùng chung. */
+const DONUT_MAT_CACHE = new Map<number, THREE.MeshStandardMaterial>();
+
+function donutMaterial(color: number): THREE.MeshStandardMaterial {
+  let m = DONUT_MAT_CACHE.get(color);
+  if (!m) {
+    m = new THREE.MeshStandardMaterial({ color, roughness: 0.7 });
+    DONUT_MAT_CACHE.set(color, m);
+  }
+  return m;
+}
+
+/**
+ * Cache geometry của hộp bo góc.
+ *
+ * `rbox` được gọi nhiều chục lần với cùng kích thước → dùng chung geometry
+ * để giảm số buffer GPU (trước đó 1.235 geometry).
+ */
+const RBOX_GEO_CACHE = new Map<string, THREE.BufferGeometry>();
+
 /** Hộp có góc bo (rounded box) — giống helper `rbox` của repo tham khảo. */
 function rbox(
   w: number,
@@ -46,30 +78,35 @@ function rbox(
   m: THREE.Material,
   r = 0.03,
 ): THREE.Mesh {
-  const geo = new THREE.BoxGeometry(w, h, d, 2, 2, 2);
-  const pos = geo.attributes.position as THREE.BufferAttribute;
-  const v = new THREE.Vector3();
-  // Bo mềm các đỉnh: co kéo về tâm theo khoảng cách tới cạnh.
-  for (let i = 0; i < pos.count; i++) {
-    v.fromBufferAttribute(pos, i);
-    const ex = Math.abs(v.x) - (w / 2 - r);
-    const ey = Math.abs(v.y) - (h / 2 - r);
-    const ez = Math.abs(v.z) - (d / 2 - r);
-    const mx = Math.max(ex, 0);
-    const my = Math.max(ey, 0);
-    const mz = Math.max(ez, 0);
-    const len = Math.hypot(mx, my, mz);
-    if (len > 0 && len < r * 1.6) {
-      const k = (r * 1.6 - len) / (r * 1.6);
-      pos.setXYZ(
-        i,
-        v.x - Math.sign(v.x) * mx * k,
-        v.y - Math.sign(v.y) * my * k,
-        v.z - Math.sign(v.z) * mz * k,
-      );
+  const key = `${w}|${h}|${d}|${r}`;
+  let geo = RBOX_GEO_CACHE.get(key);
+  if (!geo) {
+    geo = new THREE.BoxGeometry(w, h, d, 2, 2, 2);
+    const pos = geo.attributes.position as THREE.BufferAttribute;
+    const v = new THREE.Vector3();
+    // Bo mềm các đỉnh: co kéo về tâm theo khoảng cách tới cạnh.
+    for (let i = 0; i < pos.count; i++) {
+      v.fromBufferAttribute(pos, i);
+      const ex = Math.abs(v.x) - (w / 2 - r);
+      const ey = Math.abs(v.y) - (h / 2 - r);
+      const ez = Math.abs(v.z) - (d / 2 - r);
+      const mx = Math.max(ex, 0);
+      const my = Math.max(ey, 0);
+      const mz = Math.max(ez, 0);
+      const len = Math.hypot(mx, my, mz);
+      if (len > 0 && len < r * 1.6) {
+        const k = (r * 1.6 - len) / (r * 1.6);
+        pos.setXYZ(
+          i,
+          v.x - Math.sign(v.x) * mx * k,
+          v.y - Math.sign(v.y) * my * k,
+          v.z - Math.sign(v.z) * mz * k,
+        );
+      }
     }
+    geo.computeVertexNormals();
+    RBOX_GEO_CACHE.set(key, geo);
   }
-  geo.computeVertexNormals();
   const mesh = new THREE.Mesh(geo, m);
   mesh.castShadow = true;
   mesh.receiveShadow = true;
@@ -129,11 +166,9 @@ export function coffeeStation(): THREE.Group {
   // Đĩa + bánh.
   put(g, cyl(0.25, 0.25, 0.03, MATS.white, 24), 0.95, 1.005, 0);
   const donutColors = [0xe8a0b4, 0x8b5a3c, 0xffd166];
+  const donutGeo = new THREE.TorusGeometry(0.075, 0.04, 8, 16);
   for (let k = 0; k < 3; k++) {
-    const dn = new THREE.Mesh(
-      new THREE.TorusGeometry(0.075, 0.04, 8, 16),
-      new THREE.MeshStandardMaterial({ color: donutColors[k], roughness: 0.7 }),
-    );
+    const dn = new THREE.Mesh(donutGeo, donutMaterial(donutColors[k]));
     dn.rotation.x = Math.PI / 2;
     dn.castShadow = true;
     put(g, dn, 0.89 + k * 0.11, 1.05, -0.06 + (k % 2) * 0.12);
@@ -244,11 +279,9 @@ export function dutyBoard(w = 2.2, h = 1.3): THREE.Group {
   put(g, rbox(w - 0.1, h - 0.1, 0.02, new THREE.MeshStandardMaterial({ color: 0x2f3640, roughness: 0.85 }), 0.02), 0, 0, 0.04);
   // Các tờ giấy ghim.
   const noteColors = [0xffe08a, 0xa8e6cf, 0xf4b8c4, 0xbfd8ee];
+  const noteGeo = new THREE.PlaneGeometry(0.28, 0.28);
   for (let i = 0; i < 6; i++) {
-    const note = new THREE.Mesh(
-      new THREE.PlaneGeometry(0.28, 0.28),
-      new THREE.MeshStandardMaterial({ color: noteColors[i % noteColors.length], roughness: 0.9 }),
-    );
+    const note = new THREE.Mesh(noteGeo, noteMaterial(noteColors[i % noteColors.length]));
     const col = i % 3;
     const row = Math.floor(i / 3);
     note.position.set(-w / 2 + 0.34 + col * 0.62, h / 2 - 0.36 - row * 0.44, 0.055);

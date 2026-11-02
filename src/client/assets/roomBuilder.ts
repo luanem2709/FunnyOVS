@@ -244,6 +244,12 @@ function resolveAsset(manifest: Manifest | null, keywords: string[]): string | n
   return null;
 }
 
+/**
+ * Cache vật liệu đã sơn, theo (màu gốc → màu sau sơn).
+ * `applyTint` clone material cho từng mesh → rất nhiều bản sao.
+ */
+const TINTED_MAT_CACHE = new Map<string, THREE.Material>();
+
 /** Áp sơn cho model đã tải (clone material để không ảnh hưởng bản gốc). */
 function applyTint(obj: THREE.Object3D, tint: number | undefined): void {
   if (tint === undefined) return;
@@ -252,9 +258,13 @@ function applyTint(obj: THREE.Object3D, tint: number | undefined): void {
     if (!m.isMesh) return;
     const src = m.material as THREE.Material | THREE.Material[];
     const apply = (x: THREE.Material): THREE.Material => {
+      const std = x as THREE.MeshStandardMaterial;
+      const key = `${x.uuid}:${tint}`;
+      const cached = TINTED_MAT_CACHE.get(key);
+      if (cached) return cached;
       const c = x.clone();
-      const std = c as THREE.MeshStandardMaterial;
       if (std.color) std.color.lerp(new THREE.Color(tint), 0.65);
+      TINTED_MAT_CACHE.set(key, c);
       return c;
     };
     m.material = Array.isArray(src) ? src.map(apply) : apply(src);
@@ -373,7 +383,7 @@ function buildShelf(w: number, h: number): THREE.Group {
     for (let i = 0; i < n; i++) {
       const b = new THREE.Mesh(
         new THREE.BoxGeometry(0.12, 0.24 + (i % 3) * 0.03, 0.28),
-        new THREE.MeshStandardMaterial({ color: colors[(i + r) % colors.length], roughness: 0.85 }),
+        bookMaterial(colors[(i + r) % colors.length]),
       );
       b.position.set(-w / 2 + 0.2 + i * 0.16, y + 0.16, 0.04);
       b.castShadow = true;
@@ -383,13 +393,37 @@ function buildShelf(w: number, h: number): THREE.Group {
   return g;
 }
 
+/**
+ * Cache vật liệu theo màu.
+ *
+ * `fallbackBox` được gọi hàng trăm lần (mỗi vật thể dự phòng một material
+ * riêng) → hơn 1.400 vật liệu, mỗi vật liệu một shader program riêng, chậm
+ * rõ rệt. Dùng chung theo màu giúp giảm xuống còn vài chục.
+ */
+const FALLBACK_MAT_CACHE = new Map<number, THREE.MeshStandardMaterial>();
+
+/** Vật liệu sách dùng chung (theo màu bìa). */
+const BOOK_MAT_CACHE = new Map<number, THREE.MeshStandardMaterial>();
+
+function bookMaterial(color: number): THREE.MeshStandardMaterial {
+  let m = BOOK_MAT_CACHE.get(color);
+  if (!m) {
+    m = new THREE.MeshStandardMaterial({ color, roughness: 0.85 });
+    BOOK_MAT_CACHE.set(color, m);
+  }
+  return m;
+}
+
 /** Vật thể dự phòng dạng hộp đơn giản. */
 function fallbackBox(p: Placement, color: THREE.ColorRepresentation): THREE.Mesh {
   const [w, h, d] = p.fallback;
-  const mesh = new THREE.Mesh(
-    new THREE.BoxGeometry(w, h, d),
-    new THREE.MeshStandardMaterial({ color: p.tint ?? color, roughness: 0.78 }),
-  );
+  const tint = p.tint ?? (typeof color === "number" ? color : 0xb0a08c);
+  let mat = FALLBACK_MAT_CACHE.get(tint);
+  if (!mat) {
+    mat = new THREE.MeshStandardMaterial({ color: tint, roughness: 0.78 });
+    FALLBACK_MAT_CACHE.set(tint, mat);
+  }
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
   mesh.position.set(p.x, (p.y ?? 0) + h / 2, p.z);
   if (p.rotY) mesh.rotation.y = p.rotY;
   mesh.scale.setScalar(p.scale ?? 1);

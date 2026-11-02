@@ -6,6 +6,57 @@ Quy ước ước tính token: `~<số>` = số token ước tính đã dùng tr
 
 ---
 
+## 2026-11-02 — Chu kỳ 3: Tối ưu hiệu năng + hoàn thiện đi lại
+
+**Nhánh:** `auto/2026-11-02-van-phong-3d` (tiếp nối chu kỳ 2)
+
+### Đã làm
+
+| Hạng mục | Nội dung |
+|---------|----------|
+| Đo hiệu năng | `scripts/perf.ts` — đo draw call, tam giác, geometry, texture, vật liệu, đèn, FPS (5 lần lấy trung vị). Đo bằng chuỗi `page.evaluate` vì hàm bị esbuild bọc bằng `__name` mà trang web không có. |
+| Cache vật liệu | `roomBuilder.ts`: `FALLBACK_MAT_CACHE` (hộp dự phòng), `BOOK_MAT_CACHE` (sách), `TINTED_MAT_CACHE` (model đã sơn). `officeProps.ts`: `donutMaterial()`, `noteMaterial()`. |
+| Cache geometry | `officeProps.ts`: `RBOX_GEO_CACHE` cho hộp bo góc. `props.ts`: `cachedGeo()` cho lá cây, chậu, vành, đất, thân, đèn sàn. |
+| Giảm đèn | Đèn sàn (9) bỏ PointLight → dùng vật liệu phát sáng. Đèn trần phòng (9) chỉ bật ở phòng đang xem. Tổng 38 → 29 đèn. |
+| Đường đi tránh bàn | Thêm blocker bàn vào `navGrid` (pad 0.05 m). `NavGrid.addBlocker()` nhận tham số `pad` riêng cho từng vật cản. |
+| Về bàn khi nhận việc | `Walker.recall(pos, grid)` — nhân viên đang đi nghỉ mà nhận việc sẽ đi bộ về bàn (không dịch chuyển tức thì). `applyStatus()` gọi `recall()` khi chuyển sang `working`/`researching`/`learning`. |
+| Test | `tests/nav.test.ts` giữ nguyên 13 test, vẫn pass sau khi thêm `pad`. |
+
+### Kết quả
+
+| Chỉ số | Trước | Sau |
+|---------|-------|-----|
+| Vật liệu duy nhất | 719 | 619 |
+| Geometry | 1.235 | 802 |
+| Đèn | 38 | 29 |
+| Draw call | 1.371 | 1.371 (chưa đổi) |
+| FPS (SwiftShader) | 74 (1 lần đo) | 48.5 trung vị (25–55) |
+
+- `tsc --noEmit`: sạch.
+- `vitest run`: **68/68 pass**.
+- `scripts/check-walk.ts`: cả 8 nhân viên vẫn đi (9–12 m), tới chỗ nghỉ, quay lại bàn.
+
+### Bài học
+
+1. **Đo một lần là không đủ.** Cùng một cảnh cho FPS 74 rồi 27 rồi 48 ở ba lần đo liên tiếp — máy đang chạy song song nhiều thứ (dev server + tsx watch + Chrome). Phải đo 5 lần lấy trung vị mới nói được sự thật.
+2. **Giảm draw call ≠ giảm vật liệu.** Cache geometry không giảm draw call (vẫn 1.371) vì draw call tính theo số mesh, không theo số buffer. Cache vật liệu mới giúp giảm **số shader program** (49) → biên dịch shader nhanh hơn, ít "chớp" khi đổi trạng thái.
+3. **Đèn là chi phí lớn nhất trong Three.js.** Ba.js tính chi phí shader theo số đèn *đang hoạt động*. Bỏ 9 đèn sàn và tắt 8 đèn trần ở các phòng không xem → giảm 24% đèn mà gần như không mất gì về thị giác (đèn sàn dùng emissive vẫn thấy "sáng").
+4. **Vật cản có lề riêng.** `pad` cho từng blocker cho phép tường phình 0.36 m (người không đi sát tường) còn bàn chỉ phình 0.05 m (vẫn tới được chỗ ngồi).
+
+### Token ước tính
+
+`~85k`
+
+### Việc tiếp theo
+
+- 1.9: gộp mesh bằng `InstancedMesh` (lá cây, ghế, sách) để giảm draw call.
+- 4.4: hàng chờ pha cà phê.
+- 4.5: nhân viên dừng lại nói chuyện.
+- 1.4: test đầu-cuối chuỗi giao việc.
+- 3.9: vòng chuyển động ngày/đêm.
+
+---
+
 ## 2026-11-02 — Chu kỳ 2: Nhân viên đi lại + đồ đạc chi tiết
 
 **Nhánh:** `auto/2026-11-02-van-phong-3d` (tiếp nối chu kỳ 1)

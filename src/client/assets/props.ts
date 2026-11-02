@@ -29,6 +29,32 @@ const SHADE_MAT = new THREE.MeshStandardMaterial({
   side: THREE.DoubleSide,
 });
 const BULB_MAT = new THREE.MeshBasicMaterial({ color: 0xede6d6 });
+const TRUNK_MAT = new THREE.MeshStandardMaterial({ color: 0x6e4b32, roughness: 0.6 });
+
+/** Geometry chậu / vành / đất dùng chung cho mọi cây. */
+const POT_GEO = new THREE.CylinderGeometry(0.24, 0.18, 0.4, 20);
+const RIM_GEO = new THREE.CylinderGeometry(0.25, 0.25, 0.04, 20);
+const SOIL_GEO = new THREE.CylinderGeometry(0.21, 0.21, 0.02, 16);
+
+/**
+ * Cache geometry của lá cây.
+ *
+ * Mỗi cây tạo ~20 lá, mỗi lá một `CylinderGeometry`/`SphereGeometry` riêng →
+ * hơn 1.200 geometry. Geometry giống nhau dùng chung được.
+ */
+const GEO_CACHE = new Map<string, THREE.BufferGeometry>();
+
+function cachedGeo<T extends THREE.BufferGeometry>(
+  key: string,
+  make: () => T,
+): T {
+  let g = GEO_CACHE.get(key) as T | undefined;
+  if (!g) {
+    g = make();
+    GEO_CACHE.set(key, g);
+  }
+  return g;
+}
 
 export type PlantKind = "monstera" | "snake" | "bush" | "tree";
 
@@ -53,17 +79,17 @@ export function potPlant(kind: PlantKind = "bush", scale = 1, seed = 1): THREE.G
   g.scale.setScalar(scale);
   const rand = rng(seed * 2654435761);
 
-  const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.18, 0.4, 20), POT_MAT);
+  const pot = new THREE.Mesh(POT_GEO, POT_MAT);
   pot.position.y = 0.2;
   pot.castShadow = true;
   pot.receiveShadow = true;
   g.add(pot);
 
-  const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 0.04, 20), RIM_MAT);
+  const rim = new THREE.Mesh(RIM_GEO, RIM_MAT);
   rim.position.y = 0.4;
   g.add(rim);
 
-  const soil = new THREE.Mesh(new THREE.CylinderGeometry(0.21, 0.21, 0.02, 16), SOIL_MAT);
+  const soil = new THREE.Mesh(SOIL_GEO, SOIL_MAT);
   soil.position.y = 0.415;
   g.add(soil);
 
@@ -90,13 +116,16 @@ export function potPlant(kind: PlantKind = "bush", scale = 1, seed = 1): THREE.G
   };
 
   if (kind === "monstera") {
-    const lg = new THREE.SphereGeometry(0.22, 14, 8);
+    const lg = cachedGeo("monstera-leaf", () => new THREE.SphereGeometry(0.22, 14, 8));
     for (let i = 0; i < 10; i++) {
       const a = (i / 10) * Math.PI * 2 + rand() * 0.4 - 0.2;
       const h = 0.5 + rand() * 0.5;
       const r = 0.1 + h * 0.33;
       leaf(
-        new THREE.CylinderGeometry(0.012, 0.016, h, 5),
+        cachedGeo(
+          `stem-${h.toFixed(2)}`,
+          () => new THREE.CylinderGeometry(0.012, 0.016, h, 5),
+        ),
         LEAF_MATS[2],
         Math.sin(a) * r * 0.45,
         0.42 + h / 2,
@@ -125,7 +154,10 @@ export function potPlant(kind: PlantKind = "bush", scale = 1, seed = 1): THREE.G
       const r = rand() * 0.12;
       const h = 0.5 + rand() * 0.5;
       leaf(
-        new THREE.ConeGeometry(0.055, h, 4),
+        cachedGeo(
+          `snake-${h.toFixed(2)}`,
+          () => new THREE.ConeGeometry(0.055, h, 4),
+        ),
         LEAF_MATS[i % 3],
         Math.sin(a) * r,
         0.42 + h / 2,
@@ -140,16 +172,17 @@ export function potPlant(kind: PlantKind = "bush", scale = 1, seed = 1): THREE.G
     }
   } else if (kind === "tree") {
     const trunk = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.05, 0.07, 1.3, 8),
-      new THREE.MeshStandardMaterial({ color: 0x6e4b32, roughness: 0.6 }),
+      cachedGeo("tree-trunk", () => new THREE.CylinderGeometry(0.05, 0.07, 1.3, 8)),
+      TRUNK_MAT,
     );
     trunk.position.y = 1.05;
     trunk.castShadow = true;
     g.add(trunk);
+    const crownGeo = cachedGeo("tree-crown", () => new THREE.IcosahedronGeometry(0.42, 1));
     for (let i = 0; i < 7; i++) {
       const a = rand() * Math.PI * 2;
       leaf(
-        new THREE.IcosahedronGeometry(0.42, 1),
+        crownGeo,
         LEAF_MATS[i % 4],
         Math.sin(a) * (0.05 + rand() * 0.25),
         1.75 + rand() * 0.2,
@@ -164,10 +197,11 @@ export function potPlant(kind: PlantKind = "bush", scale = 1, seed = 1): THREE.G
     }
   } else {
     // bush
+    const bushGeo = cachedGeo("bush", () => new THREE.IcosahedronGeometry(0.2, 1));
     for (let i = 0; i < 7; i++) {
       const a = (i / 7) * Math.PI * 2;
       leaf(
-        new THREE.IcosahedronGeometry(0.2, 1),
+        bushGeo,
         LEAF_MATS[i % 4],
         Math.sin(a) * 0.15,
         0.62 + (i % 2) * 0.12,
@@ -180,7 +214,16 @@ export function potPlant(kind: PlantKind = "bush", scale = 1, seed = 1): THREE.G
         1,
       );
     }
-    leaf(new THREE.IcosahedronGeometry(0.22, 1), LEAF_MATS[1], 0, 0.86, 0, 0, 0, 0);
+    leaf(
+      cachedGeo("bush-top", () => new THREE.IcosahedronGeometry(0.22, 1)),
+      LEAF_MATS[1],
+      0,
+      0.86,
+      0,
+      0,
+      0,
+      0,
+    );
   }
 
   return g;
@@ -190,25 +233,38 @@ export function potPlant(kind: PlantKind = "bush", scale = 1, seed = 1): THREE.G
 export function floorLamp(height = 2.1): THREE.Group {
   const g = new THREE.Group();
 
-  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.26, 0.06, 16), METAL_MAT);
+  const base = new THREE.Mesh(
+    cachedGeo("lamp-base", () => new THREE.CylinderGeometry(0.22, 0.26, 0.06, 16)),
+    METAL_MAT,
+  );
   base.position.y = 0.03;
   base.castShadow = true;
   g.add(base);
 
-  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, height, 8), METAL_MAT);
+  const pole = new THREE.Mesh(
+    cachedGeo(
+      `lamp-pole-${height}`,
+      () => new THREE.CylinderGeometry(0.03, 0.03, height, 8),
+    ),
+    METAL_MAT,
+  );
   pole.position.y = height / 2;
   pole.castShadow = true;
   g.add(pole);
 
   const shade = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.2, 0.36, 0.38, 24, 1, true),
+    cachedGeo("lamp-shade", () => new THREE.CylinderGeometry(0.2, 0.36, 0.38, 24, 1, true)),
     SHADE_MAT,
   );
   shade.position.y = height + 0.1;
   shade.castShadow = true;
   g.add(shade);
 
-  const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 10), BULB_MAT);
+  const bulb = new THREE.Mesh(
+    cachedGeo("lamp-bulb", () => new THREE.SphereGeometry(0.11, 12, 10)),
+    // Vật liệu phát sáng → trông như đèn đang sáng mà không cần PointLight.
+    new THREE.MeshBasicMaterial({ color: 0xffe8c0 }),
+  );
   bulb.position.y = height - 0.02;
   g.add(bulb);
 
@@ -242,14 +298,15 @@ export function furnishRoom(
     group.add(plant);
   });
 
-  // Đèn sàn ở một góc, kèm đèn thật.
+  // Đèn sàn ở một góc.
+  //
+  // Về hiệu năng: không gắn PointLight cho đèn sàn. Ba.js tính shader theo số
+  // đèn đang hoạt động trong cảnh; 9 đèn sàn + 9 đèn trần + 16 đèn nhân vật là
+  // 34 đèn, rất nặng. Thay vào đó chụp đèn dùng vật liệu phát sáng (emissive)
+  // để vẫn thấy "đèn đang sáng" mà không tốn đèn thật.
   const lamp = floorLamp(1.9);
   lamp.position.set(-roomW * 0.28, 0, -roomD * 0.3);
   group.add(lamp);
-  const light = new THREE.PointLight(0xffc27a, 0.7, 7.5, 1.4);
-  light.position.set(-roomW * 0.28, 1.9, -roomD * 0.3);
-  group.add(light);
-  lamps.push(light);
 
   return { lamps };
 }

@@ -15,8 +15,11 @@ Mỗi mục hoàn tất → gạch đầu và ghi kết quả vào `LOG.md`.
 | 1.2 | Cảnh 3D "rửa trắng" sau khi bật bloom + IBL | ✅ xong | ACES + IBL cộng dồn với đèn sẵn có → giảm `environmentIntensity` 0.1, exposure 0.95 |
 | 1.3 | Camera toàn cảnh bị phòng khác/tường che kín | ✅ xong | Thêm `focusMode` (mờ ẩn phòng khác) + `wallCulling` (mờ tường chắn tầm nhìn) |
 | 1.4 | Test đầu-cuối chuỗi giao việc → cursor agent → kết quả → nhật ký token | ⬜ todo | Chạy 1 tác vụ thật qua UI, xác minh token ledger ghi đúng |
-| 1.5 | Kiểm tra hiệu năng: draw call, số mesh, FPS | ⬜ todo | Đo trước/sau, đặt ngưỡng cảnh báo |
+| 1.5 | Kiểm tra hiệu năng: draw call, số mesh, FPS | ✅ xong | `scripts/perf.ts` — 1.371 draw call, 440k tri, 802 geometry, 29 đèn, FPS trung vị 48 (SwiftShader) |
 | 1.6 | Xử lý resize làm méo composer/bloom | ✅ xong | `composer.setSize` + `setPixelRatio` trong handler resize |
+| 1.7 | Cache vật liệu & geometry để giảm draw call | ✅ xong | 1.483 → 619 vật liệu; 1.235 → 802 geometry |
+| 1.8 | Giảm số đèn hoạt động (chi phí shader) | ✅ xong | 38 → 29 đèn; đèn trần chỉ bật ở phòng đang xem, đèn sàn dùng emissive |
+| 1.9 | Gộp mesh theo vật liệu (instancing) | ⬜ todo | 1.371 draw call vẫn nhiều; `InstancedMesh` cho lá cây, ghế, sách |
 
 ## 2. Bộ test an toàn (chỉ THÊM, không nới lỏng)
 
@@ -58,8 +61,8 @@ Mỗi mục hoàn tất → gạch đầu và ghi kết quả vào `LOG.md`.
 | 4.3 | Chỗ nghỉ: cà phê, bảng trực ca, máy in, bình nước | ✅ xong | `AMENITIES` — 11 chỗ trong 6 phòng |
 | 4.4 | Hàng chờ pha cà phê (mỗi người một lượt) | ⬜ todo | `my-office/breaks.js` — `joinCoffee`/`lineUp` |
 | 4.5 | Nhân viên dừng lại nói chuyện với nhau | ⬜ todo | `my-office/nhau.js` — nhóm ngẫu nhiên tụ lại |
-| 4.6 | Agent nhận việc mới → bỏ chỗ đang đi, quay về bàn | ⬜ todo | Hiện `walker.reset()` chưa được gọi khi đổi trạng thái |
-| 4.7 | Đường đi tránh bàn/ghế (vật cản nội thất) | ⬜ todo | Hiện chỉ chặn tường, chưa chặn đồ đạc trong phòng |
+| 4.6 | Agent nhận việc mới → bỏ chỗ đang đi, quay về bàn | ✅ xong | `Walker.recall()` — vẫn đi bộ về, không dịch chuyển tức thì |
+| 4.7 | Đường đi tránh bàn/ghế (vật cản nội thất) | ✅ xong | Thêm blocker bàn vào `navGrid` (pad 0.05 m) |
 
 ## 5. Thư viện Tri thức + giờ học tự động
 | # | Mục | Trạng thái | Ghi chú |
