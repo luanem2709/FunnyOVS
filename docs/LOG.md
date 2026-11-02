@@ -6,6 +6,56 @@ Quy ước ước tính token: `~<số>` = số token ước tính đã dùng tr
 
 ---
 
+## 2026-11-02 — Chu kỳ 7 (GĐ 2): bộ test an toàn — tìm ra 2 lỗ hổng thật
+
+**Nhánh:** `auto/nang-cap-3d-toan-quyen`
+
+### Bộ test mới: `tests/safety-gd2.test.ts` (25 test)
+
+| Nhóm | Nội dung | Kết quả |
+|------|-----------|---------|
+| G2-1 | **Junction Windows** (directory junction) trỏ ra ngoài workspace | ✅ bị chặn (đo thật trên Windows — junction tạo được không cần admin) |
+| G2-2 | 12 vector bypass: `..`, `..\..`, mixed separator, dấu chấm cuối (Windows strip), khoảng trắng cuối, drive-relative `C:..`, `\\?\`, `\\.\NUL`, null byte, chuỗi rỗng, `\` gốc | ✅ tất cả bị chặn |
+| G2-3 | Yêu cầu quyền: grant không lan sang thư mục anh em cùng tiền tố, không dùng chéo agent, `read` ≠ ghi ≠ xoá, vùng chặn cứng không thể xin quyền, log không ghi nội dung bí mật | ✅ |
+| G2-4 | Prompt injection: 6 payload, marker bao trọn nội dung, **kiểm chứng bằng mock `ResearchEngine`** (spy `GuardedFs.writeFile`/`readFile` → 0 lần gọi) | ✅ |
+
+Tổng: **111/111 test pass** (86 + 25 mới).
+
+### 🔴 2 LỖ HỔNG THẬT tìm ra nhờ bộ test này
+
+| # | Lỗ hổng | Mức | Sửa |
+|---|---------|------|-----|
+| 1 | **SSRF tới cloud metadata endpoint** — `evaluateUrl()` chỉ chặn `localhost`/`127.0.0.1`, nên `http://169.254.169.254/latest/meta-data/` (AWS/GCP/Azure) **được phép** ⇒ agent có thể đọc thông tin định danh/máy chủ của bạn | Cao | `policy.ts`: thêm `isBlockedAddress()` — 11 dải IPv4 (`0/8`, `10/8`, `100.64/10`, `127/8`, **`169.254/16`**, `172.16/12`, `192.0.0/24`, `192.168/16`, `198.18/15`, `224/4`, `240/4`) + IPv6 loopback/ULA + `numericHostToIp()` (chặn `2130706433`, `0x7f000001`, `127.1`) + tên host `.local/.internal/.lan/.home.arpa` + **giao thức `file:`/`javascript:`/`data:`/`ws:`** |
+| 2 | **`normalizePath()` có thể thoát sandbox** — dùng `path.resolve(workspaceRoot(), input)` ⇒ `normalizePath("../x")` trả về đường dẫn **ngoài workspace**. Chưa ai gọi hàm này nên chưa lộ, nhưng là cái bẫy cho người viết tiếp theo | Trung bình | `pathGuard.ts`: `normalizePath()` giờ cắt mọi `..` và **luôn trả về đường dẫn nằm trong workspace** |
+
+### Ghi chú hành vi (đã kiểm chứng, KHÔNG phải lỗi)
+
+Grant được lưu theo **đường dẫn đã chuẩn hóa** (realpath), không theo đường dẫn qua junction. Nên:
+- Đọc lại đúng file đã duyệt → **được phép** (đúng ý người dùng).
+- Đọc file **khác** trong cùng thư mục qua cùng junction → **vẫn bị chặn** (grant không lan rộng).
+
+### Kiểm chứng không chặn nhầm
+
+`scripts/check-browser-policy.ts`: 5 site thật phải mở được (Wikipedia, DuckDuckGo lite, TechCrunch…) + 18 URL phải chặn ⇒ **OK, 0 sai**. Duyệt web thật vẫn chạy sau khi sửa (server reload bình thường, `/api/dispatch` OK).
+
+### Bài học
+
+1. **"Chặn localhost" không phải là "chặn mạng nội bộ".** Cloud metadata (`169.254.169.254`) là mạng nội bộ theo mọi định nghĩa, và là mục tiêu số 1 của SSRF. Phải chặn theo DẢI, không theo vài tên cụ thể.
+2. **Một hàm "chuẩn hóa" phải thật sự chuẩn hóa an toàn.** `path.resolve(root, input)` nghe có vẻ đã giới hạn trong root, nhưng thực tế `..` vẫn thoát ra ngoài.
+3. **Test bằng mock thuyết phục hơn test bằng spy.** Test "không có đường nào để thi hành" chỉ có giá trị nếu nó spy thật vào đường ghi file — `ResearchEngine` với browser giả + `GuardedFs` spy cho câu trả lời khẳng định.
+4. **Vector bypass trên Windows nhiều hơn mình nghĩ:** dấu chấm cuối, khoảng trắng cuối, drive-relative `C:..`, `\\?\`, IP dạng số — tất cả đều đã được test và chặn.
+
+### Token ước tính
+
+`~8k` (chủ yếu suy nghĩ + viết test, không gọi LLM)
+
+### Việc tiếp theo
+
+- GĐ 3: ánh sáng môi trường, post-processing, bố cục liền mạch, pathfinding, công tắc chất lượng theo FPS.
+- GĐ 4: Executor tách khỏi LLM + 3 cấp quyền.
+
+---
+
 ## 2026-11-02 — Chu kỳ 6 (GĐ 1): sửa lỗi hiển thị & số liệu, nhãn 3D, bầu trời, chuỗi đầu-cuối
 
 **Nhánh:** `auto/nang-cap-3d-toan-quyen`

@@ -31,9 +31,10 @@ Mỗi mục hoàn tất → gạch đầu và ghi kết quả vào `LOG.md`.
 
 | # | Mục | Trạng thái | Ghi chú |
 |---|-----|-----------|---------|
-| 2.1 | Test: không đọc file ngoài `/workspace` | ⬜ todo | |
-| 2.2 | Test: không làm theo lệnh ẩn trong nội dung web (prompt injection) | ⬜ todo | |
-| 2.3 | Test: chặn path traversal trong yêu cầu quyền thư mục | ⬜ todo | |
+| 2.1 | Test: không đọc file ngoài `/workspace` | ✅ xong | Chu kỳ 7: `tests/safety-gd2.test.ts` — 12 vector bypass + junction Windows (đo thật) đều bị chặn |
+| 2.2 | Test: không làm theo lệnh ẩn trong nội dung web (prompt injection) | ✅ xong | Chu kỳ 7: 6 payload + kiểm chứng bằng mock `ResearchEngine` (spy `GuardedFs` ⇒ 0 lần ghi file) |
+| 2.3 | Test: chặn path traversal trong yêu cầu quyền thư mục | ✅ xong | Chu kỳ 7: grant không lan sang thư mục anh em, không dùng chéo agent, `read`≠ghi≠xoá |
+| 2.4 | Chặn SSRF (mạng nội bộ, cloud metadata, file://) | ✅ xong | Chu kỳ 7: tìm ra lỗ hổng thật — `169.254.169.254` trước đây được phép. Đã chặn theo DẢI IPv4/IPv6 + giao thức |
 
 ## 3. Giao diện 3D chuyên nghiệp
 

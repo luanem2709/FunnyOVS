@@ -68,9 +68,22 @@ export function isValidPathInput(input: string): boolean {
   return true;
 }
 
-/** Chuẩn hóa path tuyệt đối (chưa resolve symlink). */
+/**
+ * Chuẩn hóa path về dạng TUYỆT ĐỐI nằm trong workspace.
+ *
+ * `path.resolve` một mình KHÔNG đủ: `resolve(workspace, "../x")` trả về
+ * đường dẫn ngoài workspace. Hàm này cắt mọi phần `..` và giữ kết quả
+ * luôn nằm trong workspace ⇒ không dùng được để thoát sandbox.
+ */
 export function normalizePath(input: string): string {
-  return path.resolve(workspaceRoot(), input);
+  const root = workspaceRoot();
+  const abs = path.resolve(root, input);
+  const rel = path.relative(root, abs);
+  if (rel === "") return root;
+  if (!rel.startsWith("..") && !path.isAbsolute(rel)) return abs;
+  // Ngoài workspace → cắt về phần đầu tiên nằm trong workspace.
+  const parts = rel.split(/[\\/]+/).filter((p) => p && p !== "..");
+  return path.join(root, ...parts);
 }
 
 /** Kiểm tra path có nằm trong một thư mục gốc cho trước hay không. */
