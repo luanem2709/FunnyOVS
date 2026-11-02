@@ -18,17 +18,21 @@ export interface LightingSetup {
 export function setupLighting(scene: THREE.Scene): LightingSetup {
   // Nền trời sáng → không còn nền đen "cyberpunk" cũ.
   scene.background = new THREE.Color(0xcdd9e6);
-  scene.fog = new THREE.Fog(0xcdd9e6, 55, 130);
+  // Không dùng fog: vòng skyline đã đóng vai trò "xa" của cảnh. Fog chỉ hòa
+  // mọi vật vào màu trời và làm cảnh trắng xóa, mất hết chiều sâu.
+  scene.fog = null;
 
-  const ambient = new THREE.AmbientLight(0xffffff, 0.45);
+  // Ambient rất nhẹ: ánh sáng chính đến từ hemisphere + mặt trời.
+  // Ambient mạnh sẽ xóa bóng đổ và làm cảnh trông nhạt (như repo tham khảo).
+  const ambient = new THREE.AmbientLight(0xffffff, 0.12);
   scene.add(ambient);
 
   // Ánh sáng môi trường: bầu trời xanh / mặt đất be → tự nhiên, nhẹ nhàng.
-  const hemisphere = new THREE.HemisphereLight(0xbcd7ff, 0x8a7f6d, 1.05);
+  const hemisphere = new THREE.HemisphereLight(0xbcd7ff, 0x8a7f6d, 1.25);
   scene.add(hemisphere);
 
   // Mặt trời — đổ bóng mềm.
-  const sun = new THREE.DirectionalLight(0xfff4e0, 2.1);
+  const sun = new THREE.DirectionalLight(0xfff4e0, 2.4);
   sun.position.set(28, 42, 22);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
@@ -44,7 +48,7 @@ export function setupLighting(scene: THREE.Scene): LightingSetup {
   scene.add(sun.target);
 
   // Ánh sáng phụ từ hướng ngược lại → giảm vùng tối.
-  const fill = new THREE.DirectionalLight(0xdce8ff, 0.55);
+  const fill = new THREE.DirectionalLight(0xdce8ff, 0.35);
   fill.position.set(-24, 18, -20);
   scene.add(fill);
 

@@ -53,19 +53,27 @@ export type PropKind =
 export const DESK_TOP_Y = 0.78;
 export const SEAT_Y = 0.49;
 
-/** Vật liệu dùng chung. */
+/**
+ * Vật liệu dùng chung.
+ *
+ * Bảng màu lấy cảm hứng từ `references/my-office` (`world/terrace.js`):
+ * gỗ nâu ấm, kim loại xám đậm, ghế xanh xám. Trước đây mọi thứ dùng tông
+ * kem/trắng nên dưới ánh sáng mạnh cảnh bị "rửa trắng", mất chiều sâu.
+ */
 const M = {
-  deskTop: new THREE.MeshStandardMaterial({ color: 0xf0e8d8, roughness: 0.55 }),
-  metal: new THREE.MeshStandardMaterial({ color: 0x8d949e, roughness: 0.42, metalness: 0.55 }),
-  seat: new THREE.MeshStandardMaterial({ color: 0x596170, roughness: 0.9 }),
+  // Mặt bàn gỗ ấm (không dùng kem trắng — dễ cháy sáng).
+  deskTop: new THREE.MeshStandardMaterial({ color: 0x9a6e48, roughness: 0.62 }),
+  metal: new THREE.MeshStandardMaterial({ color: 0x596170, roughness: 0.4, metalness: 0.6 }),
+  seat: new THREE.MeshStandardMaterial({ color: 0x3f4a5c, roughness: 0.88 }),
   screen: new THREE.MeshStandardMaterial({
     color: 0x14181f,
     emissive: 0x1b2430,
     roughness: 0.4,
   }),
-  wood: new THREE.MeshStandardMaterial({ color: 0xa87f52, roughness: 0.7 }),
-  prop: new THREE.MeshStandardMaterial({ color: 0xb0a08c, roughness: 0.8 }),
-  panel: new THREE.MeshStandardMaterial({ color: 0xf6f4ee, roughness: 0.8 }),
+  wood: new THREE.MeshStandardMaterial({ color: 0x6e4b32, roughness: 0.68 }),
+  prop: new THREE.MeshStandardMaterial({ color: 0x8d7f6b, roughness: 0.78 }),
+  // Bảng trắng: vẫn sáng nhưng không trắng tuyệt đối.
+  panel: new THREE.MeshStandardMaterial({ color: 0xe6e2d6, roughness: 0.78 }),
   accent: new THREE.MeshStandardMaterial({ color: 0x1f6feb, roughness: 0.5 }),
 };
 

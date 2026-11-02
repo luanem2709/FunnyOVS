@@ -10,7 +10,13 @@ import {
   type ManifestAsset,
 } from "./assets/manifest.js";
 import { preloadAssets, peekAsset } from "./assets/loader.js";
-import { setupLighting } from "./assets/lighting.js";
+import { setupLighting, screenGlowColor } from "./assets/lighting.js";
+import { setupRenderPipeline } from "./assets/renderPipeline.js";
+import { furnishRoom } from "./assets/props.js";
+import { skylineRing } from "./assets/windows.js";
+import { WallCuller } from "./assets/wallCulling.js";
+import { FocusManager } from "./assets/focusMode.js";
+import { floorTextureFor, woodFloorTexture } from "./assets/floorTextures.js";
 import { buildFurniture, deskLayout, propLayout, DESK_TOP_Y } from "./assets/roomBuilder.js";
 import {
   createAgentVisual,
@@ -214,14 +220,37 @@ camera.position.set(0, 12, 18);
 // Ánh sáng: nền sáng + hemisphere + bóng mềm (xem assets/lighting.ts)
 setupLighting(scene);
 
-// Sàn chung
+// Hậu kỳ render: bloom + ACES tone mapping + IBL (port từ repo tham khảo).
+const pipeline = setupRenderPipeline(scene, camera, renderer);
+
+// Cắt tường: làm mờ các bức tường chắn tầm nhìn camera.
+const wallCuller = new WallCuller();
+
+// Chế độ tập trung: mờ các phòng khác khi người dùng chọn một phòng.
+const focusManager = new FocusManager();
+
+// Sàn chung — chỉ trải trong lòng vòng skyline (bán kính 26), không kéo dài
+// vô hạn ra tới tầm ngắm: sàn trải xa sẽ bị fog hòa vào màu trời và làm cảnh
+// trông trắng xóa.
+const sharedFloorTex = woodFloorTexture(11);
+sharedFloorTex.repeat.set(12, 12);
 const floor = new THREE.Mesh(
-  new THREE.PlaneGeometry(140, 140),
-  new THREE.MeshStandardMaterial({ color: 0x9aa3a8, roughness: 0.95 }),
+  new THREE.CircleGeometry(25.5, 64),
+  new THREE.MeshStandardMaterial({
+    color: 0xbfae94,
+    map: sharedFloorTex,
+    roughness: 0.9,
+  }),
 );
 floor.rotation.x = -Math.PI / 2;
 floor.receiveShadow = true;
 scene.add(floor);
+
+// Vòng ngoại cảnh 360° — skyline thành phố bao quanh tầng văn phòng.
+// Thay cho cửa sổ trên tường: giữ tầm nhìn luôn mở, có đường chân trời.
+const skyline = skylineRing(26, 9);
+skyline.position.set(3, 0, 0);
+scene.add(skyline);
 
 // Hook cho script kiểm thử ảnh (không ảnh hưởng runtime).
 (window as any).__threeInfo = {
@@ -232,20 +261,31 @@ scene.add(floor);
   sceneChildren: scene.children.length,
 };
 (window as any).__captureFrame = (): { dataUrl: string; diag: unknown } => {
-  renderer.render(scene, camera);
+  pipeline.render(1 / 60);
+  // Ảnh phải được chụp trước mọi thao tác đọc pixel: trên một số driver
+  // (SwiftShader/ANGLE), `readPixels` xoá nội dung backbuffer, khiến
+  // `toDataURL` trả về ảnh trắng.
+  const dataUrl = canvas.toDataURL("image/png");
+  // Đọc pixel thô từ một framebuffer phụ để không đụng backbuffer chính.
   const gl = renderer.getContext();
   const px = new Uint8Array(4);
-  gl.readPixels(
-    Math.floor(canvas.width / 2),
-    Math.floor(canvas.height / 2),
-    1,
-    1,
-    gl.RGBA,
-    gl.UNSIGNED_BYTE,
-    px,
-  );
+  const probe = gl.createFramebuffer();
+  if (probe) {
+    gl.bindFramebuffer(gl.FRAMEBUFFER, probe);
+    gl.readPixels(
+      Math.floor(canvas.width / 2),
+      Math.floor(canvas.height / 2),
+      1,
+      1,
+      gl.RGBA,
+      gl.UNSIGNED_BYTE,
+      px,
+    );
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.deleteFramebuffer(probe);
+  }
   return {
-    dataUrl: canvas.toDataURL("image/png"),
+    dataUrl,
     diag: {
       contextLost: gl.isContextLost(),
       centerPixel: Array.from(px),
@@ -295,9 +335,10 @@ scene.add(floor);
 };
 
 // Vật liệu dùng chung (tái sử dụng để giảm draw call — Phase 5)
-// Bảng màu sáng: tường kem, sàn gỗ, đồ gỗ ấm — hợp phong cách low-poly Kenney.
+// Bảng màu: tường kem, đồ gỗ ấm — hợp phong cách low-poly Kenney.
+// Tường dùng tông hơi xám để không bị "cháy" dưới ánh sáng mạnh.
 const MAT = {
-  wall: new THREE.MeshStandardMaterial({ color: 0xe8e2d6, roughness: 0.92 }),
+  wall: new THREE.MeshStandardMaterial({ color: 0xd9d2c2, roughness: 0.94 }),
   desk: new THREE.MeshStandardMaterial({ color: 0x8a6a45, roughness: 0.7 }),
   leg: new THREE.MeshStandardMaterial({ color: 0x5f4a33, roughness: 0.8 }),
   screen: new THREE.MeshStandardMaterial({ color: 0x1b2430, emissive: 0x2a3646 }),
@@ -367,42 +408,85 @@ function buildProps(dept: Department): void {
 function buildRoom(dept: Department): void {
   const { center, size } = dept;
 
+  // Toàn bộ nội dung phòng nằm trong một group để chế độ tập trung
+  // (focus mode) có thể mờ phòng này đi khi người dùng xem phòng khác.
+  const room = new THREE.Group();
+  room.position.set(center.x, 0, center.z);
+  scene.add(room);
+
   const floorMesh = new THREE.Mesh(
     new THREE.PlaneGeometry(size.w, size.d),
-    new THREE.MeshStandardMaterial({ color: dept.floor, roughness: 0.92 }),
+    new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      map: floorTextureFor(dept.floor, hashSeed(dept.id)),
+      roughness: 0.88,
+    }),
   );
+  // Lặp texture theo kích thước phòng để hoa văn không bị méo.
+  const ft = floorMesh.material as THREE.MeshStandardMaterial;
+  if (ft.map) ft.map.repeat.set(size.w / 4, size.d / 4);
   floorMesh.rotation.x = -Math.PI / 2;
-  floorMesh.position.set(center.x, 0.01, center.z);
+  floorMesh.position.y = 0.01;
   floorMesh.receiveShadow = true;
   floorMesh.userData.department = dept.id;
-  scene.add(floorMesh);
+  room.add(floorMesh);
 
-  // Tường 3 mặt (mở mặt trước để nhìn vào) — nền sáng, dễ đọc nhãn phòng.
-  const wallH = 3.2;
+  // Tường 3 mặt (mở mặt trước để nhìn vào) — thấp để không che tầm nhìn,
+  // dùng vòng skyline 360° phía sau làm nền.
+  // Mỗi tường có vật liệu riêng để có thể mờ dần khi chắn tầm nhìn camera.
+  const wallH = 1.35;
   const wallT = 0.16;
-  const back = new THREE.Mesh(new THREE.BoxGeometry(size.w, wallH, wallT), MAT.wall);
-  back.position.set(center.x, wallH / 2, center.z - size.d / 2);
+  const back = new THREE.Mesh(
+    new THREE.BoxGeometry(size.w, wallH, wallT),
+    MAT.wall.clone(),
+  );
+  back.position.set(0, wallH / 2, -size.d / 2);
   back.userData.department = dept.id;
-  scene.add(back);
+  room.add(back);
+  wallCuller.add(back, back.material as THREE.MeshStandardMaterial);
 
   for (const side of [-1, 1]) {
-    const w = new THREE.Mesh(new THREE.BoxGeometry(wallT, wallH, size.d), MAT.wall);
-    w.position.set(center.x + (side * size.w) / 2, wallH / 2, center.z);
+    const w = new THREE.Mesh(
+      new THREE.BoxGeometry(wallT, wallH, size.d),
+      MAT.wall.clone(),
+    );
+    w.position.set((side * size.w) / 2, wallH / 2, 0);
     w.userData.department = dept.id;
-    scene.add(w);
+    room.add(w);
+    wallCuller.add(w, w.material as THREE.MeshStandardMaterial);
   }
 
   // Nhãn phòng — chữ to, tương phản cao trên nền sáng.
   const sign = makeSign(dept.name.toUpperCase(), Math.min(size.w * 0.78, 7.5), 1.0, "#1f6feb");
-  sign.position.set(center.x, wallH + 0.75, center.z - size.d / 2);
-  scene.add(sign);
+  sign.position.set(0, wallH + 0.75, -size.d / 2);
+  room.add(sign);
 
   // Đèn trần nhẹ cho phòng (phát sáng màn hình + đồ đạc).
   const lamp = new THREE.PointLight(0xffe9c4, 0.5, Math.max(size.w, size.d) * 0.8, 2);
-  lamp.position.set(center.x, wallH - 0.3, center.z);
-  scene.add(lamp);
+  lamp.position.set(0, wallH + 0.9, 0);
+  room.add(lamp);
 
-  buildProps(dept);
+  // Cây xanh + đèn sàn cho phòng (port từ repo tham khảo).
+  furnishRoom(room, size.w, size.d, hashSeed(dept.id));
+
+  // Đồ đạc trong phòng.
+  for (const p of dept.props as string[]) {
+    const placements = propLayout(p as never, size.w, size.d);
+    if (!placements.length) continue;
+    buildFurniture(room, placements, manifest, MAT.propColor);
+  }
+
+  focusManager.register(dept.id, room);
+}
+
+/** Hạt ngẫu nhiên ổn định từ chuỗi (để cây/đồ trang trí khác nhau theo phòng). */
+function hashSeed(s: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
 }
 
 /**
@@ -426,6 +510,8 @@ function makeAgent(index: number, status: AgentStatus, name: string): AgentVisua
  */
 class Screen {
   readonly mesh: THREE.Mesh;
+  /** Đèn nhỏ trước màn hình — màu theo trạng thái agent. */
+  readonly glow: THREE.PointLight;
   private ctx: CanvasRenderingContext2D;
   private tex: THREE.CanvasTexture;
   private lastKey = "";
@@ -441,11 +527,23 @@ class Screen {
       new THREE.PlaneGeometry(0.68, 0.4),
       new THREE.MeshBasicMaterial({ map: this.tex }),
     );
-    // Màn hình nằm trên bàn. Panel của monitor hướng -Z sau khi xoay PI → đặt
+    // Màn hình nằm trên bàn. Panel của monitor hướng -Z sau khi xoay PI → đặc
     // texture ngay trước panel (z nhỏ hơn) để không bị vỏ màn hình che.
     this.mesh.position.set(x, DESK_TOP_Y + 0.43, z - 0.03);
     this.mesh.rotation.y = Math.PI;
+
+    // Ánh sáng hắt ra từ màn hình: giúp nhân vật và mặt bàn có chiều sâu,
+    // đồng thời phân biệt được ai đang bận (màu theo trạng thái).
+    this.glow = new THREE.PointLight(0x9aa6b2, 0.35, 2.4, 2);
+    this.glow.position.set(x, DESK_TOP_Y + 0.42, z + 0.12);
     this.drawIdle();
+  }
+
+  /** Đổi màu đèn theo trạng thái agent. */
+  setStatus(status: string): void {
+    this.glow.color.setHex(screenGlowColor(status));
+    // Agent đang làm việc → màn hình sáng mạnh hơn.
+    this.glow.intensity = status === "idle" ? 0.22 : 0.6;
   }
 
   drawIdle(): void {
@@ -577,7 +675,13 @@ function renderRoomNav(): void {
       const d = rooms.get(b.dataset.room!);
       if (!d) return;
       target.set(d.center.x, 1, d.center.z);
-      dist = Math.max(12, Math.min(24, d.size.w));
+      // Camera nhìn chặt vào phòng: gần hơn và thấp hơn để nhân vật chiếm
+      // nhiều diện tích khung hình thay vì sàn trống.
+      dist = Math.max(9, Math.min(14, d.size.w * 0.95));
+      pitch = 0.52;
+      // Nhân vật quay mặt về +Z → camera đứng phía trước (yaw ~0) để thấy mặt.
+      yaw = 0.12;
+      focusManager.focus(d.id);
       void openPanel("department", d.id);
     });
   });
@@ -594,6 +698,8 @@ function setupAgents(list: AgentState[]): void {
     scene.add(visual.root);
     const screen = new Screen(a.position.x + 0.52, a.position.z + 0.72);
     scene.add(screen.mesh);
+    scene.add(screen.glow);
+    screen.setStatus(a.status);
     agents.set(a.id, { state: a, visual, screen });
     updateAgentTag(a);
   }
@@ -662,12 +768,20 @@ function applyStatus(a: AgentState): void {
     STATUS_COLOR[a.status] ?? STATUS_COLOR.idle,
     clipAliases,
   );
+  // Đèn màn hình đổi màu theo trạng thái → phân biệt ai đang hoạt động.
+  rec.screen.setStatus(a.status);
   updateAgentTag(a);
 }
 
 /** Hook kiểm thử: đổi trạng thái agent ngay trong scene. */
 (window as any).__agents = agents;
 (window as any).__applyStatus = applyStatus;
+(window as any).__scene = scene;
+(window as any).__camera = camera;
+(window as any).__pipeline = pipeline;
+(window as any).__renderer = renderer;
+(window as any).__rooms = rooms;
+(window as any).__THREE = THREE;
 
 /** Hook kiểm thử: vật thể nào nằm ở giữa khung hình. */
 (window as any).__pickCenter = (): string[] => {
@@ -675,7 +789,7 @@ function applyStatus(a: AgentState): void {
   rc.setFromCamera(new THREE.Vector2(0, 0), camera);
   return rc
     .intersectObjects(scene.children, true)
-    .slice(0, 6)
+    .slice(0, 8)
     .map((h) => {
       const names: string[] = [];
       h.object.traverseAncestors((o) => {
@@ -684,7 +798,17 @@ function applyStatus(a: AgentState): void {
       const mesh = h.object as THREE.Mesh;
       const mat = mesh.material;
       const matType = Array.isArray(mat) ? (mat[0]?.type ?? "-") : (mat?.type ?? "-");
-      return `${mesh.type}[${matType}] d=${h.distance.toFixed(2)} ${names.join("<")}`;
+      const wp = new THREE.Vector3();
+      h.object.getWorldPosition(wp);
+      const geo = mesh.geometry as THREE.BufferGeometry;
+      const params = (geo as any).parameters
+        ? JSON.stringify((geo as any).parameters).slice(0, 90)
+        : geo.type;
+      const col =
+        !Array.isArray(mat) && mat && (mat as THREE.MeshStandardMaterial).color
+          ? "#" + (mat as THREE.MeshStandardMaterial).color.getHexString()
+          : "-";
+      return `${mesh.type}[${matType}] d=${h.distance.toFixed(2)} col=${col} wp=(${wp.x.toFixed(1)},${wp.y.toFixed(1)},${wp.z.toFixed(1)}) ${params} ${names.join("<")}`;
     });
 };
 
@@ -696,6 +820,19 @@ let dragging = false;
 let lastX = 0;
 let lastY = 0;
 let target = new THREE.Vector3(0, 1, 0);
+
+/** Vị trí thế giới của các nhân vật (dùng để cắt tường chính xác hơn). */
+function agentPositions(): THREE.Vector3[] {
+  const out: THREE.Vector3[] = [];
+  for (const { visual } of agents.values()) {
+    const p = visual.root.position;
+    // Chỉ lấy nhân vật trong cùng phòng đang xem, để tường mờ đúng chỗ.
+    if (Math.abs(p.x - target.x) < 12 && Math.abs(p.z - target.z) < 12) {
+      out.push(new THREE.Vector3(p.x, 1, p.z));
+    }
+  }
+  return out;
+}
 
 canvas.addEventListener("pointerdown", (e) => {
   dragging = true;
@@ -754,6 +891,10 @@ function animate(): void {
   );
   camera.lookAt(target.x, 1, target.z);
 
+  // Mờ các tường chắn giữa camera và phòng đang xem.
+  wallCuller.update(camera, target, agentPositions());
+  focusManager.update(1 / 60);
+
   for (const { visual, state } of agents.values()) {
     updateAgentVisual(visual, 1 / 60);
     const ring = visual.ring;
@@ -763,7 +904,7 @@ function animate(): void {
         : 0.85;
     (ring.material as THREE.MeshBasicMaterial).opacity = pulse;
   }
-  renderer.render(scene, camera);
+  pipeline.render(1 / 60);
 }
 animate();
 
@@ -771,6 +912,10 @@ addEventListener("resize", () => {
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
+  // Composer phải cùng kích thước với renderer, nếu không bloom sẽ bị méo
+  // và ảnh bị cắt khi đổi kích thước cửa sổ.
+  pipeline.composer?.setPixelRatio(renderer.getPixelRatio());
+  pipeline.composer?.setSize(innerWidth, innerHeight);
 });
 
 // ---------------- Panels ----------------
