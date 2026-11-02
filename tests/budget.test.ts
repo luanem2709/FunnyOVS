@@ -131,6 +131,43 @@ describe("I. Token Budget: trần tuần, trần tác vụ, ví học", () => {
     b.refund("normal", 500);
     expect(b.getUsage("normal").used).toBe(0);
   });
+
+  it("trần ngày tính cho TỔNG (công việc + tự học), không cho vượt 100%", () => {
+    // GĐ 1.1: trước đây #used chỉ tính ví chính ⇒ công việc + học có thể
+    // vượt trần ngày tới 130%. Nay trần áp cho tổng.
+    const b = new TokenBudget(true);
+    const t = b.issueConfigToken();
+    b.configure({ dailyLimit: 1000, learningPercent: 50 }, t);
+    expect(b.spend("normal", 600)).toBe(true);
+    // Ví học còn 500 theo riêng nhưng tổng đã 600 → chỉ được thêm 400.
+    expect(b.spend("learning", 400)).toBe(true);
+    // Tổng = 1000 → khoá.
+    expect(b.isLocked()).toBe(true);
+    expect(b.canSpend("normal", 1)).toBe(false);
+    expect(b.canSpend("learning", 1)).toBe(false);
+  });
+
+  it("tổng ngày không vượt trần dù ví học còn dư", () => {
+    const b = new TokenBudget(true);
+    const t = b.issueConfigToken();
+    b.configure({ dailyLimit: 1000, learningPercent: 50 }, t);
+    b.spend("learning", 500);
+    // Tổng đã 500 → công việc chỉ được thêm tối đa 500.
+    expect(b.canSpend("normal", 500)).toBe(true);
+    expect(b.canSpend("normal", 501)).toBe(false);
+  });
+
+  it("tỷ lệ cảnh báo/khoá tính trên tổng ngày", () => {
+    const b = new TokenBudget(true);
+    const t = b.issueConfigToken();
+    b.configure({ dailyLimit: 1000, learningPercent: 50 }, t);
+    b.spend("learning", 500);
+    b.spend("normal", 300); // tổng 800 → đạt ngưỡng cảnh báo 80%
+    expect(b.shouldWarn()).toBe(true);
+    b.spend("normal", 200); // tổng 1000 → khoá
+    expect(b.isLocked()).toBe(true);
+    expect(b.snapshot().ratio).toBe(1);
+  });
 });
 
 describe("J. Nhật ký chi tiêu (SQLite)", () => {

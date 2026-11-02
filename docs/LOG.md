@@ -6,6 +6,98 @@ Quy ước ước tính token: `~<số>` = số token ước tính đã dùng tr
 
 ---
 
+## 2026-11-02 — Chu kỳ 6 (GĐ 1): sửa lỗi hiển thị & số liệu, nhãn 3D, bầu trời, chuỗi đầu-cuối
+
+**Nhánh:** `auto/nang-cap-3d-toan-quyen`
+
+### GĐ 1.1 — Số token trên thanh ngân sách KHÔNG khớp bảng chi tiêu: ĐÃ TÌM RA NGUYÊN NHÂN
+
+Ba nguyên nhân độc lập, đều là **lỗi thật** (không phải số giả):
+
+| # | Nguyên nhân | Bằng chứng | Nơi sửa |
+|---|-----------|-----------|---------|
+| 1 | **Panel phòng ban luôn hiện "0 token"** | `/api/state` gửi hằng `DEPARTMENTS` (tĩnh) **không kèm** `spend`; client lưu `rooms` từ đó ⇒ `dept.spend === undefined` ⇒ fallback `{tokens:0}` | `main.ts`: `/api/state` gắn `agents` + `spend` từ `ledger.totalsByDepartment()`; client có `setupRooms()` cập nhật lại `spend` mà không dựng lại phòng 3D; thêm poll `/api/departments` mỗi 5s |
+| 2 | **Thanh "Hôm nay" bỏ sót ví học** | `TokenBudget.#used` chỉ tính ví chính; ví học nằm ở `#learningUsed`. ⇒ thanh hiện 153.2k trong khi ledger tổng 216.8k | `main.ts` (client): thanh "Hôm nay" hiện **tổng** `total.used + learning.used`; thêm dòng "Công việc X · Tự học Y (tự học nằm trong trần ngày)" |
+| 3 | **Trần ngày có lỗ hổng (vượt tới 130%)** | `canSpend("normal")` so sánh `#used + amount > #dailyLimit` — không tính `#learningUsed`, dù `#isLearningLocked` lại tính cả hai ⇒ mâu thuẫn | `tokenBudget.ts`: thêm `#dayUsed()` = `#used + #learningUsed`; mọi phép so sánh trần ngày/tuần dùng tổng. **Siết chặt hơn, không nới lỏng.** |
+
+**Số liệu là thật hay giả?** → **THẬT, nhưng hiển thị sai chỗ.** Không có dữ liệu giả nào trong đường chi tiêu:
+- Dòng `quotaSource: "estimated"` = token ước lượng cho việc đọc web qua sandbox browser (chưa gọi LLM) → **ước lượng thật** của lượng nội dung đã đọc, KHÔNG phải số bịa. Đã ghi rõ nhãn `estimated` trên từng dòng.
+- Dòng `quotaSource: "cli-usage"` = token thật do Cursor CLI báo (`usage` trong JSON) → số thật tuyệt đối.
+
+**Kiểm chứng sau khi sửa (Windows, chạy thật):**
+- Thanh ngân sách: `Hôm nay 47% 233.8k/500.0k` · `Công việc 166.8k · Tự học 67.1k`
+- Ledger `totalsToday()`: `normal 166754 + learning 67052 = 233.806` ⇒ **khớp tuyệt đối**
+- Panel "Phòng Giao việc": `45.5k token · 2 lượt · 0.0438 USD` ⇒ khớp đúng dòng ledger `department=dispatch` (45.486 token, 4.38 cents).
+
+### GĐ 1.2 — Nhãn phòng & nhân vật (billboard rõ nét)
+
+Mới: `src/client/assets/labels.ts` — `BillboardLabel` vẽ canvas 1024×256:
+- Nền đậm `rgba(8,11,16,0.94)` + viền bo góc màu theo trạng thái, **chữ trắng đậm** 82px.
+- **Biểu tượng trạng thái** (⚙ 🔍 📘 ⏳ ⛔ ●) + tên trạng thái tiếng Việt.
+- **Thanh tiến độ** 0..1 dưới nhãn (đang làm 0.55 · chờ duyệt 0.9 · xong 1.0).
+- **Tự ẩn khi xa** (>13 m với người, >34 m với phòng) + thu nhỏ dần theo khoảng cách ⇒ không đè lên nhau, không rối mắt ở chế độ toàn cảnh.
+- Nhãn đặt **cao hơn đỉnh đầu** (2.12 m thay vì 1.78 m) ⇒ không che mặt nhân vật.
+- `depthTest:false` + `renderOrder 900` ⇒ nhãn luôn nổi trên vật thể.
+
+### GĐ 1.3 — Bầu trời: bỏ texture đốm tròn
+
+- `drawCityscape()`: mây cũ là 22 hình tròn đặc → đổi thành 14 đám mây gồm nhiều **radial gradient** chồng nhau (alpha tăng dần về tâm) ⇒ mềm, không đốm.
+- Bầu trời: gradient 5 chặng (`#2f6fb5 → #eef6fb`).
+- Thêm **vòm trời shader** (`skyDome()`) — nội suy màu theo chiều cao, không texture ⇒ không vệt/đốm.
+- Thêm **2 vòng skyline mờ** xa (`distantSkyline()`, alpha 0.4 / 0.26) + lớp sương mờ → chiều sâu, không cứng.
+
+### GĐ 1.4 — Chuỗi đầu-cuối (chạy THẬT trên Windows)
+
+`scripts/e2e-task.ts`: giao việc → `cursor agent -p` → kết quả → ledger.
+
+Kết quả đo được:
+```
+status: done | backend: cursor-agent | model: auto
+tokens: 96984 | costCents: 11.2168 | quotaSource: cli-usage | durationMs: 38856
+usage thật: input 36122 · output 1726 · cacheRead 59136
+ledger trước 166754+67052  →  sau 263738+67052   (+96984 = khớp chính xác)
+result: "OK: 2" (đã liệt kê được tệp trong sandbox)
+```
+
+### Cờ Cursor CLI thật sự hoạt động (đo trên máy, `scripts/check-cursor-flags.ts`)
+
+| Cờ | Kết quả |
+|-----|---------|
+| `-p` / `--print` | ✅ có `usage` + `result` |
+| `--output-format json` | ✅ |
+| `--output-format stream-json` | ✅ |
+| `--stream-partial-output` | ✅ |
+| `--model auto` | ✅ (gói Free chỉ cho phép `auto`) |
+| `--mode plan` | ✅ (read-only) |
+| `--mode ask` | ✅ (read-only) |
+| `--trust` | ✅ |
+| `--workspace <dir>` | ✅ |
+| `--add-dir <dir>` | ✅ |
+| `--auto-review` | ✅ parse OK |
+| `--force` / `--yolo` | ✅ parse OK (**không dùng** — bật auto-approve mọi lệnh) |
+| `--sandbox enabled` | ❌ **KHÔNG hoạt động trên Windows**: `Error: Sandbox mode is enabled but not available on this system. Sandbox requires macOS or Linux.` ⇒ ứng dụng **tự cô lập** (workspace riêng + HOME riêng), không dựa vào cờ này |
+| `--sandbox disabled` | ✅ |
+| `--list-models` | ✅ (275 dòng) |
+
+### Bài học
+
+1. **"0" ở một bảng không phải lúc nào cũng là dữ liệu giả** — nhiều khi là *trường không được gửi*. `/api/state` gửi hằng tĩnh trong khi `/api/departments` gửi bản đầy đủ ⇒ client nhận `undefined` và hiển thị 0.
+2. **Một bảng "hợp lệ" phải dùng cùng nguồn số liệu.** Thanh ngân sách lấy từ `TokenBudget`, bảng chi tiêu lấy từ `TokenLedger` — hai nơi phải cùng công thức, nếu không sẽ lệch.
+3. **Ví con phải nằm TRONG trần cha.** `#isLearningLocked` tính cả hai ví nhưng `canSpend` thì không ⇒ lỗ hổng 130%. Cùng một khái niệm phải dùng cùng một cách tính.
+4. **Cờ CLI phải đo, không tin tài liệu.** `--sandbox enabled` được ghi "không chạy trên Windows" trong code từ trước — lần này đo lại và xác nhận. Đồng thời phát hiện cần delay giữa các lượt gọi liên tiếp (gọi quá nhanh → `code=1` không có JSON).
+5. **Nhãn 3D phải test bằng ảnh, không bằng mắt code.** Lần đầu nhãn đè đúng lên mặt nhân vật — chỉ thấy được sau khi chụp ảnh.
+
+### Token ước tính
+
+`~120k` (đo thật: 96.984 Cursor CLI + ~25k kiểm tra cờ CLI)
+
+### Việc tiếp theo
+
+- GĐ 2: bộ test an toàn (path traversal, junction/symlink Windows, prompt injection).
+- GĐ 3: ánh sáng môi trường, post-processing, bố cục liền mạch, pathfinding.
+
+---
+
 ## 2026-11-02 — Chu kỳ 5: "Vẫn đứng yên" — việc giả, ví cạn, không có nhịp độ
 
 **Nhánh:** `auto/2026-11-02-van-phong-3d` (tiếp tối chu kỳ 4)

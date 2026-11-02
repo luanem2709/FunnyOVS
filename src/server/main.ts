@@ -404,7 +404,19 @@ startDispatchLoop();
 app.get("/api/state", (_req, res) => {
   res.json({
     agents: registry.list(),
-    departments: DEPARTMENTS,
+    // Phòng ban kèm số liệu chi tiêu THẬT từ ledger. Trước đây gửi
+    // `DEPARTMENTS` (hằng tĩnh) ⇒ client không có `spend` ⇒ panel hiện "0 token"
+    // trong khi thanh ngân sách lại hiện số thật ⇒ hai nơi lệch nhau.
+    departments: DEPARTMENTS.map((d) => ({
+      ...d,
+      agents: registry.listByDepartment(d.id),
+      spend: ledger.totalsByDepartment().find((t) => t.department === d.id) ?? {
+        department: d.id,
+        tokens: 0,
+        cents: 0,
+        calls: 0,
+      },
+    })),
     config: configStore.get(),
     emergencyStop,
     budget: budget.snapshot(),

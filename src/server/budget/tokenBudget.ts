@@ -88,12 +88,32 @@ export class TokenBudget {
     return false;
   }
 
+  /**
+   * Tổng token đã dùng trong ngày (công việc + tự học).
+   *
+   * LƯU Ý: trần ngày áp cho TỔNG, không riêng ví chính. Ví học là một phần
+   * trong trần đó (xem #isLearningLocked), nên mọi phép so sánh với
+   * `#dailyLimit` phải dùng tổng này — nếu không thì công việc + học có thể
+   * vượt trần ngày tới 130%.
+   */
+  #dayUsed(): number {
+    return this.#used + this.#learningUsed;
+  }
+
+  /** Tổng token đã dùng trong tuần (công việc + tự học). */
+  #weekTotal(): number {
+    return this.#weekUsed;
+  }
+
   canSpend(kind: WalletKind, amount: number): boolean {
     if (this.#locked) return false;
     if (this.#isLearningLocked(kind)) return false;
-    if (kind === "learning") return this.#learningUsed + amount <= this.#learningLimit;
-    if (this.#used + amount > this.#dailyLimit) return false;
-    if (this.#weekUsed + amount > this.#weeklyLimit) return false;
+    if (kind === "learning") {
+      return this.#learningUsed + amount <= this.#learningLimit;
+    }
+    // Trần ngày áp cho tổng (công việc + học).
+    if (this.#dayUsed() + amount > this.#dailyLimit) return false;
+    if (this.#weekTotal() + amount > this.#weeklyLimit) return false;
     return true;
   }
 
@@ -221,16 +241,16 @@ export class TokenBudget {
     }
   }
 
-  /** Đánh giá ngưỡng 80% / 100%. */
+  /** Đánh giá ngưỡng 80% / 100% — trên TỔNG ngày (công việc + học). */
   #evaluate(): void {
-    const ratio = this.#dailyLimit > 0 ? this.#used / this.#dailyLimit : 0;
+    const ratio = this.#dailyLimit > 0 ? this.#dayUsed() / this.#dailyLimit : 0;
     if (ratio >= 1) this.#locked = true;
     else if (ratio < this.#warnRatio) this.#warned = false;
   }
 
   /** Đã vượt ngưỡng cảnh báo chưa (dùng 1 lần để phát cảnh báo). */
   shouldWarn(): boolean {
-    const ratio = this.#dailyLimit > 0 ? this.#used / this.#dailyLimit : 0;
+    const ratio = this.#dailyLimit > 0 ? this.#dayUsed() / this.#dailyLimit : 0;
     if (ratio >= this.#warnRatio && !this.#warned) {
       this.#warned = true;
       return true;
@@ -239,7 +259,7 @@ export class TokenBudget {
   }
 
   snapshot(): BudgetSnapshot {
-    const ratio = this.#dailyLimit > 0 ? this.#used / this.#dailyLimit : 0;
+    const ratio = this.#dailyLimit > 0 ? this.#dayUsed() / this.#dailyLimit : 0;
     return {
       total: this.getUsage("normal"),
       learning: this.getUsage("learning"),

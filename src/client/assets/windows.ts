@@ -39,23 +39,36 @@ export function drawCityscape(
   const g = cvs.getContext("2d")!;
   const rand = rng(seed);
 
-  // Bầu trời.
+  // Bầu trời — gradient dọc, không dùng texture đốm.
   const sky = g.createLinearGradient(0, 0, 0, height);
-  sky.addColorStop(0, "#7fb9e8");
-  sky.addColorStop(0.62, "#c8e2f5");
-  sky.addColorStop(1, "#eaf3fa");
+  sky.addColorStop(0, "#2f6fb5");
+  sky.addColorStop(0.28, "#6ea6df");
+  sky.addColorStop(0.55, "#a9cdec");
+  sky.addColorStop(0.78, "#d5e8f7");
+  sky.addColorStop(1, "#eef6fb");
   g.fillStyle = sky;
   g.fillRect(0, 0, width, height);
 
-  // Mây.
-  g.fillStyle = "rgba(255,255,255,.85)";
-  for (let i = 0; i < 22; i++) {
+  // Mây — dùng radial gradient mềm thay vì hình tròn đặc (tránh "đốm tròn").
+  // Mỗi đám mây là nhiều blob gradient chồng lên, alpha tăng dần về tâm.
+  for (let i = 0; i < 14; i++) {
     const cx = rand() * width;
-    const cy = rand() * height * 0.32;
-    const r = 14 + rand() * 30;
-    g.beginPath();
-    g.arc(cx, cy, r, 0, Math.PI * 2);
-    g.fill();
+    const cy = rand() * height * 0.30;
+    const scale = 0.6 + rand() * 1.1;
+    const blobs = 4 + Math.floor(rand() * 4);
+    for (let b = 0; b < blobs; b++) {
+      const bx = cx + (rand() - 0.5) * 130 * scale;
+      const by = cy + (rand() - 0.5) * 26 * scale;
+      const r = (26 + rand() * 42) * scale;
+      const grd = g.createRadialGradient(bx, by, 0, bx, by, r);
+      grd.addColorStop(0, "rgba(255,255,255,0.55)");
+      grd.addColorStop(0.45, "rgba(255,255,255,0.24)");
+      grd.addColorStop(1, "rgba(255,255,255,0)");
+      g.fillStyle = grd;
+      g.beginPath();
+      g.arc(bx, by, r, 0, Math.PI * 2);
+      g.fill();
+    }
   }
 
   // Ba lớp tòa nhà từ xa tới gần.
@@ -92,7 +105,113 @@ export function drawCityscape(
   g.fillStyle = "#54697c";
   g.fillRect(0, height * 0.9, width, height * 0.1);
 
+  // Lớp sương mờ phía trên đường chân trời → skyline xa nhưng vẫn nổi
+  // nhẹ, không bị cứng như tranh vẽ.
+  const haze = g.createLinearGradient(0, height * 0.5, 0, height * 0.92);
+  haze.addColorStop(0, "rgba(214, 233, 247, 0.55)");
+  haze.addColorStop(0.55, "rgba(206, 227, 243, 0.32)");
+  haze.addColorStop(1, "rgba(198, 220, 238, 0.12)");
+  g.fillStyle = haze;
+  g.fillRect(0, height * 0.5, width, height * 0.42);
+
   return cvs;
+}
+
+/**
+ * Dải skyline MỜ ở xa (2 vòng) — đưa tầm nhìn ra xa, tạo chiều sâu.
+ * Vẽ bằng canvas, alpha thấp → mờ vào bầu trời.
+ */
+export function distantSkyline(radius: number, height: number, seed = 21): THREE.Group {
+  const g = new THREE.Group();
+
+  const layers: Array<{ r: number; h: number; col: string; alpha: number; seed: number }> = [
+    { r: radius * 1.45, h: height * 0.85, col: "#8fa9c2", alpha: 0.4, seed },
+    { r: radius * 1.8, h: height * 0.6, col: "#a7bdd2", alpha: 0.26, seed: seed + 3 },
+  ];
+
+  for (const layer of layers) {
+    const cvs = document.createElement("canvas");
+    cvs.width = 2048;
+    cvs.height = 256;
+    const ctx = cvs.getContext("2d")!;
+    const rand = rng(layer.seed);
+    ctx.fillStyle = layer.col;
+    ctx.globalAlpha = layer.alpha;
+
+    let x = -20;
+    while (x < 2048) {
+      const bw = 30 + rand() * 70;
+      const bh = 40 + rand() * 150;
+      ctx.fillRect(x, 256 - bh, bw, bh);
+      x += bw + 6 + rand() * 18;
+    }
+    ctx.globalAlpha = 1;
+
+    const tex = new THREE.CanvasTexture(cvs);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.repeat.set(5, 1);
+
+    const mesh = new THREE.Mesh(
+      new THREE.CylinderGeometry(layer.r, layer.r, layer.h, 48, 1, true),
+      new THREE.MeshBasicMaterial({
+        map: tex,
+        side: THREE.BackSide,
+        transparent: true,
+        opacity: layer.alpha,
+        depthWrite: false,
+        toneMapped: false,
+      }),
+    );
+    mesh.position.y = layer.h / 2 - 1.2;
+    mesh.renderOrder = -5;
+    g.add(mesh);
+  }
+
+  return g;
+}
+
+/**
+ * Vòm trời (sky dome) — gradient mượt phía trên, không dùng texture.
+ * Dùng shader nội suy màu theo chiều cao → không bị vệt/đốm.
+ */
+export function skyDome(radius = 120): THREE.Mesh {
+  const geo = new THREE.SphereGeometry(radius, 32, 20);
+  const mat = new THREE.ShaderMaterial({
+    side: THREE.BackSide,
+    depthWrite: false,
+    toneMapped: false,
+    uniforms: {
+      topColor: { value: new THREE.Color(0x2f6fb5) },
+      midColor: { value: new THREE.Color(0x9fc6ea) },
+      bottomColor: { value: new THREE.Color(0xeaf3fa) },
+    },
+    vertexShader: `
+      varying vec3 vWorld;
+      void main() {
+        vWorld = (modelMatrix * vec4(position, 1.0)).xyz;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: `
+      uniform vec3 topColor;
+      uniform vec3 midColor;
+      uniform vec3 bottomColor;
+      varying vec3 vWorld;
+      void main() {
+        float h = clamp(vWorld.y / ${radius.toFixed(1)}, -1.0, 1.0);
+        // h: -1 (dưới) .. 1 (trên). Dùng 3 chặng để chuyển màu mượt.
+        vec3 c = h > 0.0
+          ? mix(midColor, topColor, pow(h, 0.65))
+          : mix(midColor, bottomColor, pow(-h, 0.5));
+        gl_FragColor = vec4(c, 1.0);
+      }
+    `,
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.renderOrder = -10;
+  mesh.frustumCulled = false;
+  return mesh;
 }
 
 /** Texture skyline cho vòng ngoại cảnh. */

@@ -13,7 +13,7 @@ import { preloadAssets, peekAsset } from "./assets/loader.js";
 import { setupLighting, screenGlowColor } from "./assets/lighting.js";
 import { setupRenderPipeline } from "./assets/renderPipeline.js";
 import { furnishRoom } from "./assets/props.js";
-import { skylineRing } from "./assets/windows.js";
+import { skylineRing, distantSkyline, skyDome } from "./assets/windows.js";
 import { WallCuller } from "./assets/wallCulling.js";
 import { FocusManager } from "./assets/focusMode.js";
 import { floorTextureFor, woodFloorTexture } from "./assets/floorTextures.js";
@@ -22,6 +22,11 @@ import { chibiAnimFor } from "./assets/characterFactory.js";
 import { setChibiAnim, type ChibiAnim } from "./assets/chibi.js";
 import { signatureProp, updateProps } from "./assets/officeProps.js";
 import { buildFurniture, deskLayout, propLayout, DESK_TOP_Y } from "./assets/roomBuilder.js";
+import {
+  BillboardLabel,
+  makeRoomLabel,
+  type LabelStatus,
+} from "./assets/labels.js";
 import {
   createAgentVisual,
   applyAgentStatus,
@@ -239,6 +244,9 @@ const roomGroups = new Map<string, THREE.Group>();
 /** Đèn trần của từng phòng — chỉ bật đèn của phòng đang xem. */
 const roomLamps = new Map<string, THREE.PointLight>();
 
+/** Nhãn billboard của từng phòng (ẩn khi camera xa). */
+const roomLabels = new Map<string, BillboardLabel>();
+
 /**
  * Lưới điều hướng cho nhân viên đi lại.
  * Tường phòng được thêm vào khi dựng phòng (xem buildRoom).
@@ -267,6 +275,13 @@ scene.add(floor);
 const skyline = skylineRing(26, 9);
 skyline.position.set(3, 0, 0);
 scene.add(skyline);
+
+// Bầu trời: vòm gradient (shader) + 2 vòng skyline mờ ở xa → chiều sâu,
+// không còn texture đốm tròn.
+scene.add(skyDome(120));
+const farCity = distantSkyline(26, 9, 21);
+farCity.position.set(3, 0, 0);
+scene.add(farCity);
 
 // Hook cho script kiểm thử ảnh (không ảnh hưởng runtime).
 (window as any).__threeInfo = {
@@ -384,27 +399,6 @@ const STATUS_COLOR: Record<AgentStatus, number> = {
   stopped: 0x484f58,
 };
 
-function makeSign(text: string, w: number, h: number, color = "#4f9cf9"): THREE.Sprite {
-  const cvs = document.createElement("canvas");
-  cvs.width = 512;
-  cvs.height = 128;
-  const ctx = cvs.getContext("2d")!;
-  ctx.fillStyle = "rgba(13,17,23,0.86)";
-  ctx.fillRect(0, 0, 512, 128);
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 4;
-  ctx.strokeRect(2, 2, 508, 124);
-  ctx.fillStyle = color;
-  ctx.font = "bold 40px sans-serif";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText(text, 256, 66);
-  const tex = new THREE.CanvasTexture(cvs);
-  const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false }));
-  spr.scale.set(w, h, 1);
-  return spr;
-}
-
 /**
  * Trang trí đặc trưng cho từng phòng.
  * Dùng model Kenney thật (Furniture Kit) nếu manifest có, không thì hộp dự phòng.
@@ -472,10 +466,11 @@ function buildRoom(dept: Department): void {
     wallCuller.add(w, w.material as THREE.MeshStandardMaterial);
   }
 
-  // Nhãn phòng — chữ to, tương phản cao trên nền sáng.
-  const sign = makeSign(dept.name.toUpperCase(), Math.min(size.w * 0.78, 7.5), 1.0, "#1f6feb");
-  sign.position.set(0, wallH + 0.75, -size.d / 2);
-  room.add(sign);
+  // Nhãn phòng — billboard rõ nét: nền tối, chữ trắng đậm, tự ẩn khi xa.
+  const roomLabel = makeRoomLabel(dept.name.toUpperCase(), Math.min(size.w * 0.78, 7.5));
+  roomLabel.sprite.position.set(0, wallH + 0.75, -size.d / 2);
+  room.add(roomLabel.sprite);
+  roomLabels.set(dept.id, roomLabel);
 
   // Đèn trần nhẹ cho phòng (phát sáng màn hình + đồ đạc).
   //
@@ -529,15 +524,22 @@ function hashSeed(s: string): number {
  * Nhân vật: dùng model Kenney Animated Characters nếu có (có rig + animation),
  * không thì fallback về capsule. Mỗi agent một màu riêng.
  */
-function makeAgent(index: number, status: AgentStatus, name: string): AgentVisual {
+function makeAgent(
+  index: number,
+  status: AgentStatus,
+  name: string,
+): { visual: AgentVisual; label: BillboardLabel } {
   const tint = AGENT_TINTS[index % AGENT_TINTS.length];
   const visual = createAgentVisual(characterAsset, tint, status, index, name);
-  const nameTag = makeSign("", 2.4, 0.45, "#1f2937");
-  // Nhân vật chibi ngồi: đầu ở cao độ ~1.4 → nhãn đặt ngay trên đỉnh đầu.
-  nameTag.position.set(0, visual.chibi ? 1.78 : visual.animated ? 2.35 : 2.5, 0);
-  visual.root.add(nameTag);
-  visual.tag = nameTag;
-  return visual;
+  // Nhãn tên riêng (billboard rõ nét) — quản lý bởi `labels.ts`.
+  const nameTag = new BillboardLabel({ width: 2.3, height: 0.58, hideBeyond: 13 });
+  nameTag.setSize(2.3, 0.58);
+  // Nhân vật chibi ngồi: đầu ở cao độ ~1.4 → nhãn đặt CAO HƠN đỉnh đầu một
+  // chút để không che mặt (mũi tên bị nhãn đè).
+  nameTag.sprite.position.set(0, visual.chibi ? 2.12 : visual.animated ? 2.6 : 2.7, 0);
+  visual.root.add(nameTag.sprite);
+  visual.tag = nameTag.sprite;
+  return { visual, label: nameTag };
 }
 
 /**
@@ -672,6 +674,8 @@ class Screen {
 interface AgentRecord {
   state: AgentState;
   visual: AgentVisual;
+  /** Nhãn billboard (tên + trạng thái + tiến độ). */
+  label: BillboardLabel;
   screen: Screen;
   /** Máy trạng thái đi lại (đi nghỉ rồi quay lại bàn). */
   walker: Walker;
@@ -693,7 +697,13 @@ let pendingApproval: { id: string; taskId: string; title: string; agentName: str
 
 function setupRooms(list: Department[]): void {
   for (const d of list) {
-    if (rooms.has(d.id)) continue;
+    const existing = rooms.get(d.id);
+    if (existing) {
+      // Phòng đã dựng → chỉ cập nhật số liệu chi tiêu (phòng 3D giữ nguyên).
+      existing.spend = d.spend;
+      existing.agents = d.agents;
+      continue;
+    }
     rooms.set(d.id, d);
     buildRoom(d);
   }
@@ -734,7 +744,7 @@ function setupAgents(list: AgentState[]): void {
   let index = 0;
   for (const a of list) {
     if (agents.has(a.id)) continue;
-    const visual = makeAgent(index++, a.status, a.name);
+    const { visual, label } = makeAgent(index++, a.status, a.name);
     visual.root.position.set(a.position.x, 0, a.position.z);
     // Nhân vật ngồi tại bàn, quay mặt về phía bàn (+Z) → thấy mặt từ camera mặc định.
     if (visual.chibi) visual.chibi.sit = true;
@@ -749,7 +759,7 @@ function setupAgents(list: AgentState[]): void {
       workMin: 14 + index * 4,
       workMax: 46 + index * 7,
     });
-    agents.set(a.id, { state: a, visual, screen, walker });
+    agents.set(a.id, { state: a, visual, label, screen, walker });
     updateAgentTag(a);
   }
 }
@@ -795,26 +805,23 @@ function buildDesks(list: AgentState[]): void {
   }
 }
 
+/**
+ * Cập nhật nhãn 3D của nhân vật: tên + vai trò + biểu tượng trạng thái +
+ * thanh tiến độ (dựa trên số tác vụ đã xong so với tổng đã giao).
+ */
 function updateAgentTag(a: AgentState): void {
   const rec = agents.get(a.id);
   if (!rec) return;
-  const tag = rec.visual.tag;
-  const label = a.name;
-  if (tag.userData.label === label) return;
-  tag.userData.label = label;
-  // Vẽ lại sprite tên (texture nhỏ, cập nhật hiếm).
-  const canvasEl = (tag.material as THREE.SpriteMaterial).map?.image as HTMLCanvasElement | undefined;
-  if (!canvasEl) return;
-  const ctx = canvasEl.getContext("2d")!;
-  ctx.clearRect(0, 0, 512, 128);
-  ctx.fillStyle = "rgba(255,255,255,0.92)";
-  ctx.fillRect(0, 0, 512, 128);
-  ctx.fillStyle = "#1f2937";
-  ctx.font = "bold 52px sans-serif";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText(label, 256, 66);
-  ((tag.material as THREE.SpriteMaterial).map as THREE.CanvasTexture).needsUpdate = true;
+  const status = (a.status as LabelStatus) ?? "idle";
+  // Tiến độ: nếu agent đang làm việc → 0.5 (đang xử lý), xong → 1.
+  const progress =
+    status === "working" || status === "researching" || status === "learning"
+      ? 0.55
+      : status === "waiting" || status === "blocked"
+        ? 0.9
+        : 1;
+  const sub = a.role ? a.role : "";
+  rec.label.update(a.name, sub, status, progress);
 }
 
 function applyStatus(a: AgentState): void {
@@ -1072,6 +1079,8 @@ function animate(): void {
   for (const rec of agents.values()) {
     const { visual, state } = rec;
     updateAgentVisual(visual, 1 / 60);
+    // Nhãn 3D: ẩn khi camera xa + thu nhỏ dần (không đè lên nhau).
+    rec.label.updateVisibility(camera);
     const ring = visual.ring;
     const pulse =
       state.status === "waiting" || state.status === "blocked"
@@ -1085,6 +1094,9 @@ function animate(): void {
 
   // Quạt tủ server quay, đồ đạc động.
   for (const room of roomGroups.values()) updateProps(room, t);
+
+  // Nhãn phòng: ẩn/thu nhỏ theo khoảng cách camera.
+  for (const label of roomLabels.values()) label.updateVisibility(camera);
 
   pipeline.render(1 / 60);
 }
@@ -1104,9 +1116,14 @@ addEventListener("resize", () => {
 const panel = document.getElementById("panel")!;
 const panelTitle = document.getElementById("panel-title")!;
 const panelBody = document.getElementById("panel-body")!;
+/** Panel đang mở (loại + tham số) — để làm mới được khi số liệu thay đổi. */
+let panelKind = "";
+let panelArg: string | undefined;
 
 function closePanel(): void {
   panel.classList.add("hidden");
+  panelKind = "";
+  panelArg = undefined;
 }
 
 document.getElementById("panel-close")!.addEventListener("click", closePanel);
@@ -1116,6 +1133,8 @@ document.querySelectorAll<HTMLButtonElement>(".tab").forEach((tab) => {
 
 async function openPanel(name: string, arg?: string): Promise<void> {
   panel.classList.remove("hidden");
+  panelKind = name;
+  panelArg = arg;
   switch (name) {
     case "browser": {
       panelTitle.textContent = "Nhật ký duyệt web (sandbox)";
@@ -1486,7 +1505,12 @@ let lastBudget: BudgetSnapshot | null = null;
 function renderBudget(b: BudgetSnapshot): void {
   lastBudget = b;
   const el = document.getElementById("budget-widget")!;
-  const pct = Math.round((b.total.used / Math.max(1, b.total.limit)) * 100);
+  // Ví học là một PHẦN của trần ngày (xem TokenBudget.#isLearningLocked:
+  // tổng ví chính + ví học phải ≤ trần ngày). Vì vậy thanh "Hôm nay" phải
+  // hiện TỔNG (công việc + tự học) để khớp với tổng trong nhật ký chi tiêu.
+  const dayUsed = b.total.used + b.learning.used;
+  const dayLimit = b.total.limit;
+  const pct = Math.round((dayUsed / Math.max(1, dayLimit)) * 100);
   const lpct = Math.round((b.learning.used / Math.max(1, b.learning.limit)) * 100);
   const wpct = Math.round((b.weekly.used / Math.max(1, b.weekly.limit)) * 100);
   const q = b.quota;
@@ -1502,7 +1526,7 @@ function renderBudget(b: BudgetSnapshot): void {
       <span>Hôm nay</span>
       <div class="bar"><i style="width:${Math.min(100, pct)}%"></i></div>
       <b>${pct}%</b>
-      <span class="muted">${fmt(b.total.used)}/${fmt(b.total.limit)}</span>
+      <span class="muted">${fmt(dayUsed)}/${fmt(dayLimit)}</span>
     </div>
     <div class="bar-row">
       <span>Tuần</span>
@@ -1513,7 +1537,9 @@ function renderBudget(b: BudgetSnapshot): void {
       <span>Tự học</span>
       <div class="bar learn"><i style="width:${Math.min(100, lpct)}%"></i></div>
       <b>${lpct}%</b>
+      <span class="muted">${fmt(b.learning.used)}/${fmt(b.learning.limit)}</span>
     </div>
+    <div class="muted quota">Công việc ${fmt(b.total.used)} · Tự học ${fmt(b.learning.used)} (tự học nằm trong trần ngày)</div>
     ${quotaTxt ? `<div class="muted quota">${esc(quotaTxt)}${q?.cycleEnd ? " · reset " + new Date(q.cycleEnd).toLocaleDateString("vi-VN") : ""}</div>` : ""}
     <div class="muted auto-line" id="auto-line">${autoLineHtml()}</div>`;
 }
@@ -1772,4 +1798,18 @@ async function loadAssets(): Promise<void> {
       /* ignore */
     }
   }, 3000);
+
+  // Làm mới số liệu chi tiêu theo phòng ban (ledger đổi liên tục) để panel
+  // phòng khớp với thanh ngân sách.
+  setInterval(async () => {
+    try {
+      const depts = await api<Department[]>("/api/departments");
+      setupRooms(depts);
+      if (panelKind === "department") {
+        await openPanel("department", panelArg);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, 5000);
 })();

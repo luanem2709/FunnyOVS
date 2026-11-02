@@ -16,8 +16,9 @@ export interface LightingSetup {
 
 /** Tạo bộ ánh sáng cho cảnh ngoài trời/trong nhà sáng. */
 export function setupLighting(scene: THREE.Scene): LightingSetup {
-  // Nền trời sáng → không còn nền đen "cyberpunk" cũ.
-  scene.background = new THREE.Color(0xcdd9e6);
+  // Nền trời: vòm gradient (skyDome) phủ toàn cảnh. Màu nền dự phòng để
+  // khoảnh khắc đầu tiên không bị đen trước khi dome vẽ xong.
+  scene.background = new THREE.Color(0xa9cdec);
   // Không dùng fog: vòng skyline đã đóng vai trò "xa" của cảnh. Fog chỉ hòa
   // mọi vật vào màu trời và làm cảnh trắng xóa, mất hết chiều sâu.
   scene.fog = null;

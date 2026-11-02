@@ -17,6 +17,10 @@ Mỗi mục hoàn tất → gạch đầu và ghi kết quả vào `LOG.md`.
 | 1.4 | Test đầu-cuối chuỗi giao việc → cursor agent → kết quả → nhật ký token | ✅ xong | Chu kỳ 4: task Cursor CLI thật `done`, 45.486 token, `cli-usage`, ledger + ví + HUD khớp. Sửa 5 lỗi: timeout 120s→300s, ví học quá nhỏ, sandbox browser crash server, DDG CAPTCHA chặn bot, thiếu bộ phân công tự động |
 | 1.10 | Mọi nhân viên đều tiêu token thật (không việc giả) | ✅ xong | Chu kỳ 5: bỏ `setTimeout` giả ở việc "nội bộ" → 8/8 nhân viên có `tokensUsed>0`, `tasksDone>0` |
 | 1.11 | Bộ điều tiết nhịp độ theo ngân sách (governor) | ✅ xong | Chu kỳ 5: `governorIntervalMs()` trải đều token còn lại ra giờ làm việc, nhịp 1–8 phút, hết token thì dừng |
+| 1.12 | Số token thanh ngân sách khớp bảng chi tiêu | ✅ xong | Chu kỳ 6 (GĐ 1.1): 3 nguyên nhân — `/api/state` không gửi `spend`; thanh "Hôm nay" bỏ sót ví học; trần ngày hở lỗ 130%. Đã sửa + 4 test mới |
+| 1.13 | Nhãn 3D rõ nét: biểu tượng trạng thái + thanh tiến độ + tự ẩn khi xa | ✅ xong | Chu kỳ 6: `src/client/assets/labels.ts` — canvas 1024×256, nền đậm chữ trắng, ẩn >13 m, không che mặt |
+| 1.14 | Bầu trời gradient + skyline mờ (bỏ texture đốm tròn) | ✅ xong | Chu kỳ 6: `skyDome()` shader + `distantSkyline()` 2 vòng mờ + mây radial gradient |
+| 1.15 | Chuỗi đầu-cuối + xác minh cờ Cursor CLI | ✅ xong | Chu kỳ 6: 96.984 token `cli-usage`, ledger khớp chính xác. `--sandbox enabled` KHÔNG chạy trên Windows (đã đo) |
 | 1.5 | Kiểm tra hiệu năng: draw call, số mesh, FPS | ✅ xong | `scripts/perf.ts` — 1.371 draw call, 440k tri, 802 geometry, 29 đèn, FPS trung vị 48 (SwiftShader) |
 | 1.6 | Xử lý resize làm méo composer/bloom | ✅ xong | `composer.setSize` + `setPixelRatio` trong handler resize |
 | 1.7 | Cache vật liệu & geometry để giảm draw call | ✅ xong | 1.483 → 619 vật liệu; 1.235 → 802 geometry |

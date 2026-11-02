@@ -1,0 +1,80 @@
+{
+  "at": "2026-11-02T06:32:33.483Z",
+  "results": [
+    {
+      "flag": "-p (print)",
+      "ok": true,
+      "note": "có usage + result"
+    },
+    {
+      "flag": "--output-format json",
+      "ok": true,
+      "note": "có usage + result"
+    },
+    {
+      "flag": "--output-format stream-json",
+      "ok": true,
+      "note": "có usage + result"
+    },
+    {
+      "flag": "--stream-partial-output",
+      "ok": true,
+      "note": "có usage + result"
+    },
+    {
+      "flag": "--model auto",
+      "ok": true,
+      "note": "có usage + result"
+    },
+    {
+      "flag": "--mode plan",
+      "ok": true,
+      "note": "có usage + result"
+    },
+    {
+      "flag": "--mode ask",
+      "ok": true,
+      "note": "có usage + result"
+    },
+    {
+      "flag": "--trust",
+      "ok": true,
+      "note": "có usage + result"
+    },
+    {
+      "flag": "--sandbox enabled",
+      "ok": false,
+      "note": "không có JSON (code=1) Error: Sandbox mode is enabled but not available on this system. Sandbox requires macOS or Linux."
+    },
+    {
+      "flag": "--sandbox disabled",
+      "ok": true,
+      "note": "có usage + result"
+    },
+    {
+      "flag": "--auto-review",
+      "ok": true,
+      "note": "parse OK"
+    },
+    {
+      "flag": "--force (yolo)",
+      "ok": true,
+      "note": "parse OK"
+    },
+    {
+      "flag": "--workspace <dir>",
+      "ok": true,
+      "note": "parse OK"
+    },
+    {
+      "flag": "--add-dir <dir>",
+      "ok": true,
+      "note": "parse OK"
+    },
+    {
+      "flag": "--list-models",
+      "ok": true,
+      "note": "275 dòng"
+    }
+  ]
+}

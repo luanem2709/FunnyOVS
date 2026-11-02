@@ -1,0 +1,45 @@
+{
+  "at": "2026-11-02T06:28:51.160Z",
+  "task": {
+    "id": "task_1_8b20fa23",
+    "status": "done",
+    "backend": "cursor-agent",
+    "model": "auto",
+    "tokens": 96984,
+    "quotaSource": "cli-usage",
+    "result": "Tôi sẽ liệt kê tệp trong thư mục làm việc hiện tại._cleanup_shots.ps1  \n_shots_inventory.js  \nOK: 2"
+  },
+  "totalsBefore": {
+    "normal": 166754,
+    "learning": 67052,
+    "normalCents": 4.380000000000001,
+    "learningCents": 0
+  },
+  "totalsAfter": {
+    "normal": 263738,
+    "learning": 67052,
+    "normalCents": 15.596800000000002,
+    "learningCents": 0
+  },
+  "ledgerHead": {
+    "id": 115,
+    "ts": "2026-11-02T06:28:51.156Z",
+    "taskId": "task_1_8b20fa23",
+    "department": "dispatch",
+    "agentId": "minh",
+    "agentName": "Minh",
+    "model": "auto",
+    "backend": "cursor-agent",
+    "inputTokens": 36122,
+    "outputTokens": 1726,
+    "cacheReadTokens": 59136,
+    "cacheWriteTokens": 0,
+    "totalTokens": 96984,
+    "costCents": 11.216800000000001,
+    "wallet": "normal",
+    "cursorPercentUsed": 24,
+    "quotaSource": "cli-usage",
+    "durationMs": 38856,
+    "ok": true
+  }
+}
