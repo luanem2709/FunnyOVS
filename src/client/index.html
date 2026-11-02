@@ -12,15 +12,32 @@
 
       <!-- HUD: nút dừng khẩn cấp + chế độ tự động + thanh năng lượng token -->
       <div class="hud hud-top">
-        <button id="emergency" class="emergency" title="Dừng toàn bộ agent ngay lập tức">
-          <span class="dot"></span> DỪNG KHẨN CẤP
-        </button>
-        <div class="levels" id="levels">
-          <button data-level="ask">Chỉ hỏi</button>
-          <button data-level="balanced" class="active">Cân bằng</button>
-          <button data-level="autonomous">Tự chủ cao</button>
+        <div class="hud-row">
+          <button id="emergency" class="emergency" title="Dừng toàn bộ agent ngay lập tức">
+            <span class="dot"></span> DỪNG KHẨN CẤP
+          </button>
+          <div class="levels" id="levels">
+            <button data-level="ask">Chỉ hỏi</button>
+            <button data-level="balanced" class="active">Cân bằng</button>
+            <button data-level="autonomous">Tự chủ cao</button>
+          </div>
+        </div>
+        <div class="hud-row">
+        <div class="quality" id="quality-widget">
+          <span class="q-label">Chất lượng</span>
+          <button data-q="low">Thấp</button>
+          <button data-q="medium">Vừa</button>
+          <button data-q="high">Cao</button>
+          <button data-q="auto" class="active" title="Tự động theo FPS">Tự động</button>
+          <span class="q-fps" id="quality-fps">—</span>
+        </div>
+        <div class="view-bar" id="view-bar">
+          <button id="btn-overview" title="Bay về góc nhìn toàn cảnh văn phòng">Toàn cảnh</button>
+          <button id="btn-daynight" title="Chuyển giữa ban ngày và ban đêm">🌙 Đêm</button>
+          <span class="q-fps" id="cam-hint">WASD để di chuyển</span>
         </div>
         <div class="budget" id="budget-widget"></div>
+        </div>
       </div>
 
       <div class="hud hud-right">

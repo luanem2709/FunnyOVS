@@ -6,6 +6,42 @@ Quy ước ước tính token: `~<số>` = số token ước tính đã dùng tr
 
 ---
 
+## 2026-11-02 — Chu kỳ 8 (GĐ 3): 3D chuyên nghiệp — camera bay mượt, ngày/đêm, kệ sách, biểu đồ thật
+
+**Nhánh:** `auto/nang-cap-3d-toan-quyen**
+
+### Đã làm
+
+| Hạng mục | Thay đổi | Kiểm chứng |
+|----------|-----------|-------------|
+| Camera bay mượt | `assets/cameraRig.ts` (mới): `flyTo()` nội suy ease-in-out, `focusRoom()`, `overview()`, WASD/arrow pan, hủy bay khi người dùng kéo chuột | `scripts/verify-camera.ts`: bay từ `tz=0` → `tz=-21` qua 5 mốc **liên tục** (0 → -4.15 → -13.26 → -19.8 → -21), không giật |
+| Nút Toàn cảnh + Ngày/Đêm | `index.html` + `main.ts`: bay về góc toàn cảnh; `lighting.ts` có `applyTimeOfDay()` (2 profile), `windows.ts` có `setSkyMode()` đổi màu vòm trời | `scripts/verify-gd3.ts`: nền đổi `a9cdec` → `11182b`, sun `2.4 → 0.35`, hemi `1.25 → 0.5` |
+| Kệ sách Thư viện | `officeProps.ts`: `tallBookshelf()` — khung 2.6m + 4 tầng + sách `InstancedMesh` (160 cuốn, màu seed ổn định) | 2 InstancedMesh, 160 instance trong phòng `library` |
+| Biểu đồ tường Tài chính | `officeProps.ts`: `wallChart()` vẽ bar chart bằng `CanvasTexture`; `main.ts` nạp số liệu **thật** từ `GET /api/departments` (`spend.tokens` trong `token_ledger`) | ảnh `docs/shots/gd3-finance-chart.png` hiện đúng số: Giao việc 142470, Tự động 83765, Thư viện 43007… |
+| Bong bóng thoại | `assets/speechBubble.ts` (mới): sprite bo góc + đuôi, tự tắt sau 3.2s; `announceResults()` báo 1 lần/tác vụ xong | 8 agent đều có bubble; màu xanh (xong) / đỏ (lỗi) |
+| Nhân vật đứng khi chờ duyệt | `updateWalkers()`: `waiting`/`blocked` → `sit = false` (đứng), `wave` pose | — |
+| Bộ điều tiết chất lượng | `assets/quality.ts` + `renderPipeline.ts`: SSAO, bloom, pixel ratio, bóng đổ theo 3 mức; HUD hiện FPS | HUD: `110 fps · Cao`; tự hạ mức khi FPS thấp |
+| FPS hiển thị | Poll 500ms → `#quality-fps` | ✅ |
+
+### Bài học (đã ghi vào code)
+
+- **`dt` phải clamp trong camera rig.** Khi tab bị treo rồi quay lại, `dt` có thể vài giây → camera nhảy thẳng tới đích, mất cảm giác "bay mượt". Đã clamp `dt ≤ 0.05s`.
+- **Ảnh chụp có thể gây ảo giác.** Ba lần chụp liên tiếp cùng góc cho ảnh tưởng như không có kệ sách. Cách kiểm chứng khách quan: **tô màu `InstancedMesh` thành đỏ rồi so hash ảnh** → `f670…` ≠ `4dfd…` ⇒ sách **có** hiển thị. Script `check-shelf-render.ts` đã xoá sau khi dùng; nguyên tắc giữ lại trong `docs/LOG.md`.
+- **Layout HUD chồng panel phải.** Panel (`z-index: 20`) đè lên HUD (`z-index: 10`) ⇒ Playwright không bấm được nút "Đêm". Đã tách HUD thành 2 hàng `.hud-row`.
+
+### Trạng thái kiểm chứng
+
+- `tsc --noEmit`: sạch. `vitest run`: **74/74 pass**.
+- `npm run build`: thành công (903 kB / 246 kB gzip).
+- Ảnh: `docs/shots/gd3-overview.png`, `gd3-night.png`, `gd3-library.png`, `gd3-finance-chart.png`, `gd3-ai-servers.png`, `gd3-shelves.png`.
+
+### Chưa làm (để GĐ 4/5)
+
+- Mesh gộp / instancing tổng thể, LOD — hiện mới instancing cho sách + LED tủ server.
+- Bong bóng thoại chỉ báo **kết quả tác vụ**, chưa báo trạng thái "chờ duyệt" (đã có nhân vật đứng + vẫy tay).
+
+---
+
 ## 2026-11-02 — Chu kỳ 7 (GĐ 2): bộ test an toàn — tìm ra 2 lỗ hổng thật
 
 **Nhánh:** `auto/nang-cap-3d-toan-quyen`

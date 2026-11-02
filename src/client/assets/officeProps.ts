@@ -62,6 +62,17 @@ function donutMaterial(color: number): THREE.MeshStandardMaterial {
   return m;
 }
 
+/** Ngẫu nhiên có seed → mọi lần tải cho kết quả giống nhau. */
+function rng(seed: number): () => number {
+  let s = seed >>> 0;
+  return () => {
+    s = (s + 0x6d2b79f5) >>> 0;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 /**
  * Cache geometry của hộp bo góc.
  *
@@ -301,6 +312,161 @@ export function updateProps(group: THREE.Group, t: number): void {
 }
 
 /**
+ * Kệ sách cao cho phòng Thư viện.
+ *
+ * 4 tầng kệ + sách (InstancedMesh cho sách) → gợi hình kệ sách thật, cao
+ * gần trần, tạo cảm giác "phòng tri thức".
+ */
+export function tallBookshelf(
+  width = 2.4,
+  height = 2.6,
+  seed = 3,
+): THREE.Group {
+  const g = new THREE.Group();
+
+  // Khung kệ (2 cột + 5 vách ngang + lưng).
+  put(g, rbox(0.09, height, 0.5, MATS.door, 0.02), -width / 2, height / 2, 0);
+  put(g, rbox(0.09, height, 0.5, MATS.door, 0.02), width / 2, height / 2, 0);
+  put(g, rbox(width, 0.07, 0.5, MATS.door, 0.02), 0, height, 0);
+  put(g, rbox(width, 0.07, 0.5, MATS.door, 0.02), 0, 0.03, 0);
+  put(g, rbox(width, height, 0.05, MATS.cabinet, 0.02), 0, height / 2, -0.24);
+
+  const shelves = 4;
+  for (let i = 1; i <= shelves; i++) {
+    put(g, rbox(width - 0.12, 0.05, 0.46, MATS.door, 0.015), 0, (height / (shelves + 1)) * i, 0);
+  }
+
+  // Sách: InstancedMesh, mỗi cuốn là một hộp màu ngẫu nhiên có seed.
+  const bookGeo = new THREE.BoxGeometry(0.08, 0.3, 0.26);
+  const bookColors = [0x9c4a3f, 0x3f5f8a, 0x4f7a4a, 0xa87b3a, 0x6a4a7a, 0x3f7a78];
+  const rand = rng(seed * 7919);
+  const books: THREE.Matrix4[] = [];
+  const colors: number[] = [];
+  const shelfGap = height / (shelves + 1);
+  for (let s = 0; s < shelves; s++) {
+    const y = shelfGap * s + shelfGap / 2 + 0.03;
+    let x = -width / 2 + 0.14;
+    while (x < width / 2 - 0.18) {
+      const bw = 0.06 + rand() * 0.05;
+      const bh = 0.24 + rand() * 0.1;
+      const m = new THREE.Matrix4();
+      m.compose(
+        new THREE.Vector3(x + bw / 2, y, 0.02),
+        new THREE.Quaternion(),
+        new THREE.Vector3(bw / 0.08, bh / 0.3, 1),
+      );
+      books.push(m);
+      colors.push(bookColors[Math.floor(rand() * bookColors.length)]);
+      x += bw + 0.012 + rand() * 0.02;
+    }
+  }
+  const bookMesh = new THREE.InstancedMesh(
+    bookGeo,
+    new THREE.MeshStandardMaterial({ roughness: 0.85 }),
+    books.length,
+  );
+  books.forEach((m, i) => {
+    bookMesh.setMatrixAt(i, m);
+    bookMesh.setColorAt(i, new THREE.Color(colors[i]));
+  });
+  bookMesh.instanceMatrix.needsUpdate = true;
+  if (bookMesh.instanceColor) bookMesh.instanceColor.needsUpdate = true;
+  bookMesh.castShadow = true;
+  g.add(bookMesh);
+
+  return g;
+}
+
+/**
+ * Biểu đồ tường cho phòng Tài chính — vẽ dữ liệu chi tiêu THẬT.
+ *
+ * @param values danh sách {label, value}
+ */
+export function wallChart(values: { label: string; value: number }[]): {
+  group: THREE.Group;
+  update: (v: { label: string; value: number }[]) => void;
+} {
+  const g = new THREE.Group();
+  const W = 640;
+  const H = 360;
+
+  const cvs = document.createElement("canvas");
+  cvs.width = W;
+  cvs.height = H;
+  const ctx = cvs.getContext("2d")!;
+  const tex = new THREE.CanvasTexture(cvs);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.minFilter = THREE.LinearFilter;
+
+  // Khung + nền.
+  put(g, rbox(3.6, 2.1, 0.08, MATS.rack, 0.03), 0, 0, 0);
+  const panel = new THREE.Mesh(
+    new THREE.PlaneGeometry(3.4, 1.9),
+    new THREE.MeshBasicMaterial({ map: tex, toneMapped: false }),
+  );
+  panel.position.set(0, 0, 0.045);
+  g.add(panel);
+
+  const draw = (vals: { label: string; value: number }[]): void => {
+    ctx.fillStyle = "#0f1620";
+    ctx.fillRect(0, 0, W, H);
+
+    // Tiêu đề.
+    ctx.fillStyle = "#e6edf3";
+    ctx.font = "bold 30px system-ui, sans-serif";
+    ctx.textAlign = "left";
+    ctx.fillText("Chi tiêu theo phòng ban (token)", 24, 44);
+
+    const max = Math.max(1, ...vals.map((v) => v.value));
+    const top = 78;
+    const bottom = H - 56;
+    const chartH = bottom - top;
+    const n = Math.max(1, vals.length);
+    const slot = (W - 60) / n;
+
+    // Lưới ngang.
+    ctx.strokeStyle = "rgba(255,255,255,0.09)";
+    ctx.lineWidth = 1;
+    for (let g2 = 0; g2 <= 4; g2++) {
+      const y = top + (chartH / 4) * g2;
+      ctx.beginPath();
+      ctx.moveTo(30, y);
+      ctx.lineTo(W - 30, y);
+      ctx.stroke();
+    }
+
+    vals.forEach((v, i) => {
+      const h = (v.value / max) * chartH;
+      const x = 30 + i * slot + slot * 0.2;
+      const w = slot * 0.6;
+      const y = bottom - h;
+      const grad = ctx.createLinearGradient(0, y, 0, bottom);
+      grad.addColorStop(0, "#4f9cf9");
+      grad.addColorStop(1, "#2f6fb5");
+      ctx.fillStyle = grad;
+      ctx.fillRect(x, y, w, h);
+
+      // Giá trị.
+      ctx.fillStyle = "#c9d1d9";
+      ctx.font = "16px system-ui, sans-serif";
+      ctx.textAlign = "center";
+      const txt = v.value >= 1000 ? `${(v.value / 1000).toFixed(1)}k` : String(Math.round(v.value));
+      ctx.fillText(txt, x + w / 2, y - 8);
+
+      // Nhãn.
+      ctx.fillStyle = "#8b949e";
+      ctx.font = "15px system-ui, sans-serif";
+      ctx.fillText(v.label.length > 9 ? v.label.slice(0, 8) + "…" : v.label, x + w / 2, bottom + 24);
+    });
+
+    tex.needsUpdate = true;
+  };
+
+  draw(values);
+  return { group: g, update: draw };
+}
+
+/**
  * Đồ đạc đặc trưng cho từng phòng ban — gợi ý chức năng của phòng.
  *
  * @param deptId id phòng ban
@@ -360,6 +526,25 @@ export function signatureProp(
       const p = printer();
       p.position.set(roomW * 0.3, 0.78, -roomD * 0.3);
       g.add(p);
+      return g;
+    }
+    case "library": {
+      // Phòng Thư viện: kệ sách cao ở hai góc + bàn đọc.
+      const g = new THREE.Group();
+      for (let i = 0; i < 2; i++) {
+        const shelf = tallBookshelf(2.4, 2.6, 11 + i);
+        shelf.position.set(i === 0 ? -roomW * 0.28 : roomW * 0.28, 0, -roomD * 0.34);
+        shelf.rotation.y = i === 0 ? 0.14 : -0.14;
+        g.add(shelf);
+      }
+      // Bàn đọc ở giữa phòng.
+      const table = rbox(2.0, 0.08, 1.0, MATS.cabinet, 0.02);
+      put(g, table, 0, 0.78, roomD * 0.08);
+      for (const dx of [-0.85, 0.85]) {
+        for (const dz of [-0.38, 0.38]) {
+          put(g, rbox(0.07, 0.78, 0.07, MATS.door, 0.01), dx, 0.39, roomD * 0.08 + dz);
+        }
+      }
       return g;
     }
     default:

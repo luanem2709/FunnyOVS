@@ -10,23 +10,30 @@ import {
   type ManifestAsset,
 } from "./assets/manifest.js";
 import { preloadAssets, peekAsset } from "./assets/loader.js";
-import { setupLighting, screenGlowColor } from "./assets/lighting.js";
+import { setupLighting, screenGlowColor, applyTimeOfDay, type TimeOfDay } from "./assets/lighting.js";
 import { setupRenderPipeline } from "./assets/renderPipeline.js";
+import {
+  QualityController,
+  QUALITY_LABELS,
+  type QualityLevel,
+} from "./assets/quality.js";
 import { furnishRoom } from "./assets/props.js";
-import { skylineRing, distantSkyline, skyDome } from "./assets/windows.js";
+import { skylineRing, distantSkyline, skyDome, setSkyMode } from "./assets/windows.js";
+import { CameraRig } from "./assets/cameraRig.js";
 import { WallCuller } from "./assets/wallCulling.js";
 import { FocusManager } from "./assets/focusMode.js";
 import { floorTextureFor, woodFloorTexture } from "./assets/floorTextures.js";
 import { AMENITIES, NavGrid, Walker, bindAmenities } from "./assets/agentNav.js";
 import { chibiAnimFor } from "./assets/characterFactory.js";
 import { setChibiAnim, type ChibiAnim } from "./assets/chibi.js";
-import { signatureProp, updateProps } from "./assets/officeProps.js";
+import { signatureProp, updateProps, wallChart } from "./assets/officeProps.js";
 import { buildFurniture, deskLayout, propLayout, DESK_TOP_Y } from "./assets/roomBuilder.js";
 import {
   BillboardLabel,
   makeRoomLabel,
   type LabelStatus,
 } from "./assets/labels.js";
+import { SpeechBubble } from "./assets/speechBubble.js";
 import {
   createAgentVisual,
   applyAgentStatus,
@@ -227,13 +234,31 @@ const camera = new THREE.PerspectiveCamera(52, innerWidth / innerHeight, 0.1, 22
 camera.position.set(0, 12, 18);
 
 // Ánh sáng: nền sáng + hemisphere + bóng mềm (xem assets/lighting.ts)
-setupLighting(scene);
+const lights = setupLighting(scene);
+const sunLight = lights.sun;
 
-// Hậu kỳ render: bloom + ACES tone mapping + IBL (port từ repo tham khảo).
+// Hậu kỳ render: bloom + SSAO + ACES tone mapping + IBL.
 const pipeline = setupRenderPipeline(scene, camera, renderer);
+
+// Bộ điều tiết chất lượng: tự hạ/nâng mức theo FPS (mục tiêu 60 fps).
+const quality = new QualityController({ targetFps: 60 });
+quality.onChange((level, settings) => {
+  pipeline.applyQuality(level, settings);
+  applyQualityToScene(settings);
+  updateQualityUi(level);
+});
 
 // Cắt tường: làm mờ các bức tường chắn tầm nhìn camera.
 const wallCuller = new WallCuller();
+
+/**
+ * Rig camera: bay mượt tới phòng, WASD để di chuyển, nút Toàn cảnh.
+ * `target` là Vector3 tâm nhìn (đồng bộ mỗi khung hình từ rig) vì WallCuller
+ * cần một Vector3.
+ */
+const camRig = new CameraRig(camera);
+const target = new THREE.Vector3(0, 1, 0);
+camRig.attachKeyboard();
 
 // Chế độ tập trung: mờ các phòng khác khi người dùng chọn một phòng.
 const focusManager = new FocusManager();
@@ -246,6 +271,44 @@ const roomLamps = new Map<string, THREE.PointLight>();
 
 /** Nhãn billboard của từng phòng (ẩn khi camera xa). */
 const roomLabels = new Map<string, BillboardLabel>();
+
+/**
+ * Biểu đồ tường phòng Tài chính (dữ liệu thật từ ledger).
+ * `null` nếu phòng chưa được dựng.
+ */
+let financeChart: { update: (v: { label: string; value: number }[]) => void } | null = null;
+
+/**
+ * Áp dụng mức chất lượng lên phần còn lại của cảnh:
+ *  - Đèn bàn/màn hình phát sáng (tốn đèn) → tắt ở mức Thấp.
+ *  - Kích thước bản đồ bóng → theo mức.
+ */
+function applyQualityToScene(settings: {
+  emissiveLights: boolean;
+  shadowMapSize: number;
+}): void {
+  for (const rec of agents.values()) {
+    rec.screen.glow.visible = settings.emissiveLights;
+  }
+  for (const lamp of roomLamps.values()) {
+    lamp.castShadow = false;
+  }
+  sunLight.shadow.mapSize.set(settings.shadowMapSize, settings.shadowMapSize);
+  // Ép three.js dựng lại bản đồ bóng khi kích thước thay đổi.
+  if (sunLight.shadow.map) {
+    sunLight.shadow.map.dispose();
+    (sunLight.shadow as any).map = null;
+  }
+}
+
+/** Cập nhật nút bấm + số FPS trên HUD. */
+function updateQualityUi(level: QualityLevel): void {
+  document.querySelectorAll<HTMLButtonElement>("#quality-widget button").forEach((b) => {
+    const q = b.dataset.q;
+    const active = q === "auto" ? quality.status.auto : !quality.status.auto && q === level;
+    b.classList.toggle("active", active);
+  });
+}
 
 /**
  * Lưới điều hướng cho nhân viên đi lại.
@@ -278,7 +341,8 @@ scene.add(skyline);
 
 // Bầu trời: vòm gradient (shader) + 2 vòng skyline mờ ở xa → chiều sâu,
 // không còn texture đốm tròn.
-scene.add(skyDome(120));
+const skyDomeMesh = skyDome(120);
+scene.add(skyDomeMesh);
 const farCity = distantSkyline(26, 9, 21);
 farCity.position.set(3, 0, 0);
 scene.add(farCity);
@@ -358,11 +422,17 @@ scene.add(farCity);
 (window as any).__focusAgent = (id: string, camDist = 3.2): void => {
   const rec = agents.get(id);
   if (!rec) return;
-  target.set(rec.visual.root.position.x, 1.0, rec.visual.root.position.z);
   // Nhân vật quay mặt về +Z → camera đứng phía trước mặt.
-  yaw = 0.4;
-  pitch = 0.3;
-  dist = camDist;
+  camRig.flyTo(
+    {
+      tx: rec.visual.root.position.x,
+      tz: rec.visual.root.position.z,
+      yaw: 0.4,
+      pitch: 0.3,
+      dist: camDist,
+    },
+    { duration: 0.4 },
+  );
 };
 
 // Vật liệu dùng chung (tái sử dụng để giảm draw call — Phase 5)
@@ -492,6 +562,14 @@ function buildRoom(dept: Department): void {
   // Đồ đạc đặc trưng theo chức năng phòng (tủ server, quầy cà phê, bảng trực ca).
   const signature = signatureProp(dept.id, size.w, size.d);
   if (signature) room.add(signature);
+
+  // Phòng Tài chính: biểu đồ tường với dữ liệu chi tiêu THẬT từ ledger.
+  if (dept.id === "finance") {
+    const chart = wallChart([]);
+    chart.group.position.set(0, 2.0, -size.d / 2 + 0.2);
+    room.add(chart.group);
+    financeChart = chart;
+  }
 
   // Đồ đạc trong phòng.
   for (const p of dept.props as string[]) {
@@ -679,6 +757,8 @@ interface AgentRecord {
   screen: Screen;
   /** Máy trạng thái đi lại (đi nghỉ rồi quay lại bàn). */
   walker: Walker;
+  /** Bong bóng thoại ngắn khi báo kết quả. */
+  bubble: SpeechBubble;
 }
 const agents = new Map<string, AgentRecord>();
 const rooms = new Map<string, Department>();
@@ -711,6 +791,24 @@ function setupRooms(list: Department[]): void {
   navGrid.bake();
   bindAmenities(AMENITIES, [...rooms.values()]);
   renderRoomNav();
+  updateFinanceChart(list);
+}
+
+/**
+ * Cập nhật biểu đồ tường phòng Tài chính bằng số liệu THẬT từ ledger.
+ *
+ * Nguồn: `GET /api/departments` trả `spend.tokens` cho từng phòng (đọc từ
+ * bảng `token_ledger`). Không dùng số giả.
+ */
+function updateFinanceChart(list: Department[]): void {
+  if (!financeChart) return;
+  const rows = list
+    .filter((d) => (d.spend?.tokens ?? 0) > 0)
+    .map((d) => ({ label: d.short || d.name, value: d.spend!.tokens }))
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 8);
+  // Không có phòng nào chi tiêu → hiển thị 0 để trục vẫn đúng.
+  financeChart.update(rows.length ? rows : [{ label: "Chưa có", value: 0 }]);
 }
 
 /** Thanh điều hướng tới từng phòng ban. */
@@ -727,13 +825,9 @@ function renderRoomNav(): void {
     b.addEventListener("click", () => {
       const d = rooms.get(b.dataset.room!);
       if (!d) return;
-      target.set(d.center.x, 1, d.center.z);
-      // Camera nhìn chặt vào phòng: gần hơn và thấp hơn để nhân vật chiếm
-      // nhiều diện tích khung hình thay vì sàn trống.
-      dist = Math.max(9, Math.min(14, d.size.w * 0.95));
-      pitch = 0.52;
-      // Nhân vật quay mặt về +Z → camera đứng phía trước (yaw ~0) để thấy mặt.
-      yaw = 0.12;
+      // Bay mượt vào phòng: gần hơn và thấp hơn để nhân vật chiếm nhiều
+      // diện tích khung hình thay vì sàn trống.
+      camRig.focusRoom(d.center.x, d.center.z, d.size.w);
       focusManager.focus(d.id);
       void openPanel("department", d.id);
     });
@@ -759,7 +853,11 @@ function setupAgents(list: AgentState[]): void {
       workMin: 14 + index * 4,
       workMax: 46 + index * 7,
     });
-    agents.set(a.id, { state: a, visual, label, screen, walker });
+    // Bong bóng thoại: hiện trên đầu khi agent báo kết quả.
+    const bubble = new SpeechBubble();
+    visual.root.add(bubble.sprite);
+    bubble.sprite.position.set(0, 2.35, 0);
+    agents.set(a.id, { state: a, visual, label, screen, walker, bubble });
     updateAgentTag(a);
   }
 }
@@ -888,18 +986,18 @@ function applyStatus(a: AgentState): void {
   p: number,
   yw: number,
 ): void => {
-  target.set(tx, 1, tz);
-  dist = d;
-  pitch = p;
-  yaw = yw;
+  camRig.set({ tx, tz, dist: d, pitch: p, yaw: yw });
   // Bỏ tập trung phòng để thấy toàn cảnh (và bật lại đèn phòng).
   focusManager.focus(null);
 };
 (window as any).__pipeline = pipeline;
 (window as any).__renderer = renderer;
 (window as any).__rooms = rooms;
+(window as any).__roomGroups = roomGroups;
 (window as any).__focusManager = focusManager;
 (window as any).__THREE = THREE;
+(window as any).__camRig = camRig;
+(window as any).__lights = lights;
 
 /** Hook kiểm thử: vật thể nào nằm ở giữa khung hình. */
 (window as any).__pickCenter = (): string[] => {
@@ -931,13 +1029,9 @@ function applyStatus(a: AgentState): void {
 };
 
 // ---------------- Camera orbit ----------------
-let yaw = 0;
-let pitch = 0.62;
-let dist = 24;
 let dragging = false;
 let lastX = 0;
 let lastY = 0;
-let target = new THREE.Vector3(0, 1, 0);
 
 /** Vị trí thế giới của các nhân vật (dùng để cắt tường chính xác hơn). */
 function agentPositions(): THREE.Vector3[] {
@@ -956,17 +1050,21 @@ canvas.addEventListener("pointerdown", (e) => {
   dragging = true;
   lastX = e.clientX;
   lastY = e.clientY;
+  camRig.beginUserControl();
 });
 addEventListener("pointerup", () => (dragging = false));
 addEventListener("pointermove", (e) => {
   if (!dragging) return;
-  yaw -= (e.clientX - lastX) * 0.005;
-  pitch = Math.max(0.18, Math.min(1.35, pitch + (e.clientY - lastY) * 0.005));
+  const s = camRig.state;
+  s.yaw -= (e.clientX - lastX) * 0.005;
+  s.pitch = Math.max(0.18, Math.min(1.35, s.pitch + (e.clientY - lastY) * 0.005));
   lastX = e.clientX;
   lastY = e.clientY;
 });
 canvas.addEventListener("wheel", (e) => {
-  dist = Math.max(8, Math.min(48, dist + e.deltaY * 0.03));
+  camRig.beginUserControl();
+  const s = camRig.state;
+  s.dist = Math.max(8, Math.min(48, s.dist + e.deltaY * 0.03));
 });
 addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
@@ -989,7 +1087,9 @@ canvas.addEventListener("click", (e) => {
       if (o.userData?.department) {
         const dept = rooms.get(o.userData.department);
         if (dept) {
-          target.set(dept.center.x, 1, dept.center.z);
+          // Bay mượt tới phòng thay vì giật tức thời.
+          camRig.focusRoom(dept.center.x, dept.center.z, dept.size.w);
+          focusManager.focus(dept.id);
           void openPanel("department", dept.id);
         }
         return;
@@ -1023,14 +1123,22 @@ function updateWalkers(): void {
 
     const walking = walker.phase === "walking" || walker.phase === "returning";
     if (visual.chibi) {
-      visual.chibi.sit = !walking && walker.phase !== "leaving" && walker.phase !== "acting";
+      // Ngồi khi đang làm việc; ĐỨNG lên khi chờ duyệt / bị chặn (cần người
+      // dùng để ý thấy mình).
+      const status = rec.state.status as AgentStatus;
+      const mustStand = status === "waiting" || status === "blocked";
+      visual.chibi.sit =
+        !walking &&
+        walker.phase !== "leaving" &&
+        walker.phase !== "acting" &&
+        !mustStand;
       if (walking) {
         setChibiAnim(visual.chibi, "walk");
       } else if (changed && walker.phase === "acting") {
         setChibiAnim(visual.chibi, errandAnim(walker.target?.kind));
       } else if (changed && walker.phase === "work") {
         // Quay lại bàn → trở về pose theo trạng thái công việc.
-        setChibiAnim(visual.chibi, chibiAnimFor(rec.state.status as AgentStatus));
+        setChibiAnim(visual.chibi, chibiAnimFor(status));
       }
     }
 
@@ -1054,15 +1162,20 @@ function errandAnim(kind: string | undefined): ChibiAnim {
   }
 }
 
+/** Mốc thời gian khung hình trước (để tính FPS). */
+let lastFrameAt = 0;
+
 function animate(): void {
   requestAnimationFrame(animate);
   const t = performance.now() / 1000;
-  camera.position.set(
-    target.x + Math.sin(yaw) * Math.cos(pitch) * dist,
-    Math.sin(pitch) * dist,
-    target.z + Math.cos(yaw) * Math.cos(pitch) * dist,
-  );
-  camera.lookAt(target.x, 1, target.z);
+  // dt thật để bộ điều tiết chất lượng đo FPS chính xác.
+  const now = performance.now();
+  const dt = lastFrameAt > 0 ? (now - lastFrameAt) / 1000 : 1 / 60;
+  lastFrameAt = now;
+  quality.sample(dt);
+  // Camera: bay mượt / WASD / đặt vị trí — rig tự tính toạ độ camera.
+  camRig.update(dt);
+  target.set(camRig.state.tx, 1, camRig.state.tz);
 
   // Mờ các tường chắn giữa camera và phòng đang xem.
   wallCuller.update(camera, target, agentPositions());
@@ -1079,6 +1192,8 @@ function animate(): void {
   for (const rec of agents.values()) {
     const { visual, state } = rec;
     updateAgentVisual(visual, 1 / 60);
+    // Bong bóng thoại: tự tắt sau vài giây.
+    rec.bubble.update(1 / 60);
     // Nhãn 3D: ẩn khi camera xa + thu nhỏ dần (không đè lên nhau).
     rec.label.updateVisibility(camera);
     const ring = visual.ring;
@@ -1491,6 +1606,53 @@ document.querySelectorAll<HTMLButtonElement>("#levels button").forEach((b) => {
   });
 });
 
+// ---------------- Chất lượng đồ hoạ ----------------
+document.querySelectorAll<HTMLButtonElement>("#quality-widget button").forEach((b) => {
+  b.addEventListener("click", () => {
+    const q = b.dataset.q;
+    if (q === "auto") {
+      quality.setAuto(true);
+      updateQualityUi(quality.current);
+      toast("Chất lượng: tự động theo FPS (mục tiêu 60).");
+      return;
+    }
+    quality.setManual(q as QualityLevel);
+    updateQualityUi(q as QualityLevel);
+    toast("Chất lượng: " + (QUALITY_LABELS[q as QualityLevel] ?? q) + " (tắt tự động).");
+  });
+});
+updateQualityUi(quality.current);
+
+// ---------------- Góc nhìn: Toàn cảnh + Ngày/Đêm ----------------
+document.getElementById("btn-overview")?.addEventListener("click", () => {
+  camRig.overview();
+  focusManager.focus(null);
+  toast("Góc nhìn toàn cảnh văn phòng.");
+});
+
+/** Chế độ thời gian hiện tại (ban ngày). */
+let timeOfDay: TimeOfDay = "day";
+document.getElementById("btn-daynight")?.addEventListener("click", () => {
+  timeOfDay = timeOfDay === "day" ? "night" : "day";
+  applyTimeOfDay(lights, timeOfDay, roomLamps.values(), scene);
+  setSkyMode(skyDomeMesh, timeOfDay);
+  const btn = document.getElementById("btn-daynight")!;
+  btn.textContent = timeOfDay === "day" ? "🌙 Đêm" : "☀️ Ngày";
+  btn.classList.toggle("active", timeOfDay === "night");
+  // Đèn màn hình sáng hơn về đêm → màn hình nổi bật trong phòng tối.
+  for (const rec of agents.values()) {
+    rec.screen.glow.intensity =
+      timeOfDay === "night"
+        ? rec.state.status === "idle"
+          ? 0.5
+          : 1.1
+        : rec.state.status === "idle"
+          ? 0.22
+          : 0.6;
+  }
+  toast(timeOfDay === "night" ? "Chế độ ban đêm." : "Chế độ ban ngày.");
+});
+
 // ---------------- Thanh năng lượng token ----------------
 /** Thông tin bộ phân công tự động (cập nhật mỗi 3s từ /api/dispatch). */
 let dispatchStats: { dispatched: number; busy: string[]; intervalMs: number; remainingTokens: number } = {
@@ -1720,6 +1882,40 @@ win.saveSettings = async () => {
 
 // ---------------- Boot ----------------
 
+/**
+ * Bong bóng báo kết quả: khi một tác vụ chuyển sang "done"/"failed", agent
+ * tương ứng hiện bong bóng ngắn trên đầu trong ~3 giây.
+ *
+ * Chỉ báo một lần mỗi tác vụ (dùng id tác vụ đã thấy) để không spam.
+ */
+const announcedTasks = new Set<string>();
+
+function announceResults(taskList: TaskRecord[]): void {
+  for (const t of taskList) {
+    if (t.status !== "done" && t.status !== "failed") continue;
+    if (announcedTasks.has(t.id)) continue;
+    announcedTasks.add(t.id);
+    const rec = agents.get(t.agentId);
+    if (!rec) continue;
+    const ok = t.status === "done";
+    const text = ok
+      ? `Xong: ${t.title}`
+      : `Lỗi: ${t.title}`;
+    rec.bubble.show(text, ok ? "#3fb950" : "#f85149");
+    // Nhân vật vẫy tay / cười khi báo kết quả tốt.
+    if (rec.visual.chibi) {
+      setChibiAnim(rec.visual.chibi, ok ? "toast" : "sweat");
+    }
+  }
+  // Dọn id cũ để không giữ vô hạn (giữ 500 tác vụ gần nhất).
+  if (announcedTasks.size > 500) {
+    const keep = taskList.slice(-200).map((t) => t.id);
+    for (const id of [...announcedTasks]) {
+      if (!keep.includes(id)) announcedTasks.delete(id);
+    }
+  }
+}
+
 /** Nạp asset Kenney (nếu có) trước khi dựng cảnh. */
 async function loadAssets(): Promise<void> {
   manifest = await loadManifest();
@@ -1770,6 +1966,7 @@ async function loadAssets(): Promise<void> {
         const t = taskList.find((x) => x.agentId === a.id && x.status === "running");
         screen.draw(a, logs, t);
       }
+      announceResults(taskList);
     } catch {
       /* server đang khởi động lại */
     }
@@ -1812,4 +2009,13 @@ async function loadAssets(): Promise<void> {
       /* ignore */
     }
   }, 5000);
+
+  // Hiển thị FPS + mức chất lượng hiện tại (cập nhật 2 lần/giây).
+  setInterval(() => {
+    const fpsEl = document.getElementById("quality-fps");
+    if (!fpsEl) return;
+    const st = quality.status;
+    fpsEl.textContent = `${st.fps} fps · ${QUALITY_LABELS[st.level]}`;
+    fpsEl.style.color = st.fps < 30 ? "#f85149" : st.fps < 50 ? "#d29922" : "";
+  }, 500);
 })();

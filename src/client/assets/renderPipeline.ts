@@ -14,13 +14,17 @@ import { RoomEnvironment } from "three/addons/environments/RoomEnvironment.js";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
+import { SSAOPass } from "three/addons/postprocessing/SSAOPass.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
+import type { QualityLevel, QualitySettings } from "./quality.js";
 
 export interface RenderPipeline {
   /** Composer dùng để vẽ khung hình (null nếu bỏ hậu kỳ). */
   composer: EffectComposer | null;
   /** Bloom để điều chỉnh cường độ theo trạng thái. */
   bloom: UnrealBloomPass | null;
+  /** SSAO (bóng đổ tiếp xúc) — chỉ bật ở mức chất lượng Cao. */
+  ssao: SSAOPass | null;
   /** Môi trường IBL cho vật liệu kim loại/kính. */
   environment: THREE.Texture | null;
   /** Máy đang dùng phần mềm dựng hình (không có GPU). */
@@ -29,6 +33,12 @@ export interface RenderPipeline {
   render(dt?: number): void;
   /** Giải phóng tài nguyên GPU. */
   dispose(): void;
+  /** Áp dụng mức chất lượng (bật/tắt pass, đổi pixel ratio). */
+  applyQuality(level: QualityLevel, settings: QualitySettings): void;
+  /** Bật/tắt SSAO. */
+  setSsao(on: boolean): void;
+  /** Bật/tắt bloom. */
+  setBloom(on: boolean): void;
 }
 
 /** Máy có GPU thật không? (SwiftShader/llvmpipe = dựng bằng CPU, rất chậm) */
@@ -59,6 +69,7 @@ export function setupRenderPipeline(
   // Hậu kỳ + IBL chỉ khi có GPU thật.
   let composer: EffectComposer | null = null;
   let bloom: UnrealBloomPass | null = null;
+  let ssao: SSAOPass | null = null;
   let environment: THREE.Texture | null = null;
 
   if (!softwareGL) {
@@ -88,6 +99,15 @@ export function setupRenderPipeline(
     // Bloom nhẹ: chỉ đèn/màn hình sáng nổi lên. Ngưỡng cao để nền sáng không bị cháy.
     bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.25, 0.7, 1.0);
     composer.addPass(bloom);
+    // SSAO: bóng tiếp xúc ở góc vật thể — làm cảnh "có chiều sâu" hơn.
+    // Bật/tắt được (mức chất lượng Thấp/Vừa tắt để tiết hiệu năng).
+    ssao = new SSAOPass(scene, camera, size.x, size.y);
+    ssao.kernelRadius = 12;
+    ssao.minDistance = 0.0008;
+    ssao.maxDistance = 0.06;
+    ssao.output = SSAOPass.OUTPUT.Default;
+    ssao.enabled = false;
+    composer.addPass(ssao);
     composer.addPass(new OutputPass());
   } else {
     // Không GPU: giảm tải — nửa pixel, không bóng, không hậu kỳ.
@@ -101,9 +121,10 @@ export function setupRenderPipeline(
   renderer.toneMappingExposure = 0.95;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
 
-  return {
+  const api: RenderPipeline = {
     composer,
     bloom,
+    ssao,
     environment,
     softwareGL,
     render(dt?: number) {
@@ -114,5 +135,31 @@ export function setupRenderPipeline(
       composer?.dispose();
       environment?.dispose();
     },
+    applyQuality(level: QualityLevel, settings: QualitySettings) {
+      // Pixel ratio.
+      const maxPr = Math.min(devicePixelRatio, settings.pixelRatio);
+      renderer.setPixelRatio(Math.max(0.5, maxPr));
+      // Bóng đổ.
+      renderer.shadowMap.enabled = settings.shadows;
+      // Hậu kỳ.
+      api.setSsao(settings.ssao);
+      api.setBloom(settings.bloom);
+      if (composer) {
+        composer.setPixelRatio(renderer.getPixelRatio());
+        const s = new THREE.Vector2();
+        renderer.getSize(s);
+        composer.setSize(s.x, s.y);
+      }
+      // Thông báo cho phần khác (ánh sáng) biết mức hiện tại.
+      (window as any).__qualityLevel = level;
+    },
+    setSsao(on: boolean) {
+      if (ssao) ssao.enabled = on && !softwareGL;
+    },
+    setBloom(on: boolean) {
+      if (bloom) bloom.enabled = on;
+    },
   };
+
+  return api;
 }

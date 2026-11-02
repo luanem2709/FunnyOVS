@@ -227,6 +227,25 @@ export function skylineTexture(repeat = 4, seed = 7): THREE.CanvasTexture {
 }
 
 /**
+ * Đổi màu vòm trời theo thời gian trong ngày.
+ * Ban đêm: trời tím thẫm, chân trời ấm hơn (ánh đèn thành phố).
+ */
+export function setSkyMode(dome: THREE.Mesh, mode: "day" | "night"): void {
+  const mat = dome.material as THREE.ShaderMaterial;
+  if (!mat.uniforms) return;
+  const u = mat.uniforms;
+  if (mode === "night") {
+    (u.topColor.value as THREE.Color).setHex(0x0a1024);
+    (u.midColor.value as THREE.Color).setHex(0x1d2a4d);
+    (u.bottomColor.value as THREE.Color).setHex(0x3a3350);
+  } else {
+    (u.topColor.value as THREE.Color).setHex(0x2f6fb5);
+    (u.midColor.value as THREE.Color).setHex(0x9fc6ea);
+    (u.bottomColor.value as THREE.Color).setHex(0xeaf3fa);
+  }
+}
+
+/**
  * Vòng ngoại cảnh: trụ kín bao quanh + khung cửa sổ + bậu cửa.
  * @param radius bán kính vòng ngoại cảnh
  * @param height chiều cao vòng
