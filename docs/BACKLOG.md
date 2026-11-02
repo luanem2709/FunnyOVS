@@ -14,7 +14,9 @@ Mỗi mục hoàn tất → gạch đầu và ghi kết quả vào `LOG.md`.
 | 1.1 | Chụp ảnh kiểm thử bị trắng do `readPixels` xoá backbuffer | ✅ xong | Đã tách `toDataURL` trước `readPixels`, dùng FBO phụ để đọc pixel |
 | 1.2 | Cảnh 3D "rửa trắng" sau khi bật bloom + IBL | ✅ xong | ACES + IBL cộng dồn với đèn sẵn có → giảm `environmentIntensity` 0.1, exposure 0.95 |
 | 1.3 | Camera toàn cảnh bị phòng khác/tường che kín | ✅ xong | Thêm `focusMode` (mờ ẩn phòng khác) + `wallCulling` (mờ tường chắn tầm nhìn) |
-| 1.4 | Test đầu-cuối chuỗi giao việc → cursor agent → kết quả → nhật ký token | ⬜ todo | Chạy 1 tác vụ thật qua UI, xác minh token ledger ghi đúng |
+| 1.4 | Test đầu-cuối chuỗi giao việc → cursor agent → kết quả → nhật ký token | ✅ xong | Chu kỳ 4: task Cursor CLI thật `done`, 45.486 token, `cli-usage`, ledger + ví + HUD khớp. Sửa 5 lỗi: timeout 120s→300s, ví học quá nhỏ, sandbox browser crash server, DDG CAPTCHA chặn bot, thiếu bộ phân công tự động |
+| 1.10 | Mọi nhân viên đều tiêu token thật (không việc giả) | ✅ xong | Chu kỳ 5: bỏ `setTimeout` giả ở việc "nội bộ" → 8/8 nhân viên có `tokensUsed>0`, `tasksDone>0` |
+| 1.11 | Bộ điều tiết nhịp độ theo ngân sách (governor) | ✅ xong | Chu kỳ 5: `governorIntervalMs()` trải đều token còn lại ra giờ làm việc, nhịp 1–8 phút, hết token thì dừng |
 | 1.5 | Kiểm tra hiệu năng: draw call, số mesh, FPS | ✅ xong | `scripts/perf.ts` — 1.371 draw call, 440k tri, 802 geometry, 29 đèn, FPS trung vị 48 (SwiftShader) |
 | 1.6 | Xử lý resize làm méo composer/bloom | ✅ xong | `composer.setSize` + `setPixelRatio` trong handler resize |
 | 1.7 | Cache vật liệu & geometry để giảm draw call | ✅ xong | 1.483 → 619 vật liệu; 1.235 → 802 geometry |
@@ -69,6 +71,8 @@ Mỗi mục hoàn tất → gạch đầu và ghi kết quả vào `LOG.md`.
 |---|-----|-----------|---------|
 | 5.1 | Ghi bài học từ mỗi chu kỳ vào thư viện | ⬜ todo | |
 | 5.2 | Nghiên cứu best practice 3D (ghi vào `docs/research/`) | ⬜ todo | |
+| 5.3 | Nhân viên tự nhận việc khi rảnh (không cần bạn giao) | ✅ xong | Chu kỳ 4: `src/server/agents/workDispatcher.ts` — 7 việc thường nhật, mỗi nhân viên 1 việc, tôn trọng ví `normal`/`learning` |
+| 5.4 | Việc nghiên cứu ghi vào ledger + cộng token cho nhân viên | ✅ xong | Chu kỳ 4: `researchEngine` trả `tokensUsed` → `token_ledger` + `registry.recordUsage()` |
 
 ## 6. Tài liệu
 

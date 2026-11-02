@@ -22,6 +22,18 @@ import { ResearchEngine } from "./learning/researchEngine.js";
 import { ProposalStore } from "./selfdev/proposalStore.js";
 import { AgentRegistry } from "./agents/agentRegistry.js";
 import { DEPARTMENTS } from "./agents/departments.js";
+import {
+  AUTO_WORK_CATALOG,
+  activeHoursLeft,
+  estimateItemCost,
+  estimateRoundCost,
+  governorIntervalMs,
+  markDispatched,
+  markFree,
+  pickNextWork,
+  type AutoWorkItem,
+  type DispatcherState,
+} from "./agents/workDispatcher.js";
 import { TaskRunner } from "./tasks/taskRunner.js";
 import { ActivityLog } from "./activity/activityLog.js";
 import { policyForLevel, type AutomationLevel } from "./automation/automationPolicy.js";
@@ -62,6 +74,11 @@ const kb = new KnowledgeBase(DATA_DIR);
 const research = new ResearchEngine({ browser, kb, budget });
 const proposals = new ProposalStore(ROOT);
 const registry = new AgentRegistry();
+// Khôi phục token/số tác vụ đã dùng của từng nhân viên từ ledger,
+// để HUD không bị reset 0 mỗi lần server khởi động lại.
+for (const row of ledger.totalsByAgent()) {
+  registry.update(row.agentId, { tokensUsed: row.tokens, tasksDone: row.calls });
+}
 const activity = new ActivityLog();
 
 let emergencyStop = false;
@@ -230,6 +247,159 @@ function startQuotaLoop(): void {
 }
 startQuotaLoop();
 
+// ---- Bộ phân công việc tự động ----
+// Giữ văn phòng "sống": nhân viên tự nhận việc, tự tiêu token, tự ghi ledger.
+// Chỉ chạy ở mức tự động "balanced"/"autonomous" (mức "ask" thì không tự làm).
+const dispatchState: DispatcherState = {
+  busy: new Set<string>(),
+  nextAllowed: new Map<string, number>(),
+  dispatched: 0,
+};
+
+/** Chạy một mục việc tự động cho nhân viên. */
+async function runAutoWork(item: AutoWorkItem): Promise<void> {
+  const agent = registry.get(item.agentId);
+  if (!agent) return;
+  const policy = policyForLevel(configStore.get().automationLevel);
+
+  activity.record({
+    kind: "task",
+    actor: agent.name,
+    message: `Bắt đầu: ${item.title}`,
+    detail: item.note,
+  });
+
+  if (item.kind === "research" || item.kind === "internal") {
+    // Cả "việc nội bộ" cũng chạy THẬT: duyệt web, đọc nội dung, ghi vào Thư viện
+    // tri thức và trừ ví token. Trước đây việc nội bộ chỉ "ngủi 2,5 giây rồi
+    // báo Xong" → nhân viên đứng yên, thanh token không nhúc nhích, người dùng
+    // tưởng hệ thống chết.
+    const learningMode = item.wallet === "learning";
+    registry.setStatus(agent.id, learningMode ? "learning" : "researching", item.title);
+    broadcast("agent:update", registry.get(agent.id));
+    try {
+      const result = await research.research(
+        {
+          agent,
+          topic: item.topic ?? item.title,
+          learningMode,
+          maxSources: item.maxSources,
+          snippetChars: item.snippetChars,
+        },
+        policy,
+      );
+      const spent = result.tokensUsed ?? 0;
+      if (spent > 0) {
+        ledger.add({
+          taskId: `auto_${Date.now().toString(36)}`,
+          department: agent.department,
+          agentId: agent.id,
+          agentName: agent.name,
+          model: "sandbox-web",
+          backend: "sandbox-browser",
+          inputTokens: spent,
+          outputTokens: 0,
+          cacheReadTokens: 0,
+          cacheWriteTokens: 0,
+          costCents: 0,
+          wallet: item.wallet,
+          cursorPercentUsed: budget.getQuota()?.totalPercentUsed,
+          quotaSource: "estimated",
+          durationMs: 0,
+          ok: result.ok,
+          error: result.ok ? undefined : result.note,
+        });
+        registry.recordUsage(agent.id, spent);
+        broadcast("agent:update", registry.get(agent.id));
+        if (learningMode) {
+          registry.update(agent.id, { learned: (registry.get(agent.id)?.learned ?? 0) + 1 });
+        }
+      }
+      activity.record({
+        kind: "task",
+        actor: agent.name,
+        message: result.ok ? `Xong: ${item.title}` : `Không xong: ${item.title}`,
+        detail: `${spent.toLocaleString("vi-VN")} token · ${result.sources.length} nguồn${
+          result.ok ? "" : ` · ${result.note ?? ""}`
+        }`,
+        level: result.ok ? "info" : "warn",
+      });
+    } catch (err) {
+      activity.record({
+        kind: "task",
+        actor: agent.name,
+        message: `Lỗi: ${item.title}`,
+        detail: (err as Error).message,
+        level: "danger",
+      });
+    } finally {
+      registry.setStatus(agent.id, "idle");
+      const updated = registry.get(agent.id);
+      if (updated) broadcast("agent:update", updated);
+      markFree(dispatchState, agent.id);
+    }
+    return;
+  }
+}
+
+let dispatchTimer: NodeJS.Timeout | null = null;
+/** Mốc bắt đầu ngày (để governor san đều ngân sách theo giờ còn lại). */
+const dayStartMs = (() => {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+})();
+/** Nhịp giao việc hiện tại (ms) — do governor điều chỉnh theo ngân sách còn lại. */
+let dispatchIntervalMs = 60_000;
+/** Thời điểm bắt đầu vòng giao việc gần nhất (toàn văn phòng). */
+let lastRoundAt = 0;
+
+/** Chi phí ước lượng của một mục việc (dùng cho governor). */
+function itemCost(item: AutoWorkItem): number {
+  return estimateItemCost(item);
+}
+
+function startDispatchLoop(): void {
+  if (dispatchTimer) clearInterval(dispatchTimer);
+  const tick = (): void => {
+    if (emergencyStop) return;
+    const level = configStore.get().automationLevel;
+    if (level === "ask") return; // Chỉ hỏi → không tự làm
+    const now = Date.now();
+
+    // Governor: nhịp VÒNG giao việc tính theo ngân sách ngày còn lại.
+    // Mỗi vòng = cả văn phòng cùng nhận việc (song song).
+    const snap = budget.snapshot();
+    const remaining = snap.total.limit - snap.total.used - snap.learning.used;
+      const interval = governorIntervalMs({
+        remaining,
+        roundCost: estimateRoundCost(AUTO_WORK_CATALOG),
+        baseIntervalMs: 60_000,
+        // Tối đa 8 phút giữa hai vòng ⇒ người dùng luôn thấy văn phòng chuyển
+        // động. Thực tế mỗi vòng tiêu ~4k token nên 8 phút/vòng vẫn nằm trong
+        // hạn mức ngày; governor sẽ tự giãn nhịp khi ví cạn.
+        maxIntervalMs: 8 * 60_000,
+        activeHoursLeft: activeHoursLeft(now, dayStartMs),
+      });
+    dispatchIntervalMs = Number.isFinite(interval) ? interval : 30 * 60_000;
+    // Chưa tới nhịp → bỏ qua vòng này.
+    if (now - lastRoundAt < dispatchIntervalMs) return;
+    lastRoundAt = now;
+
+    for (const item of AUTO_WORK_CATALOG) {
+      const picked = pickNextWork(AUTO_WORK_CATALOG, dispatchState, item.agentId, now);
+      if (!picked) continue;
+      // Ví của việc này đã cạn thì dừng (không tự tăng hạn mức).
+      if (!budget.canSpend(picked.wallet, itemCost(picked))) continue;
+      markDispatched(dispatchState, picked, now);
+      void runAutoWork(picked);
+    }
+  };
+  void tick();
+  dispatchTimer = setInterval(tick, 5_000);
+}
+startDispatchLoop();
+
 // ---- API ----
 app.get("/api/state", (_req, res) => {
   res.json({
@@ -248,6 +418,31 @@ app.get("/api/state", (_req, res) => {
 });
 
 app.get("/api/agents", (_req, res) => res.json(registry.list()));
+
+/** Trạng thái bộ phân công việc tự động (để HUD hiện "nhân viên đang bận"). */
+app.get("/api/dispatch", (_req, res) => {
+  const snap = budget.snapshot();
+  res.json({
+    dispatched: dispatchState.dispatched,
+    busy: [...dispatchState.busy],
+    catalog: AUTO_WORK_CATALOG.map((w) => ({ agentId: w.agentId, title: w.title, kind: w.kind })),
+    // Nhịp giao việc hiện tại (ms) — do governor tính theo ngân sách còn lại.
+    intervalMs: dispatchIntervalMs,
+    remainingTokens: snap.total.limit - snap.total.used,
+    remainingLearningTokens: snap.learning.limit - snap.learning.used,
+  });
+});
+
+/** Giao việc ngay cho một nhân viên (dùng để thử nhanh từ UI). */
+app.post("/api/dispatch/run", async (req, res) => {
+  if (emergencyStop) return res.status(423).json({ error: "Đang bật chế độ dừng khẩn cấp." });
+  const agentId = String(req.body?.agentId ?? "");
+  const item = AUTO_WORK_CATALOG.find((w) => w.agentId === agentId);
+  if (!item) return res.status(404).json({ error: "Nhân viên này không có việc tự động." });
+  markDispatched(dispatchState, item, Date.now());
+  void runAutoWork(item);
+  res.json({ ok: true, item: { agentId: item.agentId, title: item.title } });
+});
 
 app.get("/api/departments", (_req, res) =>
   res.json(
@@ -384,12 +579,49 @@ app.post("/api/kb/retrospectives", (req, res) => {
 // --- Nghiên cứu / tự học ---
 app.post("/api/research", async (req, res) => {
   const { agentId, topic, learningMode } = req.body as any;
-  const agent = registry.get(agentId) ?? { id: agentId, name: agentId, role: "" };
+  const known = registry.get(agentId);
+  const agent = known ?? { id: agentId, name: agentId, role: "", department: "automation" as const };
   const policy = policyForLevel(configStore.get().automationLevel);
   if (emergencyStop) return res.status(423).json({ error: "Đang bật chế độ dừng khẩn cấp." });
   registry.setStatus(agentId, learningMode ? "learning" : "researching", topic);
+  broadcast("agent:update", registry.get(agentId));
   const result = await research.research({ agent, topic, learningMode }, policy);
   registry.setStatus(agentId, "idle");
+  const updated = registry.get(agentId);
+  if (updated) broadcast("agent:update", updated);
+
+  // Ghi ledger + cộng token cho nhân viên → thanh năng lượng chạy, HUD đổi số.
+  const spent = result.tokensUsed ?? 0;
+  if (spent > 0) {
+    ledger.add({
+      taskId: `research_${Date.now().toString(36)}`,
+      department: agent.department ?? "automation",      agentId: agent.id,
+      agentName: agent.name,
+      model: "sandbox-web",
+      backend: "sandbox-browser",
+      inputTokens: spent,
+      outputTokens: 0,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      costCents: 0,
+      wallet: learningMode ? "learning" : "normal",
+      cursorPercentUsed: budget.getQuota()?.totalPercentUsed,
+      quotaSource: "estimated",
+      durationMs: 0,
+      ok: result.ok,
+      error: result.ok ? undefined : result.note,
+    });
+    registry.recordUsage(agent.id, spent);
+    const after = registry.get(agent.id);
+    if (after) broadcast("agent:update", after);
+    activity.record({
+      kind: "task",
+      actor: agent.name,
+      message: `${learningMode ? "Tự học" : "Nghiên cứu"}: ${topic}`,
+      detail: `${spent.toLocaleString("vi-VN")} token · ${result.sources.length} nguồn`,
+      level: result.ok ? "info" : "warn",
+    });
+  }
   res.json(result);
 });
 

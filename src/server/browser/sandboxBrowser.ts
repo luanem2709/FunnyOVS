@@ -28,7 +28,14 @@ export interface PageContent {
   url: string;
   title: string;
   text: string;
+  /** HTML thô của trang — cần cho việc bóc link kết quả tìm kiếm. */
+  html: string;
   links: string[];
+  /**
+   * Link kết quả tìm kiếm đã bóc sẵn từ DOM (class chứa "result").
+   * Bóc bằng DOM chứ không bằng regex vì thứ tự thuộc tính HTML thay đổi.
+   */
+  resultLinks: Array<{ href: string; text: string }>;
   risky: ReturnType<typeof detectRiskyAction>;
 }
 
@@ -125,6 +132,9 @@ export class SandboxBrowser extends EventEmitter {
     fs.mkdirSync(this.profileDir, { recursive: true });
 
     if (!this.browser) {
+      // KHÔNG truyền `--user-data-dir` khi dùng chromium.launch(): Playwright mới
+      // (>=1.49) ném lỗi "Pass userDataDir parameter to launchPersistentContext"
+      // → làm sập cả server. Profile riêng đã được cô lập bằng newContext().
       this.browser = await chromium.launch({
         headless: this.headless,
         executablePath: this.chromePath,
@@ -135,7 +145,6 @@ export class SandboxBrowser extends EventEmitter {
           "--disable-background-networking",
           "--disable-sync",
           "--disable-features=Translate,OptimizationHints",
-          `--user-data-dir=${this.profileDir}`,
         ],
       });
       this.browser.on("disconnected", () => {
@@ -149,6 +158,10 @@ export class SandboxBrowser extends EventEmitter {
       locale: "vi-VN",
       javaScriptEnabled: true,
       acceptDownloads: false,
+      // User-Agent thật: UA mặc định của Playwright ("HeadlessChrome") bị
+      // DuckDuckGo chặn bằng CAPTCHA ngay.
+      userAgent:
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
       // Không dùng storageState của người dùng → không có phiên đăng nhập nào của bạn.
       storageState: undefined,
     });
@@ -206,6 +219,7 @@ export class SandboxBrowser extends EventEmitter {
 
       const title = await page.title().catch(() => "");
       const text = await page.evaluate(() => document.body?.innerText ?? "").catch(() => "");
+      const html = await page.content().catch(() => "");
       const links = await page
         .evaluate(() =>
           Array.from(document.querySelectorAll("a[href]"))
@@ -213,6 +227,19 @@ export class SandboxBrowser extends EventEmitter {
             .map((a) => (a as HTMLAnchorElement).href),
         )
         .catch(() => [] as string[]);
+
+      // Bóc link kết quả tìm kiếm ngay trong DOM: class chứa "result".
+      // Regex trên HTML thô không ổn định vì thứ tự thuộc tính thay đổi.
+      const resultLinks = await page
+        .evaluate(() =>
+          Array.from(document.querySelectorAll('a[class*="result"]'))
+            .slice(0, 20)
+            .map((a) => ({
+              href: (a as HTMLAnchorElement).getAttribute("href") ?? "",
+              text: (a.textContent ?? "").trim(),
+            })),
+        )
+        .catch(() => [] as Array<{ href: string; text: string }>);
 
       const injection = detectInjection(text);
       const risky = detectRiskyAction(text);
@@ -240,7 +267,9 @@ export class SandboxBrowser extends EventEmitter {
           url: page.url(),
           title,
           text,
+          html,
           links,
+          resultLinks,
           risky,
         },
       };
@@ -259,22 +288,54 @@ export class SandboxBrowser extends EventEmitter {
     }
   }
 
-  /** Tìm kiếm nhanh qua DuckDuckGo HTML (không cần API key). */
+  /**
+   * Tìm kiếm nhanh — KHÔNG cần API key.
+   *
+   * Thử `lite.duckduckgo.com/lite/` trước: bản `html.duckduckgo.com` chặn bot
+   * bằng CAPTCHA ("select all squares containing a duck") nên luôn trả 0 kết quả.
+   * Bản `lite` dùng class `result-link` và vẫn trả kết quả thật.
+   */
   async search(
+    query: string,
+    opts: { agentId: string; agentName: string },
+  ): Promise<Array<{ title: string; url: string; snippet: string }>> {
+    const lite = await this.#searchLite(query, opts);
+    if (lite.length > 0) return lite;
+    return this.#searchHtml(query, opts);
+  }
+
+  /** Bản "lite" của DuckDuckGo — ổn định, không CAPTCHA. */
+  async #searchLite(
+    query: string,
+    opts: { agentId: string; agentName: string },
+  ): Promise<Array<{ title: string; url: string; snippet: string }>> {
+    const url = `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(query)}`;
+    const res = await this.open(url, opts);
+    if (!res.ok) return [];
+    const out: Array<{ title: string; url: string; snippet: string }> = [];
+    for (const r of res.content.resultLinks) {
+      const href = decodeDdgHref(r.href);
+      if (!href) continue;
+      out.push({ title: r.text, url: href, snippet: "" });
+      if (out.length >= 10) break;
+    }
+    return out;
+  }
+
+  /** Bản HTML cũ — dự phòng (thường bị CAPTCHA nên ít khi dùng tới). */
+  async #searchHtml(
     query: string,
     opts: { agentId: string; agentName: string },
   ): Promise<Array<{ title: string; url: string; snippet: string }>> {
     const url = `https://duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
     const res = await this.open(url, opts);
     if (!res.ok) return [];
-    const { text } = res.content;
     const results: Array<{ title: string; url: string; snippet: string }> = [];
-    const re = /result__a[^>]*href="([^"]+)"[^>]*>(.*?)<\/a>/gs;
-    let m: RegExpExecArray | null;
-    while ((m = re.exec(text)) !== null && results.length < 10) {
-      const clean = m[1].replace(/\\/g, "").replace(/^\/\/duckduckgo\.com\/l\/\?uddg=/, "");
-      const decoded = decodeURIComponent(clean.split("&rut=")[0]);
-      results.push({ title: m[2].replace(/<[^>]+>/g, "").trim(), url: decoded, snippet: "" });
+    for (const r of res.content.resultLinks) {
+      const href = decodeDdgHref(r.href);
+      if (!href) continue;
+      results.push({ title: r.text, url: href, snippet: "" });
+      if (results.length >= 10) break;
     }
     return results;
   }
@@ -297,4 +358,21 @@ export function findChrome(): string | undefined {
     path.join(os.homedir(), "AppData\\Local\\Google\\Chrome\\Application\\chrome.exe"),
   ].filter(Boolean) as string[];
   return candidates.find((c) => fs.existsSync(c));
+}
+
+/**
+ * Giải mã link bọc của DuckDuckGo (`/l/?uddg=<url-encoded>&rut=...`).
+ * Trả về undefined nếu không phải link kết quả.
+ */
+export function decodeDdgHref(href: string): string | undefined {
+  try {
+    // DDG dùng link bọc: "//duckduckgo.com/l/?uddg=<url-encoded>&rut=..."
+    // (có thể bỏ protocol, hoặc dùng https://).
+    const m = href.match(/uddg=([^&]+)/);
+    if (!m) return undefined;
+    const decoded = decodeURIComponent(m[1]);
+    return /^https?:\/\//i.test(decoded) ? decoded : undefined;
+  } catch {
+    return undefined;
+  }
 }

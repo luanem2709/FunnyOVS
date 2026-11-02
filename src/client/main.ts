@@ -686,6 +686,8 @@ let characterAsset: ManifestAsset | null = null;
 let clipAliases: Record<string, string> = {};
 let browserLogs: BrowserLogEntry[] = [];
 let tasks: TaskRecord[] = [];
+/** Id nhân viên đang tự chạy việc (từ /api/dispatch) — hiện badge "đang tự làm việc". */
+let busyAgents: string[] = [];
 let pendingApproval: { id: string; taskId: string; title: string; agentName: string; reason: string; estimation?: { estimatedTokens: number } } | null =
   null;
 
@@ -871,9 +873,25 @@ function applyStatus(a: AgentState): void {
 (window as any).__applyStatus = applyStatus;
 (window as any).__scene = scene;
 (window as any).__camera = camera;
+/** Đặt camera thủ công (dùng cho ảnh toàn cảnh): targetX, targetZ, dist, pitch, yaw. */
+(window as any).__setCamera = (
+  tx: number,
+  tz: number,
+  d: number,
+  p: number,
+  yw: number,
+): void => {
+  target.set(tx, 1, tz);
+  dist = d;
+  pitch = p;
+  yaw = yw;
+  // Bỏ tập trung phòng để thấy toàn cảnh (và bật lại đèn phòng).
+  focusManager.focus(null);
+};
 (window as any).__pipeline = pipeline;
 (window as any).__renderer = renderer;
 (window as any).__rooms = rooms;
+(window as any).__focusManager = focusManager;
 (window as any).__THREE = THREE;
 
 /** Hook kiểm thử: vật thể nào nằm ở giữa khung hình. */
@@ -1271,6 +1289,7 @@ async function openPanel(name: string, arg?: string): Promise<void> {
       panelTitle.textContent = dept.name;
       const agentsHere = dept.agents ?? [];
       const spend = dept.spend ?? { tokens: 0, cents: 0, calls: 0 };
+      const busy = new Set(busyAgents);
       panelBody.innerHTML = `
         <div class="item">
           <div class="meta">Chi tiêu hôm nay: <b>${fmt(spend.tokens)}</b> token · ${spend.calls} lượt · ${(spend.cents / 100).toFixed(4)} USD</div>
@@ -1278,12 +1297,13 @@ async function openPanel(name: string, arg?: string): Promise<void> {
         ${agentsHere
           .map(
             (a) => `<div class="item">
-          <h4>${esc(a.name)} <span class="badge info">${esc(a.status)}</span></h4>
+          <h4>${esc(a.name)} <span class="badge ${a.status === "idle" ? "info" : "ok"}">${esc(a.status)}</span>${busy.has(a.id) ? '<span class="badge warn">đang tự làm việc</span>' : ""}</h4>
           <div>${esc(a.role)}</div>
           <div class="meta">${fmt(a.tokensUsed)} token · ${a.tasksDone} tác vụ · ${a.learned} bài học</div>
           ${a.task ? `<div>${esc(a.task)}</div>` : ""}
           <div class="row">
             <button class="act" onclick="assignTask('${a.id}','${esc(dept.id)}')">Giao việc</button>
+            <button class="act ghost" onclick="runAutoWork('${a.id}')">Chạy tự động</button>
           </div>
         </div>`,
           )
@@ -1453,7 +1473,18 @@ document.querySelectorAll<HTMLButtonElement>("#levels button").forEach((b) => {
 });
 
 // ---------------- Thanh năng lượng token ----------------
+/** Thông tin bộ phân công tự động (cập nhật mỗi 3s từ /api/dispatch). */
+let dispatchStats: { dispatched: number; busy: string[]; intervalMs: number; remainingTokens: number } = {
+  dispatched: 0,
+  busy: [],
+  intervalMs: 15_000,
+  remainingTokens: 0,
+};
+/** Snapshot ngân sách cuối cùng để vẽ lại khi có thay đổi dispatch. */
+let lastBudget: BudgetSnapshot | null = null;
+
 function renderBudget(b: BudgetSnapshot): void {
+  lastBudget = b;
   const el = document.getElementById("budget-widget")!;
   const pct = Math.round((b.total.used / Math.max(1, b.total.limit)) * 100);
   const lpct = Math.round((b.learning.used / Math.max(1, b.learning.limit)) * 100);
@@ -1483,7 +1514,15 @@ function renderBudget(b: BudgetSnapshot): void {
       <div class="bar learn"><i style="width:${Math.min(100, lpct)}%"></i></div>
       <b>${lpct}%</b>
     </div>
-    ${quotaTxt ? `<div class="muted quota">${esc(quotaTxt)}${q?.cycleEnd ? " · reset " + new Date(q.cycleEnd).toLocaleDateString("vi-VN") : ""}</div>` : ""}`;
+    ${quotaTxt ? `<div class="muted quota">${esc(quotaTxt)}${q?.cycleEnd ? " · reset " + new Date(q.cycleEnd).toLocaleDateString("vi-VN") : ""}</div>` : ""}
+    <div class="muted auto-line" id="auto-line">${autoLineHtml()}</div>`;
+}
+
+/** Dòng trạng thái tự động: số việc đã giao, ai đang bận, nhịp giao tiếp theo. */
+function autoLineHtml(): string {
+  const busy = dispatchStats.busy.length;
+  const every = Math.round(dispatchStats.intervalMs / 1000);
+  return `Tự động: ${dispatchStats.dispatched} việc · ${busy} người đang làm · giao mỗi ${every}s · còn ${fmt(dispatchStats.remainingTokens)} token`;
 }
 
 // ---------------- WebSocket ----------------
@@ -1560,6 +1599,17 @@ win.assignTask = async (agentId: string, department: string) => {
   const ta = document.getElementById("taskPrompt") as HTMLTextAreaElement | null;
   if (ta) ta.dataset.agentId = agentId;
   toast("Đã chọn nhân vật — viết yêu cầu rồi bấm Gửi.");
+};
+
+/** Yêu cầu nhân viên tự nhận việc ngay (không cần viết prompt). */
+win.runAutoWork = async (agentId: string) => {
+  try {
+    await api("/api/dispatch/run", { method: "POST", body: { agentId } });
+    toast("Đã giao việc tự động — nhân viên đang làm việc.", "info");
+    busyAgents = [...new Set([...busyAgents, agentId])];
+  } catch (e) {
+    toast("Không giao được việc: " + (e as Error).message, "danger");
+  }
 };
 
 win.submitTask = async (department: string) => {
@@ -1698,4 +1748,28 @@ async function loadAssets(): Promise<void> {
       /* server đang khởi động lại */
     }
   }, 2000);
+
+  // Làm mới trạng thái phân công tự động (nhân viên đang bận) + ngân sách.
+  setInterval(async () => {
+    try {
+      const d = await api<{
+        busy: string[];
+        dispatched: number;
+        intervalMs: number;
+        remainingTokens: number;
+      }>("/api/dispatch");
+      busyAgents = d.busy ?? [];
+      dispatchStats = {
+        dispatched: d.dispatched ?? 0,
+        busy: busyAgents,
+        intervalMs: d.intervalMs ?? 15_000,
+        remainingTokens: d.remainingTokens ?? 0,
+      };
+      // Vẽ lại dòng trạng thái tự động trong thanh ngân sách.
+      const line = document.getElementById("auto-line");
+      if (line) line.innerHTML = autoLineHtml();
+    } catch {
+      /* ignore */
+    }
+  }, 3000);
 })();

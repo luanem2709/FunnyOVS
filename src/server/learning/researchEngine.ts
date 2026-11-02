@@ -25,6 +25,12 @@ export interface ResearchRequest {
   maxSources?: number;
   /** Có phải giờ học tự chọn không (dùng ví learning). */
   learningMode?: boolean;
+  /**
+   * Số ký tự tối đa đọc từ mỗi trang. Cắt ngắn → tiêu ít token hơn.
+   * Việc tự động (nhân viên tự nhận việc) dùng giá trị nhỏ để token chảy đều
+   * mà không đốt nhanh hạn mức.
+   */
+  snippetChars?: number;
 }
 
 export interface ResearchResult {
@@ -35,6 +41,8 @@ export interface ResearchResult {
   injectionWarnings: string[];
   note?: string;
   knowledgeId?: number;
+  /** Token đã tiêu (ước lượng theo nội dung đọc được). */
+  tokensUsed?: number;
 }
 
 export interface ResearchEngineOptions {
@@ -57,10 +65,12 @@ export class ResearchEngine extends EventEmitter {
     const wallet = req.learningMode ? "learning" : "normal";
     const guard = new TaskGuard(policy);
     const maxSources = Math.min(req.maxSources ?? 5, policy.maxPages);
+    const snippetChars = req.snippetChars ?? 6000;
 
     const injectionWarnings: string[] = [];
     const sources: ResearchResult["sources"] = [];
     const summaries: string[] = [];
+    let tokensUsed = 0;
 
     const searches = await this.opts.browser.search(req.topic, {
       agentId: req.agent.id,
@@ -72,6 +82,7 @@ export class ResearchEngine extends EventEmitter {
         ok: false,
         sources: [],
         injectionWarnings,
+        tokensUsed,
         note: "Không tìm thấy kết quả tìm kiếm (hoặc mạng bị chặn).",
       };
     }
@@ -96,17 +107,19 @@ export class ResearchEngine extends EventEmitter {
       }
 
       // Cắt ngắn nội dung để tiết kiệm token.
-      const snippet = content.text.slice(0, 6000);
+      const snippet = content.text.slice(0, snippetChars);
       const cost = this.estimate(asUntrustedData(snippet, content.url));
       if (!this.opts.budget.canSpend(wallet, cost)) {
         return {
           ok: false,
           sources,
           injectionWarnings,
+          tokensUsed,
           note: "Hết ngân sách token — đã dừng nghiên cứu.",
         };
       }
       this.opts.budget.spend(wallet, cost);
+      tokensUsed += cost;
 
       const source = {
         title: content.title || s.title || content.url,
@@ -118,7 +131,7 @@ export class ResearchEngine extends EventEmitter {
     }
 
     if (sources.length === 0) {
-      return { ok: false, sources: [], injectionWarnings, note: "Không đọc được nguồn nào." };
+      return { ok: false, sources: [], injectionWarnings, tokensUsed, note: "Không đọc được nguồn nào." };
     }
 
     const summary = summaries.join("\n");
@@ -145,6 +158,7 @@ export class ResearchEngine extends EventEmitter {
       conflicts,
       injectionWarnings,
       knowledgeId: entry.id,
+      tokensUsed,
       note: needsUser
         ? "Có thông tin mâu thuẫn hoặc nội dung nhạy cảm — bạn nên xem lại trước khi dùng."
         : undefined,

@@ -177,6 +177,28 @@ export class TokenLedger {
     return out;
   }
 
+  /** Tổng token + số lượt theo từng nhân viên hôm nay (khôi phục HUD sau restart). */
+  totalsByAgent(): Array<{ agentId: string; agentName: string; tokens: number; calls: number }> {
+    const since = new Date();
+    since.setHours(0, 0, 0, 0);
+    return (
+      this.db
+        .prepare(
+          `SELECT agent_id AS agentId,
+                  MAX(agent_name) AS agentName,
+                  SUM(input_tokens + output_tokens + cache_read_tokens + cache_write_tokens) AS tokens,
+                  COUNT(*) AS calls
+           FROM token_ledger WHERE ts >= ? GROUP BY agent_id`,
+        )
+        .all(since.toISOString()) as any[]
+    ).map((r) => ({
+      agentId: String(r.agentId),
+      agentName: String(r.agentName ?? r.agentId),
+      tokens: Number(r.tokens ?? 0),
+      calls: Number(r.calls ?? 0),
+    }));
+  }
+
   /** Tổng theo từng phòng ban (cho biểu đồ 3D). */
   totalsByDepartment(): Array<{ department: string; tokens: number; cents: number; calls: number }> {
     const since = new Date();

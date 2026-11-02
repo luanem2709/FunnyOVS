@@ -68,6 +68,12 @@ export interface TaskRunnerDeps {
   defaultModel?: string;
   /** Chỉ cho dùng "auto" (gói Free). */
   freeTierOnly?: boolean;
+  /**
+   * Timeout cứng cho một lượt Cursor CLI (ms).
+   * Mặc định 300_000 — lượt thật đo được 261s nên 120s là quá ngắn và khiến
+   * task luôn fail với "quá thời gian" dù CLI đang chạy tốt.
+   */
+  taskTimeoutMs?: number;
   /** Có cho phép tự chủ cao không (bỏ qua bước duyệt ước lượng). */
   autonomous?: boolean;
   /** Đọc động chế độ tự động hiện tại (để đổi lúc runtime không cần restart). */
@@ -232,7 +238,7 @@ export class TaskRunner {
       workspace: this.deps.workspace,
       model: task.model,
       mode,
-      timeoutMs: 120_000,
+      timeoutMs: this.deps.taskTimeoutMs ?? 300_000,
     });
 
     // Bước 3: ghi ledger + trừ ngân sách

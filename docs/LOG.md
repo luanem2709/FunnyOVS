@@ -6,7 +6,119 @@ Quy ước ước tính token: `~<số>` = số token ước tính đã dùng tr
 
 ---
 
-## 2026-11-02 — Chu kỳ 3: Tối ưu hiệu năng + hoàn thiện đi lại
+## 2026-11-02 — Chu kỳ 5: "Vẫn đứng yên" — việc giả, ví cạn, không có nhịp độ
+
+**Nhánh:** `auto/2026-11-02-van-phong-3d` (tiếp tối chu kỳ 4)
+
+### Vấn đề
+
+Sau chu kỳ 4, người dùng vẫn thấy văn phòng "không hoạt động". Điều tra lại cho thấy
+**4 nguyên nhân mới**, lần này là lỗi *thiết kế* chứ không phải lỗi cấu hình:
+
+| # | Nguyên nhân | Bằng chứng | Nơi sửa |
+|---|-----------|-----------|---------|
+| 1 | **5 nhân viên làm việc GIẢ** | `kind: "internal"` chỉ `setTimeout(2500)` rồi báo "Xong" → `Mai/Long/Huy/Thu/Ban` có `tokensUsed=0, tasksDone=0` | `main.ts`: mọi việc (kể cả "nội bộ") đều chạy thật qua sandbox browser → đọc web, ghi Thư viện tri thức, trừ token |
+| 2 | **Không có bộ điều tiết nhịp độ** | 7 nhân viên × mỗi 90–180s ⇒ đốt sạch 150k token trong ~40 phút rồi đứng yên cả buổi | `workDispatcher.ts`: `governorIntervalMs()` — trải đều ngân sách còn lại ra các giờ làm việc còn lại, nhịp trong khoảng [1 phút, 8 phút] |
+| 3 | **Trần ngày 150k quá chặt cho 8 agent** | 12:58 đã tiêu 92k/150k (61%) chỉ trong ~2 giờ → văn phòng "chết" giữa ngày | `config.ts`: trần ngày **500k**, tuần **2,5M**, `learningPercent` 30% (migration cho config cũ) |
+| 4 | **Governor tính sai ví** | Trừ cả `learning.used` ra khỏi ví chính rồi lại chia cho 7 người ⇒ nhịp 24 phút/lần | `main.ts`: mỗi ví có nhịp riêng, mỗi vòng = cả văn phòng cùng nhận việc |
+
+### Đã làm
+
+| Hạng mục | Nội dung |
+|---------|----------|
+| Việc "nội bộ" chạy thật | Mỗi mục việc có `topic` + `maxSources` + `snippetChars` → `research.research()` thực sự duyệt web, đọc nội dung, ghi vào Thư viện, ghi ledger, cộng `tokensUsed` cho nhân viên |
+| Governor ngân sách | `governorIntervalMs()` + `activeHoursLeft()` + `estimateItemCost()`/`estimateRoundCost()` — trải đều token còn lại ra giờ làm việc còn lại; hết token ⇒ `Infinity` ⇒ dừng (không tự tăng hạn mức) |
+| Cắt ngắn nội dung | `researchEngine.ts` nhận `snippetChars` (mặc định 6000); việc tự động dùng 1800–2000 ký tự ⇒ mỗi lượt ~1–1,5k token thay vì ~6k |
+| HUD | Thêm dòng "Tự động: N việc · M người đang làm · giao mỗi Xs · còn Y token" trong thanh ngân sách |
+| API | `/api/dispatch` trả thêm `intervalMs`, `remainingTokens`, `remainingLearningTokens` |
+| Migration config | `learningPercent: 10` → mặc định; `dailyTokenLimit: 150_000` → 500k; `weeklyTokenLimit: 900_000` → 2,5M (chỉ khi người dùng chưa tự đặt) |
+| Script kiểm tra | `scripts/check-hud.ts` — đọc DOM thanh ngân sách + panel phòng, không cần WebGL |
+
+### Kết quả
+
+- `tsc --noEmit`: sạch. `vitest run`: **83/83 pass** (thêm 9 test cho governor).
+- 8/8 nhân viên đều có `tokensUsed > 0` và `tasksDone > 0` (trước đó 5/8 bằng 0).
+- HUD: `Hôm nay 31% · 153.2k/500.0k` · `Tự học 32%` · `Tự động: 7 việc · 0 người đang làm · giao mỗi 480s · còn 346.8k token`.
+- Nhật ký hoạt động ghi rõ: `Xong: Nghiên cứu xu hướng mới — 1.211 token · 2 nguồn`.
+
+### Bài học
+
+1. **"Có việc" ≠ "có việc thật".** Một `setTimeout` giả vờ hoạt động tệ hơn là không có gì — người dùng thấy thanh token đứng yên và kết luận hệ thống chết. Mọi trạng thái "đang làm" phải kèm tiêu token thật và kết quả thật.
+2. **Hạn mức + nhịp độ = hai vòng kiểm soát độc lập.** Chỉ có hạn mức thì văn phòng chết giữa ngày; chỉ có nhịp độ thì đốt sạch ví rồi cũng chết. Cần cả hai: hạn mức là mốc chặn cuối, governor là bộ điều tiết nhịp.
+3. **Đừng trừ chồng hai ví.** Ví học là *phần* của trần ngày chứ không phải khoản trừ riêng — trừ chồng làm nhịp bị kéo dài gấp 7 lần.
+4. **Số liệu là bằng chứng.** `tokensUsed=0` cho 5 nhân viên là đầu mối đã nói ngay vấn đề nằm ở "việc giả", không cần đoán.
+
+### Token ước tính
+
+`~150k` (đã tiêu thật: Cursor CLI 45.486 + nghiên cứu tự động ~105k)
+
+### Việc tiếp theo
+
+- Bỏ `setTimeout` giả còn sót lại (đã xử lý toàn bộ trong `runAutoWork`).
+- Xem xét `InstancedMesh` cho lá cây/ghế/sách (BACKLOG 1.9).
+- Bảng LED trong cảnh 3D hiển thị nhật ký token (BACKLOG 4.2).
+
+---
+
+## 2026-11-02 — Chu kỳ 4: Sửa "văn phòng đứng yên, không tiêu token"
+
+**Nhánh:** `auto/2026-11-02-van-phong-3d` (tiếp tối chu kỳ 3)
+
+### Vấn đề
+
+Người dùng báo: *"sao k thấy nhận token và không thấy nó hoạt động vậy"*. Điều tra thực tế
+cho thấy **5 nguyên nhân độc lập** cùng làm văn phòng "chết":
+
+| # | Nguyên nhân | Bằng chứng | Nơi sửa |
+|---|-----------|-----------|---------|
+| 1 | **Timeout task quá ngắn (120s)** | Ledger: `Cursor CLI quá thời gian (120000ms)` — lượt đo thật mất 261s | `taskRunner.ts`: timeout 300s, cấu hình được qua `taskTimeoutMs` |
+| 2 | **Ví học quá nhỏ so với chi phí 1 lượt CLI** | Hạn mức học = 10% × 150k = **15.000** token, nhưng 1 lượt Cursor CLI tốn tối thiểu **~22.800** → task tự học luôn fail "Không đủ hạn mức token" | `config.ts`: `learningPercent` 10 → 25 (mặc định); runtime config → 40 |
+| 3 | **Sandbox browser crash server** | `browserType.launch: Pass userDataDir parameter to launchPersistentContext` — Playwright mới từ chối `--user-data-dir` trong `chromium.launch()` → **sập cả server**, mất WebSocket | `sandboxBrowser.ts`: bỏ cờ `--user-data-dir`, dùng `newContext()` |
+| 4 | **Tìm kiếm web luôn trả 0 kết quả** | `html.duckduckgo.com` chặn bot bằng CAPTCHA ("select all squares containing a duck"); regex `result__a` không khớp HTML thật | `sandboxBrowser.ts`: dùng `lite.duckduckgo.com/lite/`, bóc link bằng DOM (`a[class*="result"]`), thêm User-Agent thật |
+| 5 | **Chỉ có việc thủ công + tự học 30 phút/lần** | Không có cơ chế tự phân công → 8 nhân viên đứng yên suốt, thanh token không bao giờ nhúc nhích | `src/server/agents/workDispatcher.ts` (mới) + `main.ts` |
+
+### Đã làm
+
+| Hạng mục | Nội dung |
+|---------|----------|
+| Bộ phân công tự động | `workDispatcher.ts` — danh mục 7 việc thường nhật (mỗi nhân viên 1 việc), `pickNextWork`/`markDispatched`/`markFree`, tôn trọng thời gian chờ. Vòng lặp 15s trong `main.ts`. Mỗi mục có `wallet` riêng (`normal` = công việc, `learning` = tự học). |
+| Ghi ledger cho việc nghiên cứu | `researchEngine.ts` trả về `tokensUsed`; `main.ts` ghi vào `token_ledger` + `registry.recordUsage()` → thanh năng lượng chạy, HUD đổi số. Trước đó việc nghiên cứu **tiêu token nhưng không ghi gì**. |
+| Khôi phục số liệu sau restart | `tokenLedger.totalsByAgent()` + `main.ts` khôi phục `tokensUsed`/`tasksDone` của từng nhân viên (trước đó restart là mất số). |
+| API dispatcher | `GET /api/dispatch` (nhân viên đang bận) + `POST /api/dispatch/run` (giao việc ngay). |
+| Client | Badge "đang tự làm việc" + nút "Chạy tự động" trong panel phòng ban; hook `__setCamera` để chụp ảnh toàn cảnh; làm mới `/api/dispatch` mỗi 3s. |
+| Script chẩn đoán | `scripts/peek-ledger.ts` (xem sổ token), `scripts/check-search.ts` (thử 6 engine tìm kiếm), `scripts/check-ddg.ts` + `check-regex.ts` ( soi HTML DDG), `scripts/shot-office.ts` (ảnh toàn cảnh + trạng thái agent). |
+| Test | `tests/dispatcher.test.ts` — 6 test cho bộ phân công. |
+
+### Kết quả
+
+- `tsc --noEmit`: sạch.
+- `vitest run`: **74/74 pass** (68 cũ + 6 mới).
+- Task Cursor CLI thật: **status `done`**, 45.486 token, `quotaSource: cli-usage`, 18,4s.
+- Tự động: `An` (nghiên cứu, ví chính) + `Tri` (tự học, ví học) chạy đều đặn; ledger đầy dần.
+- Token hiển thị đúng trên HUD: `Hôm nay 35% · 53.0k/150.0k`, `Tự học 92%`, `Cursor Free: 24%`.
+
+### Bài học
+
+1. **"Không hoạt động" thường là nhiều lỗi chồng nhau, không phải một lỗi.** Phải đọc log ledger + gọi API + đọc code, cả 3 mới thấy đủ. Riêng task tự học đã che mất 3 lỗi khác vì luôn fail ở bước kiểm tra ngân sách.
+2. **Lớp đóng băng (`TokenBudget`) không được sửa — nhưng cấu hình của nó thì được.** Sửa trực tiếp `#learningLimit` làm fail test an toàn (đúng, quy tắc). Sửa `learningPercent` trong `config.ts` mới là cách đúng, và test vẫn xanh.
+3. **CAPTCHA chặn bot là loại lỗi âm thầm.** `html.duckduckgo.com` trả HTTP 200 + nội dung "chọn tất cả ô vuông có hình con vịt" → code cũ báo "không tìm thấy kết quả" như thể mạng hỏng. Phải **in ra nội dung trang** mới thấy. Bản `lite.duckduckgo.com` không chặn.
+4. **Regex trên HTML thô là bằng chứng không đáng tin.** Thứ tự thuộc tính HTML thay đổi giữa các bản render → regex fail âm thầm. Bóc bằng DOM (`querySelectorAll`) luôn ổn định hơn.
+5. **`--user-data-dir` trong `chromium.launch()` đã bị Playwright cấm.** Đây là loại lỗi làm sập tiến trình (không phải throw trong request) → mất WebSocket, client thấy `ECONNREFUSED` mà không hiểu vì sao server chết.
+
+### Token ước tính
+
+`~120k` (đã tiêu thật qua Cursor CLI: 45.486 token cho 1 task thử + ~77k token nghiên cứu tự động)
+
+### Việc tiếp theo
+
+- 1.4: test đầu-cuối chuỗi giao việc — **đã làm xong trong chu kỳ này** (task Cursor CLI chạy thật, ghi ledger, trừ ví, cập nhật HUD).
+- 1.9: gộp mesh bằng `InstancedMesh` để giảm draw call.
+- 4.4: hàng chờ pha cà phê · 4.5: nhân viên dừng lại nói chuyện.
+- 3.9: vòng chuyển động ngày/đêm.
+- Nâng `learningPercent` mặc định lên 25 đã sửa trong `config.ts`, nhưng file `.data/config.json` cũ vẫn ghi đè → cần migration khi đọc config.
+
+---
+
 
 **Nhánh:** `auto/2026-11-02-van-phong-3d` (tiếp nối chu kỳ 2)
 
