@@ -16,7 +16,7 @@ Mỗi mục hoàn tất → gạch đầu và ghi kết quả vào `LOG.md`.
 | 1.3 | Camera toàn cảnh bị phòng khác/tường che kín | ✅ xong | Thêm `focusMode` (mờ ẩn phòng khác) + `wallCulling` (mờ tường chắn tầm nhìn) |
 | 1.4 | Test đầu-cuối chuỗi giao việc → cursor agent → kết quả → nhật ký token | ⬜ todo | Chạy 1 tác vụ thật qua UI, xác minh token ledger ghi đúng |
 | 1.5 | Kiểm tra hiệu năng: draw call, số mesh, FPS | ⬜ todo | Đo trước/sau, đặt ngưỡng cảnh báo |
-| 1.6 | Xử lý resize làm méo composer/bloom | ⬜ todo | `composer.setSize` chưa được gọi khi đổi kích thước cửa sổ |
+| 1.6 | Xử lý resize làm méo composer/bloom | ✅ xong | `composer.setSize` + `setPixelRatio` trong handler resize |
 
 ## 2. Bộ test an toàn (chỉ THÊM, không nới lỏng)
 
@@ -34,10 +34,10 @@ Mỗi mục hoàn tất → gạch đầu và ghi kết quả vào `LOG.md`.
 | 3.2 | Cây xanh trong chậu + đèn sàn | ✅ xong | `assets/props.ts` (port từ `my-office/terrace.js`, `plants-lamps.js`) |
 | 3.3 | Ngoại cảnh 360°: skyline thành phố | ✅ xong | `assets/windows.ts` (port từ `my-office/windows.js`) |
 | 3.4 | Texture sàn ván gỗ / gạch | ✅ xong | `assets/floorTextures.ts` |
-| 3.5 | Tương phản & bảng màu vật liệu (đồ gỗ, tường, sàn) | 🔄 đang làm | Ảnh vẫn nhạt, cần tăng contrast vật liệu |
-| 3.6 | Nhân vật không bị bàn che khi camera nhìn chếch | 🔄 đang làm | Camera yaw ~0.12, pitch 0.52 — cần tinh chỉnh thêm |
-| 3.7 | Màn hình máy tính phát sáng theo trạng thái agent | ⬜ todo | Dùng `screenGlowColor` + PointLight gắn màn hình |
-| 3.8 | Đồ đạc chi tiết: quầy cà phê, tủ server, kệ sách | ⬜ todo | Tham khảo `my-office/src/office/world/props/*` |
+| 3.5 | Tương phản & bảng màu vật liệu (đồ gỗ, tường, sàn) | ✅ xong | Bảng màu đậm hơn trong `roomBuilder.ts` + `main.ts` |
+| 3.6 | Nhân vật không bị bàn che khi camera nhìn chếch | ✅ xong | Camera yaw 0.12, pitch 0.52; đồ đạc lùi sang bên |
+| 3.7 | Màn hình máy tính phát sáng theo trạng thái agent | ✅ xong | `Screen.setStatus` — PointLight trước màn hình, màu theo trạng thái |
+| 3.8 | Đồ đạc chi tiết: quầy cà phê, tủ server, máy in | ✅ xong | `assets/officeProps.ts` — port từ `my-office/{coffee,server-racks,printer}.js` |
 | 3.9 | Vòng chuyển động ngày/đêm (mặt trời, đèn bật khi tối) | ⬜ todo | Repo tham khảo có `envDay`/`envNight` |
 | 3.10 | Bóng đổ đẹp hơn: contact shadow / SSAO | ⬜ todo | Cân nhắc `SSAO` pass của three.js |
 
@@ -49,8 +49,19 @@ Mỗi mục hoàn tất → gạch đầu và ghi kết quả vào `LOG.md`.
 | 4.2 | Nhật ký token hiển thị trong cảnh (bảng LED/bảng điện tử) | ⬜ todo | |
 | 4.3 | Hộp thoại xin quyền nổi 3D tại vị trí agent | ⬜ todo | |
 
-## 5. Thư viện Tri thức + giờ học tự động
+## 4. Nhân viên đi lại (port từ `my-office/people/*`)
 
+| # | Mục | Trạng thái | Ghi chú |
+|---|-----|-----------|---------|
+| 4.1 | Lưới điều hướng + A* tìm đường | ✅ xong | `assets/agentNav.ts` — lưới 0.5 m, chặn tường phòng, rút gọn đường |
+| 4.2 | Máy trạng thái work → đi → nghỉ → về bàn | ✅ xong | `Walker` — 5 phase, animation `walk`/`coffee`/`board` |
+| 4.3 | Chỗ nghỉ: cà phê, bảng trực ca, máy in, bình nước | ✅ xong | `AMENITIES` — 11 chỗ trong 6 phòng |
+| 4.4 | Hàng chờ pha cà phê (mỗi người một lượt) | ⬜ todo | `my-office/breaks.js` — `joinCoffee`/`lineUp` |
+| 4.5 | Nhân viên dừng lại nói chuyện với nhau | ⬜ todo | `my-office/nhau.js` — nhóm ngẫu nhiên tụ lại |
+| 4.6 | Agent nhận việc mới → bỏ chỗ đang đi, quay về bàn | ⬜ todo | Hiện `walker.reset()` chưa được gọi khi đổi trạng thái |
+| 4.7 | Đường đi tránh bàn/ghế (vật cản nội thất) | ⬜ todo | Hiện chỉ chặn tường, chưa chặn đồ đạc trong phòng |
+
+## 5. Thư viện Tri thức + giờ học tự động
 | # | Mục | Trạng thái | Ghi chú |
 |---|-----|-----------|---------|
 | 5.1 | Ghi bài học từ mỗi chu kỳ vào thư viện | ⬜ todo | |

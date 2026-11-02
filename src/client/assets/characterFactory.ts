@@ -72,7 +72,7 @@ function makeRing(color: number): THREE.Mesh {
 }
 
 /** Chibi dùng pose nào cho trạng thái này. */
-function chibiAnimFor(status: AgentStatus): ChibiAnim {
+export function chibiAnimFor(status: AgentStatus): ChibiAnim {
   switch (status) {
     case "working":
       return "type";

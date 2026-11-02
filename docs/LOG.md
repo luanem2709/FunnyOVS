@@ -6,6 +6,52 @@ Quy ước ước tính token: `~<số>` = số token ước tính đã dùng tr
 
 ---
 
+## 2026-11-02 — Chu kỳ 2: Nhân viên đi lại + đồ đạc chi tiết
+
+**Nhánh:** `auto/2026-11-02-van-phong-3d` (tiếp nối chu kỳ 1)
+
+### Đã làm
+
+| Hạng mục | Nội dung |
+|---------|----------|
+| Lưới điều hướng | `src/client/assets/agentNav.ts` — `NavGrid`: lưới ô 0.5 m, vật cản là tường phòng (phình thêm bán kính người 0.36 m), A* 8 hướng với heuristic Chebyshev, rút gọn đường bằng string pulling. |
+| Máy trạng thái đi lại | `Walker` — 5 phase: `work` → `leaving` → `walking` → `acting` → `returning`. Tốc độ 1.15 m/s, thời gian ngồi ngẫu nhiên 18–55 s (lệch pha theo từng agent). |
+| Chỗ nghỉ | `AMENITIES` — 11 chỗ trong 6 phòng: quầy cà phê (Tự động), bảng trực ca (Marketing), máy in (Khách hàng + Tự động), bình nước (5 phòng). Gắn toạ độ tuyệt đối qua `bindAmenities()`. |
+| Tích hợp 3D | `main.ts` → `updateWalkers()`: nhân vật xoay theo hướng đi, đổi pose `walk` khi đi, `coffee`/`board`/`read` khi làm việc ở chỗ đến, ngồi lại đúng chỗ bàn khi về. |
+| Đồ đạc chi tiết | `src/client/assets/officeProps.ts` — quầy cà phê (tủ + máy pha espresso + cốc + bánh), tủ server (LED `InstancedMesh` + quạt quay), vách kính, máy in, bảng trực ca ghim ý tưởng. Gắn theo chức năng phòng: AI → tủ server, Tự động → quầy cà phê, Marketing → bảng, Khách hàng → máy in. |
+| Sửa lỗi hình ảnh | Bỏ `Fog` (hòa mọi vật vào màu trời → cảnh trắng xóa), giới hạn sàn chung trong vòng skyline (bán kính 25.5), bảng màu vật liệu đậm hơn. |
+| Sửa lỗi resize | `composer.setSize` + `setPixelRatio` khi đổi kích thước cửa sổ. |
+| Màn hình phát sáng | `Screen.setStatus()` — PointLight trước màn hình, màu theo trạng thái agent, cường độ cao hơn khi đang làm việc. |
+| Test | `tests/nav.test.ts` — 13 test: chặn tường, phình vật cản, A* giữa 2 phòng, đường không đi qua ô chặn, đường kết thúc đúng đích, đích không tới được, `nearestFree`, đủ 5 phase, vị trí thay đổi, về đúng bàn, `reset()`. |
+
+### Kết quả
+
+- `tsc --noEmit`: sạch.
+- `vitest run`: **68/68 pass** (nav 13, budget 23, safety 32).
+- `scripts/check-walk.ts`: cả 8 nhân viên đều đi (dịch chuyển 1.8–7.6 m), tới chỗ nghỉ rồi quay lại bàn.
+- Ảnh: `docs/shots/walk-check.png`.
+
+### Bài học
+
+1. **Truyền object copy vào hàm cập nhật vị trí → nhân viên đứng yên.** `walker.update({x, z}, ...)` nhận object mới mỗi khung hình nên `step()` sửa toạ độ trên object tạm, không phải trên `visual.root.position`. Phải truyền thẳng `THREE.Vector3`.
+2. **`requestAnimationFrame` rất dễ mất khi sửa code bằng tìm–thay thế.** Một lần thay chuỗi đã xoá dòng `requestAnimationFrame(animate)` → cảnh đứng hình, nhân viên không chuyển động mà không có lỗi console nào. Bài học: sau mỗi lần sửa `animate()`, kiểm tra lại vòng lặp có tự gọi lại không.
+3. **Đo đạc trước khi sửa tiếp.** `scripts/diag-nav.ts` cho thấy A* tìm được đường tới 11/11 chỗ nghỉ cho mọi nhân viên → biết ngay lỗi không nằm ở thuật toán tìm đường mà ở chỗ khác.
+4. **Ảnh PNG hiển thị trong công cụ xem ảnh bị hạt/mờ.** Chuyển sang JPEG hoặc crop vùng cần xem mới kiểm tra được chi tiết thật.
+
+### Token ước tính
+
+`~78k`
+
+### Việc tiếp theo
+
+- 4.6: `walker.reset()` khi agent nhận việc mới.
+- 4.7: đường đi tránh bàn/ghế.
+- 4.4: hàng chờ pha cà phê.
+- 1.5: đo hiệu năng (draw call, FPS).
+- 1.4: test đầu-cuối chuỗi giao việc.
+
+---
+
 ## 2026-11-02 — Chu kỳ 1: Nâng cấp 3D theo `references/my-office`
 
 **Nhánh:** `auto/2026-11-02-van-phong-3d` (không commit vào `main`)

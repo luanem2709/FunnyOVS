@@ -33,7 +33,15 @@ export type ChibiAnim =
   | "wave"
   | "think"
   | "sweat"
-  | "walk";
+  | "walk"
+  /** Uống cà phê (đi nghỉ ở quầy cà phê). */
+  | "coffee"
+  /** Xem bảng trực ca / viết bảng. */
+  | "board"
+  /** Nói chuyện / cười. */
+  | "laugh"
+  /** Vẫy tay chào. */
+  | "toast";
 
 /** Bảng màu áo cho 8 agent — màu tương phản, dễ nhận dạng từ xa. */
 export const SHIRT_COLORS = [

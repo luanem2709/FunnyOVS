@@ -17,6 +17,10 @@ import { skylineRing } from "./assets/windows.js";
 import { WallCuller } from "./assets/wallCulling.js";
 import { FocusManager } from "./assets/focusMode.js";
 import { floorTextureFor, woodFloorTexture } from "./assets/floorTextures.js";
+import { AMENITIES, NavGrid, Walker, bindAmenities } from "./assets/agentNav.js";
+import { chibiAnimFor } from "./assets/characterFactory.js";
+import { setChibiAnim, type ChibiAnim } from "./assets/chibi.js";
+import { signatureProp, updateProps } from "./assets/officeProps.js";
 import { buildFurniture, deskLayout, propLayout, DESK_TOP_Y } from "./assets/roomBuilder.js";
 import {
   createAgentVisual,
@@ -228,6 +232,15 @@ const wallCuller = new WallCuller();
 
 // Chế độ tập trung: mờ các phòng khác khi người dùng chọn một phòng.
 const focusManager = new FocusManager();
+
+/** Group của từng phòng (dùng để cập nhật đồ đạc động). */
+const roomGroups = new Map<string, THREE.Group>();
+
+/**
+ * Lưới điều hướng cho nhân viên đi lại.
+ * Tường phòng được thêm vào khi dựng phòng (xem buildRoom).
+ */
+const navGrid = new NavGrid(-26, -26, 26, 26);
 
 // Sàn chung — chỉ trải trong lòng vòng skyline (bán kính 26), không kéo dài
 // vô hạn ra tới tầm ngắm: sàn trải xa sẽ bị fog hòa vào màu trời và làm cảnh
@@ -469,6 +482,10 @@ function buildRoom(dept: Department): void {
   // Cây xanh + đèn sàn cho phòng (port từ repo tham khảo).
   furnishRoom(room, size.w, size.d, hashSeed(dept.id));
 
+  // Đồ đạc đặc trưng theo chức năng phòng (tủ server, quầy cà phê, bảng trực ca).
+  const signature = signatureProp(dept.id, size.w, size.d);
+  if (signature) room.add(signature);
+
   // Đồ đạc trong phòng.
   for (const p of dept.props as string[]) {
     const placements = propLayout(p as never, size.w, size.d);
@@ -477,6 +494,13 @@ function buildRoom(dept: Department): void {
   }
 
   focusManager.register(dept.id, room);
+  roomGroups.set(dept.id, room);
+
+  // Ghi tường vào lưới điều hướng để nhân viên không đi xuyên tường.
+  // Mỗi phòng có tường ở 3 mặt (trừ mặt trước +Z là cửa).
+  navGrid.addBlocker(center.x - size.w / 2, center.z - size.d / 2, center.x + size.w / 2, center.z - size.d / 2 + 0.16);
+  navGrid.addBlocker(center.x - size.w / 2, center.z - size.d / 2, center.x - size.w / 2 + 0.16, center.z + size.d / 2);
+  navGrid.addBlocker(center.x + size.w / 2 - 0.16, center.z - size.d / 2, center.x + size.w / 2, center.z + size.d / 2);
 }
 
 /** Hạt ngẫu nhiên ổn định từ chuỗi (để cây/đồ trang trí khác nhau theo phòng). */
@@ -637,6 +661,8 @@ interface AgentRecord {
   state: AgentState;
   visual: AgentVisual;
   screen: Screen;
+  /** Máy trạng thái đi lại (đi nghỉ rồi quay lại bàn). */
+  walker: Walker;
 }
 const agents = new Map<string, AgentRecord>();
 const rooms = new Map<string, Department>();
@@ -657,6 +683,9 @@ function setupRooms(list: Department[]): void {
     rooms.set(d.id, d);
     buildRoom(d);
   }
+  // Đã biết hết tường → nướng lưới điều hướng và gắn toạ độ các chỗ nghỉ.
+  navGrid.bake();
+  bindAmenities(AMENITIES, [...rooms.values()]);
   renderRoomNav();
 }
 
@@ -700,7 +729,13 @@ function setupAgents(list: AgentState[]): void {
     scene.add(screen.mesh);
     scene.add(screen.glow);
     screen.setStatus(a.status);
-    agents.set(a.id, { state: a, visual, screen });
+    // Mỗi nhân viên có máy trạng thái đi lại riêng.
+    const walker = new Walker({ x: a.position.x, z: a.position.z }, {
+      // Lệch pha để 8 nhân viên không đi cùng lúc.
+      workMin: 14 + index * 4,
+      workMax: 46 + index * 7,
+    });
+    agents.set(a.id, { state: a, visual, screen, walker });
     updateAgentTag(a);
   }
 }
@@ -775,6 +810,32 @@ function applyStatus(a: AgentState): void {
 
 /** Hook kiểm thử: đổi trạng thái agent ngay trong scene. */
 (window as any).__agents = agents;
+// Hook kiểm thử: ép nhân viên đi ngay (để chụp ảnh kiểm tra đường đi).
+(window as any).__forceWalk = (): void => {
+  for (const rec of agents.values()) rec.walker.timer = 0;
+};
+// Hook kiểm thử: vị trí + phase hiện tại của nhân viên.
+(window as any).__walkerInfo = (): unknown[] =>
+  [...agents.values()].map((r) => ({
+    id: r.state.id,
+    phase: r.walker.phase,
+    x: +r.visual.root.position.x.toFixed(2),
+    z: +r.visual.root.position.z.toFixed(2),
+    target: r.walker.target?.kind ?? null,
+    pathLen: r.walker.path.length,
+  }));
+// Hook kiểm thử: thử tính đường từ bàn của nhân viên tới từng chỗ nghỉ.
+(window as any).__navDebug = (): unknown[] => {
+  const out: unknown[] = [];
+  for (const rec of agents.values()) {
+    const results = AMENITIES.map((am) => {
+      const path = navGrid.findPath(rec.walker.home, { x: am.x, z: am.z });
+      return { kind: am.kind, room: am.room, ok: !!path, len: path?.length ?? 0 };
+    });
+    out.push({ id: rec.state.id, home: rec.walker.home, results });
+  }
+  return out;
+};
 (window as any).__applyStatus = applyStatus;
 (window as any).__scene = scene;
 (window as any).__camera = camera;
@@ -881,6 +942,61 @@ canvas.addEventListener("click", (e) => {
   }
 });
 
+/**
+ * Cập nhật đi lại cho tất cả nhân viên.
+ *
+ * Nhân viên đang làm việc thì ngồi tại bàn. Sau một khoảng ngẫu nhiên, họ đứng
+ * dậy, đi tới một chỗ nghỉ (quầy cà phê, bảng trực ca, máy in, bình nước),
+ * đứng lại ở đó một lúc rồi quay lại bàn. Animation đi kèm: `walk` khi đi,
+ * `coffee`/`board`/`read` khi làm việc ở chỗ đến.
+ */
+function updateWalkers(): void {
+  for (const rec of agents.values()) {
+    const { walker, visual } = rec;
+    const p = visual.root.position;
+    // Truyền thẳng vector vị trí để `step()` cập nhật được toạ độ thật
+    // (truyền object copy sẽ khiến nhân viên đứng yên tại chỗ).
+    const { changed, facing } = walker.update(p, navGrid, AMENITIES);
+
+    // Đang đi → xoay nhân vật theo hướng đi và dùng pose `walk`.
+    if (facing !== null) {
+      // Nhân vật mặt về +Z ở tư thế ngồi; khi đi cần xoay về hướng đi.
+      visual.root.rotation.y = facing;
+    }
+
+    const walking = walker.phase === "walking" || walker.phase === "returning";
+    if (visual.chibi) {
+      visual.chibi.sit = !walking && walker.phase !== "leaving" && walker.phase !== "acting";
+      if (walking) {
+        setChibiAnim(visual.chibi, "walk");
+      } else if (changed && walker.phase === "acting") {
+        setChibiAnim(visual.chibi, errandAnim(walker.target?.kind));
+      } else if (changed && walker.phase === "work") {
+        // Quay lại bàn → trở về pose theo trạng thái công việc.
+        setChibiAnim(visual.chibi, chibiAnimFor(rec.state.status as AgentStatus));
+      }
+    }
+
+    // Khi ngồi lại bàn, phải đúng chỗ (đường về có thể lệch vài cm).
+    if (walker.phase === "work") {
+      p.x += (walker.home.x - p.x) * 0.25;
+      p.z += (walker.home.z - p.z) * 0.25;
+    }
+  }
+}
+
+/** Animation phù hợp với loại việc nhân viên đi làm. */
+function errandAnim(kind: string | undefined): ChibiAnim {
+  switch (kind) {
+    case "coffee":
+      return "coffee" as ChibiAnim;
+    case "board":
+      return "board" as ChibiAnim;
+    default:
+      return "read";
+  }
+}
+
 function animate(): void {
   requestAnimationFrame(animate);
   const t = performance.now() / 1000;
@@ -895,7 +1011,8 @@ function animate(): void {
   wallCuller.update(camera, target, agentPositions());
   focusManager.update(1 / 60);
 
-  for (const { visual, state } of agents.values()) {
+  for (const rec of agents.values()) {
+    const { visual, state } = rec;
     updateAgentVisual(visual, 1 / 60);
     const ring = visual.ring;
     const pulse =
@@ -904,6 +1021,13 @@ function animate(): void {
         : 0.85;
     (ring.material as THREE.MeshBasicMaterial).opacity = pulse;
   }
+
+  // Nhân viên đi lại: làm việc ở bàn → đi nghỉ → quay lại bàn.
+  updateWalkers();
+
+  // Quạt tủ server quay, đồ đạc động.
+  for (const room of roomGroups.values()) updateProps(room, t);
+
   pipeline.render(1 / 60);
 }
 animate();
