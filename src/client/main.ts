@@ -1561,9 +1561,10 @@ const LEVEL_TEXT: Record<string, string> = {
 };
 
 async function renderExecutor(): Promise<void> {
-  const [level, logData] = await Promise.all([
+  const [level, logData, trash] = await Promise.all([
     api<typeof executorLevel>("/api/executor/level"),
     api<{ entries: any[]; total: number; chain: any }>("/api/executor/log?limit=200"),
+    api<{ items: any[] }>("/api/executor/trash"),
   ]);
   executorLevel = level;
 
@@ -1589,6 +1590,27 @@ async function renderExecutor(): Promise<void> {
     </div>
     ${e.error ? `<div class="meta" style="color:#ff8a8a">${esc(e.error)}</div>` : ""}
     ${e.params ? `<div class="meta">${esc(Object.entries(e.params).map(([k, v]) => `${k}=${v}`).join(" · "))}</div>` : ""}
+  </div>`,
+    )
+    .join("");
+
+  const trashHtml = trash.items
+    .map(
+      (t) => `<div class="item">
+    <h4>${esc(t.name)}</h4>
+    <div class="meta">
+      <span class="badge ${t.restored ? "ok" : "warn"}">${t.restored ? "đã khôi phục" : "trong thùng rác"}</span>
+      ${(t.size / 1024).toFixed(1)} KB · ${new Date(t.ts).toLocaleString("vi-VN")}
+    </div>
+    <div class="meta" style="word-break:break-all">${esc(t.original)}</div>
+    ${
+      t.restored
+        ? ""
+        : `<div class="row">
+      <button class="act" onclick="restoreTrash('${t.id}')">Khôi phục</button>
+      <button class="act danger" onclick="purgeTrash('${t.id}')">Dọn vĩnh viễn</button>
+    </div>`
+    }
   </div>`,
     )
     .join("");
@@ -1619,7 +1641,10 @@ async function renderExecutor(): Promise<void> {
       ${logData.total} hành động ·
       ${chainOk ? '<span class="badge ok">chuỗi hash toàn vẹn</span>' : '<span class="badge danger">CHUỖI HASH BỊ HỎNG</span>'}
     </div>
-    ${entries || "<p>Chưa có hành động nào.</p>"}`;
+    ${entries || "<p>Chưa có hành động nào.</p>"}
+
+    <h3>🗑 Thùng rác (xóa = khôi phục được)</h3>
+    ${trashHtml || "<p>Thùng rác trống.</p>"}`;
 }
 
 async function startFullConfirm(): Promise<void> {
@@ -1675,6 +1700,46 @@ async function clearTaint(): Promise<void> {
   await api("/api/executor/taint", { method: "POST", body: { clear: true } });
   toast("Đã xóa cờ nhiễm.");
   await renderExecutor();
+}
+
+// ---------------- GĐ 5: Thùng rác & overlay ----------------
+async function restoreTrash(id: string): Promise<void> {
+  const r = await api<any>("/api/executor/trash/restore", { method: "POST", body: { id } });
+  toast(r.ok ? `Đã khôi phục: ${r.path}` : "Khôi phục lỗi: " + r.error, r.ok ? "info" : "danger");
+  await renderExecutor();
+}
+
+async function purgeTrash(id: string): Promise<void> {
+  if (!confirm("Dọn rác thật? Mục này sẽ bị xóa vĩnh viễn, KHÔNG khôi phục được.")) return;
+  const r = await api<any>("/api/executor/trash/purge", { method: "POST", body: { id } });
+  toast(r.ok ? "Đã dọn rác vĩnh viễn." : "Dọn rác lỗi: " + r.error, r.ok ? "info" : "danger");
+  await renderExecutor();
+}
+
+async function purgeTrashAll(): Promise<void> {
+  if (!confirm("Dọn TOÀN BỘ thùng rác? Mọi mục sẽ bị xóa vĩnh viễn.")) return;
+  const r = await api<any>("/api/executor/trash/purge", { method: "POST", body: { all: true } });
+  toast(r.ok ? `Đã dọn ${r.count} mục.` : "Dọn rác lỗi: " + r.error, r.ok ? "info" : "danger");
+  await renderExecutor();
+}
+
+async function abortInput(): Promise<void> {
+  await api("/api/executor/overlay/abort", { method: "POST" });
+  toast("Đã hủy thao tác.", "danger");
+}
+
+/** Overlay đèn báo khi Executor đang điều khiển chuột/bàn phím. */
+const inputOverlay = document.getElementById("input-overlay")!;
+const inputOverlayText = document.getElementById("io-text")!;
+document.getElementById("io-abort")!.addEventListener("click", () => void abortInput());
+
+function setInputOverlay(state: { active: boolean; action: string | null; aborted: boolean }): void {
+  if (state.active) {
+    inputOverlay.classList.remove("hidden");
+    inputOverlayText.textContent = state.action ?? "Đang thao tác…";
+  } else {
+    inputOverlay.classList.add("hidden");
+  }
 }
 
 // ---------------- Hộp thoại trong cảnh 3D ----------------
@@ -1895,6 +1960,9 @@ function connectWs(): void {
       case "executor:loop":
         if (panelKind === "executor") void openPanel("executor");
         break;
+      case "input:overlay":
+        setInputOverlay(data as { active: boolean; action: string | null; aborted: boolean });
+        break;
       case "injection":
         toast(
           `⚠ Phát hiện prompt injection tại ${(data as any).url} — đã bỏ qua, không làm theo.`,
@@ -1946,6 +2014,12 @@ win.disableFull = disableFull;
 win.setGrantedLevel = setGrantedLevel;
 win.markTaint = markTaint;
 win.clearTaint = clearTaint;
+
+// --- GĐ 5: Thùng rác ---
+win.restoreTrash = restoreTrash;
+win.purgeTrash = purgeTrash;
+win.purgeTrashAll = purgeTrashAll;
+win.abortInput = abortInput;
 
 win.assignTask = async (agentId: string, department: string) => {
   await openPanel("department", department);

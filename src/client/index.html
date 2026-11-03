@@ -68,6 +68,15 @@
       <!-- Hộp thoại xin duyệt tác vụ tốn nhiều token -->
       <div id="approval-dialog" class="perm-dialog hidden"></div>
 
+      <!-- GĐ 5: Overlay đèn báo khi Executor điều khiển chuột/bàn phím -->
+      <div id="input-overlay" class="input-overlay hidden">
+        <div class="io-box">
+          <div class="io-spinner"></div>
+          <div class="io-text" id="io-text">Đang thao tác…</div>
+          <button id="io-abort" class="io-abort">✋ HỦY KHẨN CẤP</button>
+        </div>
+      </div>
+
       <div id="toast-host"></div>
     </div>
     <script type="module" src="./main.ts"></script>

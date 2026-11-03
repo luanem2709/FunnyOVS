@@ -39,12 +39,17 @@ import { ActivityLog } from "./activity/activityLog.js";
 import { policyForLevel, type AutomationLevel } from "./automation/automationPolicy.js";
 import { loadLlmConfig } from "./llm.js";
 import { ActionLog } from "./executor/actionLog.js";
-import { Executor, type DeviceDriver } from "./executor/executor.js";
+import { Executor, deviceFromController, type DeviceDriver } from "./executor/executor.js";
 import { LoopGuard } from "./executor/loopGuard.js";
 import { planActions } from "./executor/planner.js";
 import { runActionLoop } from "./executor/actionLoop.js";
 import { ACTION_DOCS, PERMISSION_LABELS, type PermissionLevel } from "./executor/actionSchema.js";
 import { PermissionLevelManager, FULL_CONFIRM_PHRASE } from "./security/permissionLevel.js";
+import {
+  GuardedInputController,
+  PowerShellInputController,
+  RecordingInputController,
+} from "./executor/inputController.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..", "..");
@@ -103,9 +108,23 @@ const permLevel = new PermissionLevelManager((s) => {
   });
 });
 
-// Driver thiết bị: mặc định KHÔNG làm gì (an toàn khi phát triển).
-// Muốn bật thật thì cắm driver nut.js/robotjs vào đây.
-let deviceDriver: DeviceDriver | undefined;
+// Driver thiết bị (GĐ 5): có "đèn báo" overlay + nút hủy khẩn cấp.
+// Mặc định dùng controller GHI LẠI (không đụng máy thật) — an toàn khi phát triển.
+// Muốn bật thật: đặt OFFICE_INPUT_REAL=1 (chỉ nên dùng khi đang ở Cấp 3).
+const inputReal = process.env.OFFICE_INPUT_REAL === "1";
+const inputController = new GuardedInputController(
+  inputReal ? new PowerShellInputController() : new RecordingInputController(),
+);
+inputController.on("overlay", (o) => broadcast("input:overlay", o));
+inputController.on("aborted", () => {
+  activity.record({
+    kind: "emergency",
+    actor: "bạn",
+    message: "Đã hủy thao tác chuột/bàn phím khẩn cấp.",
+    level: "danger",
+  });
+});
+let deviceDriver: DeviceDriver | undefined = deviceFromController(inputController);
 
 const executor = new Executor({
   workspace: config.workspace,
@@ -625,6 +644,57 @@ app.post("/api/executor/taint", (req, res) => {
   res.json(clear ? permLevel.clearTaint() : permLevel.markTainted(source ?? "nội dung không tin cậy"));
 });
 
+// --- GĐ 5: Thùng rác (xóa = khôi phục được) ---
+app.get("/api/executor/trash", (_req, res) => {
+  const items = executor.trash.list();
+  res.json({
+    items: items.map((i) => ({
+      id: i.id,
+      name: i.name,
+      original: i.original,
+      trashed: i.trashed,
+      ts: i.ts,
+      size: i.size,
+      restored: i.restored,
+    })),
+  });
+});
+
+// Khôi phục một mục từ thùng rác về vị trí cũ.
+app.post("/api/executor/trash/restore", async (req, res) => {
+  const { id } = req.body as { id: string };
+  const r = await executor.trash.restore(id);
+  res.status(r.ok ? 200 : 400).json(r);
+});
+
+// Dọn rác THẬT (không khôi phục được) — cần xác nhận.
+app.post("/api/executor/trash/purge", async (req, res) => {
+  const { id, all } = req.body as { id?: string; all?: boolean };
+  const r = all ? await executor.trash.purgeAll() : await executor.trash.purge(id ?? "");
+  res.status(r.ok ? 200 : 400).json(r);
+});
+
+// --- GĐ 5: Overlay điều khiển chuột/bàn phím + hủy khẩn cấp ---
+app.get("/api/executor/overlay", (_req, res) => res.json(inputController.overlayState));
+
+// Hủy thao tác chuột/bàn phím đang chạy (nút hủy khẩn cấp trên overlay).
+app.post("/api/executor/overlay/abort", (_req, res) => {
+  inputController.abort();
+  activity.record({
+    kind: "emergency",
+    actor: "bạn",
+    message: "Đã hủy thao tác chuột/bàn phím.",
+    level: "danger",
+  });
+  res.json(inputController.overlayState);
+});
+
+// Bật lại sau khi hủy.
+app.post("/api/executor/overlay/reset", (_req, res) => {
+  inputController.reset();
+  res.json(inputController.overlayState);
+});
+
 // Nhật ký hành động (chỉ ghi thêm) — màn hình xem lại.
 app.get("/api/executor/log", (req, res) => {
   const limit = Math.min(1000, Number((req.query.limit as string) ?? 200));
@@ -982,6 +1052,16 @@ app.post("/api/emergency-stop", (_req, res) => {
         kind: "emergency",
         actor: "hệ thống",
         message: `Đã kill ${killed} cây tiến trình của Executor.`,
+        level: "danger",
+      });
+    }
+    // Hủy mọi thao tác chuột/bàn phím đang chạy.
+    if (inputController.overlayState.active) {
+      inputController.abort();
+      activity.record({
+        kind: "emergency",
+        actor: "hệ thống",
+        message: "Đã hủy thao tác chuột/bàn phím.",
         level: "danger",
       });
     }

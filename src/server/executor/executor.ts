@@ -36,6 +36,12 @@ import { LoopGuard, type LoopGuardOptions } from "./loopGuard.js";
 import { runPowerShell, killProcessTree, type RunResult } from "./powerShell.js";
 import { checkPath, isWithin, workspaceRoot } from "../sandbox/pathGuard.js";
 import { evaluateUrl, DEFAULT_POLICY } from "../browser/policy.js";
+import { TrashBin } from "./trashBin.js";
+import {
+  RecordingInputController,
+  type InputController,
+  type Screenshot,
+} from "./inputController.js";
 
 export interface ExecResult {
   ok: boolean;
@@ -85,6 +91,25 @@ export const NOOP_DEVICE: DeviceDriver = {
     throw new Error("Chưa cài driver chụp màn hình.");
   },
 };
+
+/** Adapter: dùng InputController (có overlay) làm DeviceDriver. */
+export function deviceFromController(controller: InputController): DeviceDriver {
+  return {
+    async click(x, y, button, clicks) {
+      await controller.click(x, y, button, clicks);
+    },
+    async typeText(text) {
+      await controller.typeText(text);
+    },
+    async keyPress(key, modifiers) {
+      await controller.keyPress(key, modifiers);
+    },
+    async screenshot(region) {
+      const s: Screenshot = await controller.screenshot(region);
+      return { mimeType: s.mimeType, base64: s.base64 };
+    },
+  };
+}
 
 /** Kết quả kiểm tra quyền trước khi chạy. */
 export type Precheck =
@@ -191,6 +216,7 @@ export class Executor {
   private readonly workspace: string;
   private readonly device: DeviceDriver;
   private readonly trashDir: string;
+  private readonly trashBin: TrashBin;
   /** Các tiến trình đang chạy (để Dừng khẩn cấp kill được). */
   private running = new Map<string, number>();
 
@@ -198,6 +224,7 @@ export class Executor {
     this.workspace = deps.workspace ?? workspaceRoot();
     this.device = deps.device ?? NOOP_DEVICE;
     this.trashDir = deps.trashDir ?? path.join(this.workspace, ".trash");
+    this.trashBin = new TrashBin(this.trashDir);
   }
 
   /**
@@ -637,28 +664,16 @@ export class Executor {
   }
 
   /**
-   * Chuyển file/thư mục vào Thùng rác (không xóa hẳn).
-   * Ghi lại manifest để có thể khôi phục.
+   * Chuyển file/thư mục vào Thùng rác (không xóa hẳn — có thể khôi phục).
    */
   private async toTrash(abs: string): Promise<string> {
-    if (!existsSync(abs)) return abs;
-    await fs.mkdir(this.trashDir, { recursive: true });
-    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-    const base = path.basename(abs);
-    const dest = path.join(this.trashDir, `${stamp}__${base}`);
-    await fs.rename(abs, dest).catch(async () => {
-      // Khác ổ đĩa → copy + xóa.
-      await fs.cp(abs, dest, { recursive: true });
-      await fs.rm(abs, { recursive: true, force: true });
-    });
-    // Manifest để khôi phục.
-    const manifestPath = path.join(this.trashDir, "index.jsonl");
-    await fs.appendFile(
-      manifestPath,
-      JSON.stringify({ ts: new Date().toISOString(), original: abs, trashed: dest }) + "\n",
-      "utf8",
-    );
-    return dest;
+    const dest = await this.trash.move(abs);
+    return dest ?? abs;
+  }
+
+  /** Thùng rác (để UI liệt kê + khôi phục). */
+  get trash(): TrashBin {
+    return this.trashBin;
   }
 
   /** Đường dẫn tuyệt đối đã chuẩn hóa, luôn nằm trong workspace. */

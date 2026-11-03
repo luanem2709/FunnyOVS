@@ -121,3 +121,21 @@ label { display: block; margin: 10px 0 4px; color: var(--muted); font-size: 12px
 .toast { background: var(--panel); border-left: 3px solid var(--accent); padding: 10px 14px; border-radius: 6px; font-size: 12px; max-width: 380px; }
 .toast.warn { border-left-color: var(--warn); }
 .toast.danger { border-left-color: var(--danger); }
+
+/* GĐ 5 — Overlay đèn báo khi Executor điều khiển chuột/bàn phím */
+.input-overlay { position: absolute; inset: 0; z-index: 60; display: flex;
+  align-items: center; justify-content: center; pointer-events: none;
+  background: radial-gradient(circle at center, rgba(248,81,73,.10), rgba(0,0,0,.55)); }
+.input-overlay .io-box { pointer-events: auto; background: var(--panel);
+  border: 2px solid var(--danger); border-radius: 12px; padding: 22px 30px; text-align: center;
+  box-shadow: 0 0 40px rgba(248,81,73,.4); animation: ioIn .16s ease-out; }
+@keyframes ioIn { from { transform: scale(.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.input-overlay .io-spinner { width: 34px; height: 34px; margin: 0 auto 12px;
+  border: 3px solid rgba(248,81,73,.25); border-top-color: var(--danger);
+  border-radius: 50%; animation: ioSpin .8s linear infinite; }
+@keyframes ioSpin { to { transform: rotate(360deg); } }
+.input-overlay .io-text { font-size: 14px; font-weight: 600; margin-bottom: 14px; }
+.input-overlay .io-abort { background: var(--danger); color: #fff; border: none; border-radius: 8px;
+  padding: 11px 20px; font-size: 13px; font-weight: 700; cursor: pointer;
+  box-shadow: 0 0 0 3px rgba(248,81,73,.25); }
+.input-overlay .io-abort:hover { background: #ff6b63; }
