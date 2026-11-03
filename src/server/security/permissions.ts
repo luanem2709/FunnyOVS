@@ -297,6 +297,21 @@ export class PermissionManager extends EventEmitter {
     return req;
   }
 
+  /**
+   * Tạo yêu cầu duyệt cho một hành động KHÔNG gắn với đường dẫn
+   * (chạy lệnh, điều khiển chuột/bàn phím, việc khó hoàn tác…).
+   *
+   * Không dùng `check()` vì hành động này không có đường dẫn để so sánh.
+   */
+  requestApproval(opts: {
+    agentId: string;
+    agentName: string;
+    label: string;
+    purpose: string;
+  }): AccessRequest {
+    return this.createRequest(opts.agentId, opts.agentName, opts.label, "execute", opts.purpose);
+  }
+
   listPending(): AccessRequest[] {
     return [...this.pending.values()].filter((r) => r.status === "pending");
   }

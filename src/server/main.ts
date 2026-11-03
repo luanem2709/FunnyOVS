@@ -38,6 +38,13 @@ import { TaskRunner } from "./tasks/taskRunner.js";
 import { ActivityLog } from "./activity/activityLog.js";
 import { policyForLevel, type AutomationLevel } from "./automation/automationPolicy.js";
 import { loadLlmConfig } from "./llm.js";
+import { ActionLog } from "./executor/actionLog.js";
+import { Executor, type DeviceDriver } from "./executor/executor.js";
+import { LoopGuard } from "./executor/loopGuard.js";
+import { planActions } from "./executor/planner.js";
+import { runActionLoop } from "./executor/actionLoop.js";
+import { ACTION_DOCS, PERMISSION_LABELS, type PermissionLevel } from "./executor/actionSchema.js";
+import { PermissionLevelManager, FULL_CONFIRM_PHRASE } from "./security/permissionLevel.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "..", "..");
@@ -80,6 +87,74 @@ for (const row of ledger.totalsByAgent()) {
   registry.update(row.agentId, { tokensUsed: row.tokens, tasksDone: row.calls });
 }
 const activity = new ActivityLog();
+
+// ---- GĐ 4: Executor + 3 cấp quyền ----
+// Nhật ký hành động CHỈ GHI THÊM (append-only) + chuỗi hash chống sửa file.
+const actionLog = new ActionLog(path.join(DATA_DIR, "action-log.jsonl"));
+
+// Quản lý 3 cấp quyền (Sandbox / Được cấp / Toàn quyền).
+const permLevel = new PermissionLevelManager((s) => {
+  broadcast("perm:level", { ...s, remainingSeconds: permLevel.remainingSeconds() });
+  activity.record({
+    kind: "permission",
+    actor: "hệ thống",
+    message: `Cấp quyền: ${PERMISSION_LABELS[s.level]}`,
+    level: s.level === "full" ? "danger" : "info",
+  });
+});
+
+// Driver thiết bị: mặc định KHÔNG làm gì (an toàn khi phát triển).
+// Muốn bật thật thì cắm driver nut.js/robotjs vào đây.
+let deviceDriver: DeviceDriver | undefined;
+
+const executor = new Executor({
+  workspace: config.workspace,
+  log: actionLog,
+  device: deviceDriver,
+  getLevel: () => permLevel.level(),
+  isTainted: () => permLevel.isTainted(),
+  trashDir: path.join(config.workspace, ".trash"),
+  // Hỏi người dùng: tạo yêu cầu duyệt 4 lựa chọn rồi chờ quyết định.
+  askUser: async (action, reason) => {
+    const req = perms.requestApproval({
+      agentId: "executor",
+      agentName: "Executor",
+      label: action.type,
+      purpose: `${reason} — ${action.description}`,
+    });
+    broadcast("perm:request", req);
+    return await waitForDecision(req.id);
+  },
+  checkPathPermission: (agentId, target, need) => {
+    const res = perms.check({
+      agentId,
+      agentName: "Executor",
+      target,
+      reason: need,
+      purpose: "Executor thực thi hành động",
+    });
+    if (res.allowed) return { allowed: true };
+    if (res.needsRequest) return { allowed: false, reason: "Cần bạn cấp quyền cho đường dẫn này.", needsApproval: true };
+    return { allowed: false, reason: res.reason, needsApproval: false };
+  },
+});
+
+/** Chờ người dùng quyết định một yêu cầu quyền (tối đa 5 phút). */
+function waitForDecision(requestId: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      perms.off("decided", onDecided);
+      resolve(false);
+    }, 5 * 60 * 1000);
+    const onDecided = (r: { id: string; status: string }) => {
+      if (r.id !== requestId) return;
+      clearTimeout(timer);
+      perms.off("decided", onDecided);
+      resolve(r.status === "approved");
+    };
+    perms.on("decided", onDecided);
+  });
+}
 
 let emergencyStop = false;
 
@@ -506,6 +581,110 @@ app.post("/api/permissions/manual-unlock", (req, res) => {
   res.json(perms.manualUnlock(p));
 });
 
+// --- GĐ 4: Executor ---
+// Schema hành động (để LLM biết hợp đồng và để UI hiển thị).
+app.get("/api/executor/schema", (_req, res) =>
+  res.json({ actions: ACTION_DOCS, levels: PERMISSION_LABELS }),
+);
+
+// Cấp quyền hiện hành + taint + đếm ngược.
+app.get("/api/executor/level", (_req, res) =>
+  res.json({
+    ...permLevel.get(),
+    remainingSeconds: permLevel.remainingSeconds(),
+    taint: permLevel.taintState(),
+    running: executor.runningCount,
+  }),
+);
+
+// Bước 1 xác nhận Cấp 3: nhập cụm "TOAN QUYEN".
+app.post("/api/executor/level/request-full", (req, res) => {
+  const { phrase } = req.body as { phrase: string };
+  res.json(permLevel.requestFullAccess(phrase ?? ""));
+});
+
+// Bước 2: bật Cấp 3 với thời lượng (ms). 0 = không hết hạn.
+app.post("/api/executor/level/confirm-full", (req, res) => {
+  const { durationMs } = req.body as { durationMs: number };
+  res.json(permLevel.confirmFullAccess(Number(durationMs ?? 0)));
+});
+
+// Tắt Cấp 3 (quay về Sandbox).
+app.post("/api/executor/level/disable-full", (_req, res) => {
+  res.json(permLevel.disableFullAccess());
+});
+
+// Cấp 2: nâng lên "Được cấp" sau khi người dùng duyệt yêu cầu.
+app.post("/api/executor/level/granted", (_req, res) => {
+  res.json({ ok: true, state: permLevel.setGranted() });
+});
+
+// Taint: đánh dấu phiên bị nhiễm / làm sạch.
+app.post("/api/executor/taint", (req, res) => {
+  const { source, clear } = req.body as { source?: string; clear?: boolean };
+  res.json(clear ? permLevel.clearTaint() : permLevel.markTainted(source ?? "nội dung không tin cậy"));
+});
+
+// Nhật ký hành động (chỉ ghi thêm) — màn hình xem lại.
+app.get("/api/executor/log", (req, res) => {
+  const limit = Math.min(1000, Number((req.query.limit as string) ?? 200));
+  res.json({ entries: actionLog.list(limit), total: actionLog.size, chain: actionLog.verifyChain() });
+});
+
+// Chạy thử một hành động (dùng để kiểm thử + cho UI "thử").
+app.post("/api/executor/run", async (req, res) => {
+  const { action, agentId, agentName } = req.body as {
+    action: unknown;
+    agentId?: string;
+    agentName?: string;
+  };
+  const guard = new LoopGuard({ maxRepeats: 3, maxSteps: 20, maxDurationMs: 120_000 });
+  const r = await executor.execute(
+    agentId ?? "executor",
+    agentName ?? "Executor",
+    action,
+    guard,
+  );
+  broadcast("executor:result", r);
+  res.status(r.ok ? 200 : 403).json(r);
+});
+
+// LLM đề xuất hành động → Executor thực thi (vòng lặp có giới hạn).
+app.post("/api/executor/plan", async (req, res) => {
+  const { goal, context, agentId, agentName } = req.body as {
+    goal: string;
+    context?: string;
+    agentId?: string;
+    agentName?: string;
+  };
+  const plan = await planActions(goal, context ?? "", permLevel.isTainted());
+  res.json(plan);
+});
+
+// Chạy trọn vòng lặp: đề xuất → thực thi → phản hồi.
+app.post("/api/executor/loop", async (req, res) => {
+  const { goal, context, agentId, agentName } = req.body as {
+    goal: string;
+    context?: string;
+    agentId?: string;
+    agentName?: string;
+  };
+  const result = await runActionLoop(
+    agentId ?? "executor",
+    agentName ?? "Executor",
+    goal,
+    {
+      executor,
+      isTainted: () => permLevel.isTainted(),
+      guard: { maxRepeats: 3, maxSteps: 20, maxDurationMs: 180_000 },
+      maxTurns: 3,
+    },
+    context ?? "",
+  );
+  broadcast("executor:loop", result);
+  res.json(result);
+});
+
 // --- File an toàn (mọi đường đi qua GuardedFs) ---
 app.post("/api/files/read", async (req, res) => {
   const { agentId, agentName, path: p, purpose } = req.body as any;
@@ -796,6 +975,18 @@ app.post("/api/emergency-stop", (_req, res) => {
         tasks.cancel(t.id);
       }
     }
+    // Kill mọi lệnh Executor đang chạy (cả cây tiến trình con).
+    const killed = executor.killAll();
+    if (killed > 0) {
+      activity.record({
+        kind: "emergency",
+        actor: "hệ thống",
+        message: `Đã kill ${killed} cây tiến trình của Executor.`,
+        level: "danger",
+      });
+    }
+    // Tắt Cấp 3 (Toàn quyền) — dừng khẩn cấp phải hạ quyền.
+    if (permLevel.level() === "full") permLevel.disableFullAccess();
   } else {
     for (const a of registry.list()) {
       registry.setStatus(a.id, "idle");

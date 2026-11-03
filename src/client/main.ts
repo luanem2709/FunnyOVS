@@ -1332,6 +1332,12 @@ async function openPanel(name: string, arg?: string): Promise<void> {
       await renderPermissions();
       break;
 
+    case "executor": {
+      panelTitle.textContent = "Executor — cấp quyền & màn hình xem lại";
+      await renderExecutor();
+      break;
+    }
+
     case "proposals": {
       panelTitle.textContent = "Đề xuất thay đổi (cần bạn duyệt)";
       const list = await api<Proposal[]>("/api/proposals");
@@ -1527,6 +1533,148 @@ async function renderPermissions(): Promise<void> {
     `<div class="row" style="margin-bottom:12px"><button class="act danger" onclick="revokeAll()">Thu hồi tất cả quyền</button></div>
      <h3>Quyền đang cấp</h3>${grants || "<p>Chưa có quyền nào.</p>"}
      <h3>Nhật ký truy cập</h3>${logs || "<p>Chưa có log.</p>"}`;
+}
+
+// ---------------- Executor: cấp quyền + màn hình xem lại ----------------
+/** Trạng thái cấp quyền Executor (cache để hiển thị nhanh). */
+let executorLevel: {
+  level: string;
+  remainingSeconds: number;
+  fullExpiresAt: number | null;
+  taint: { tainted: boolean; source: string | null };
+  running: number;
+} = {
+  level: "sandbox",
+  remainingSeconds: 0,
+  fullExpiresAt: null,
+  taint: { tainted: false, source: null },
+  running: 0,
+};
+
+/** Bước xác nhận Cấp 3 hiện tại (null = chưa nhập cụm). */
+let fullConfirmStep = 0;
+
+const LEVEL_TEXT: Record<string, string> = {
+  sandbox: "🛡 Cấp 1 — Sandbox (mặc định)",
+  granted: "🔑 Cấp 2 — Được cấp",
+  full: "⚡ Cấp 3 — Toàn quyền",
+};
+
+async function renderExecutor(): Promise<void> {
+  const [level, logData] = await Promise.all([
+    api<typeof executorLevel>("/api/executor/level"),
+    api<{ entries: any[]; total: number; chain: any }>("/api/executor/log?limit=200"),
+  ]);
+  executorLevel = level;
+
+  const tainted = level.taint?.tainted;
+  const countDown =
+    level.level === "full" && level.remainingSeconds > 0
+      ? ` · còn ${Math.floor(level.remainingSeconds / 60)} phút ${level.remainingSeconds % 60}s`
+      : level.level === "full"
+        ? " · không hết hạn"
+        : "";
+
+  const chainOk = logData.chain?.ok !== false;
+
+  const entries = logData.entries
+    .map(
+      (e) => `<div class="item">
+    <h4>${esc(e.description || e.type)}</h4>
+    <div class="meta">
+      <span class="badge ${e.ok ? "ok" : "danger"}">${esc(e.type)}</span>
+      <span class="badge ${e.level === "full" ? "danger" : e.level === "granted" ? "warn" : "info"}">${esc(e.level ?? "?")}</span>
+      ${e.tainted ? '<span class="badge warn">nhiễm</span>' : ""}
+      ${esc(e.agentName)} · ${new Date(e.ts).toLocaleTimeString("vi-VN")} · ${e.durationMs ?? 0}ms
+    </div>
+    ${e.error ? `<div class="meta" style="color:#ff8a8a">${esc(e.error)}</div>` : ""}
+    ${e.params ? `<div class="meta">${esc(Object.entries(e.params).map(([k, v]) => `${k}=${v}`).join(" · "))}</div>` : ""}
+  </div>`,
+    )
+    .join("");
+
+  panelBody.innerHTML = `
+    <h3>Cấp quyền hiện tại</h3>
+    <div class="item">
+      <div><b>${esc(LEVEL_TEXT[level.level] ?? level.level)}</b>${esc(countDown)}</div>
+      ${tainted ? `<div class="meta" style="color:#ffb45a">⚠ Phiên đang bị nhiễm: ${esc(level.taint.source ?? "nội dung không tin cậy")}. Hành động nguy hiểm sẽ hỏi lại bạn.</div>` : ""}
+      ${level.level === "full" ? `<div class="row"><button class="act danger" onclick="disableFull()">Tắt Toàn quyền ngay</button></div>` : ""}
+      <div class="row">
+        <button class="act ghost" onclick="setGrantedLevel()">Nâng lên Cấp 2 (Được cấp)</button>
+        <button class="act danger" onclick="startFullConfirm()">Bật Cấp 3 (Toàn quyền)</button>
+      </div>
+      ${fullConfirmStep === 1 ? `<div class="row"><input id="fullPhrase" placeholder="Nhập: TOAN QUYEN" /><button class="act" onclick="submitFullPhrase()">Xác nhận bước 1</button></div>` : ""}
+      ${fullConfirmStep === 2 ? `<div class="row">
+        <button class="act danger" onclick="confirmFull(900000)">15 phút</button>
+        <button class="act danger" onclick="confirmFull(3600000)">60 phút</button>
+        <button class="act danger" onclick="confirmFull(0)">Không hết hạn</button>
+      </div><div class="meta">Bước 2: chọn thời lượng. Toàn quyền vẫn hỏi lại việc khó hoàn tác.</div>` : ""}
+      <div class="row">
+        ${tainted ? `<button class="act ghost" onclick="clearTaint()">Xóa cờ nhiễm</button>` : `<button class="act ghost" onclick="markTaint()">Đánh dấu nhiễm (thử)</button>`}
+      </div>
+    </div>
+
+    <h3>Màn hình xem lại (nhật ký chỉ ghi thêm)</h3>
+    <div class="meta" style="margin-bottom:8px">
+      ${logData.total} hành động ·
+      ${chainOk ? '<span class="badge ok">chuỗi hash toàn vẹn</span>' : '<span class="badge danger">CHUỖI HASH BỊ HỎNG</span>'}
+    </div>
+    ${entries || "<p>Chưa có hành động nào.</p>"}`;
+}
+
+async function startFullConfirm(): Promise<void> {
+  fullConfirmStep = 1;
+  await renderExecutor();
+}
+
+async function submitFullPhrase(): Promise<void> {
+  const input = document.getElementById("fullPhrase") as HTMLInputElement | null;
+  const phrase = input?.value ?? "";
+  const r = await api<any>("/api/executor/level/request-full", {
+    method: "POST",
+    body: { phrase },
+  });
+  if (r.needPhrase) {
+    toast(r.message, "warn");
+    return;
+  }
+  fullConfirmStep = 2;
+  toast(r.message);
+  await renderExecutor();
+}
+
+async function confirmFull(durationMs: number): Promise<void> {
+  const r = await api<any>("/api/executor/level/confirm-full", {
+    method: "POST",
+    body: { durationMs },
+  });
+  fullConfirmStep = 0;
+  toast(r.message);
+  await renderExecutor();
+}
+
+async function disableFull(): Promise<void> {
+  const r = await api<any>("/api/executor/level/disable-full", { method: "POST" });
+  toast(r.message);
+  await renderExecutor();
+}
+
+async function setGrantedLevel(): Promise<void> {
+  await api("/api/executor/level/granted", { method: "POST" });
+  toast("Đã nâng lên Cấp 2 (Được cấp).");
+  await renderExecutor();
+}
+
+async function markTaint(): Promise<void> {
+  await api("/api/executor/taint", { method: "POST", body: { source: "thử nghiệm thủ công" } });
+  toast("Đã đánh dấu phiên bị nhiễm.");
+  await renderExecutor();
+}
+
+async function clearTaint(): Promise<void> {
+  await api("/api/executor/taint", { method: "POST", body: { clear: true } });
+  toast("Đã xóa cờ nhiễm.");
+  await renderExecutor();
 }
 
 // ---------------- Hộp thoại trong cảnh 3D ----------------
@@ -1739,6 +1887,14 @@ function connectWs(): void {
       case "permission:decided":
         toast("Yêu cầu quyền đã được xử lý.", "info");
         break;
+      case "perm:level":
+        executorLevel = { ...executorLevel, ...(data as any) };
+        if (panelKind === "executor") void openPanel("executor");
+        break;
+      case "executor:result":
+      case "executor:loop":
+        if (panelKind === "executor") void openPanel("executor");
+        break;
       case "injection":
         toast(
           `⚠ Phát hiện prompt injection tại ${(data as any).url} — đã bỏ qua, không làm theo.`,
@@ -1781,6 +1937,15 @@ const win = window as any;
 
 win.decidePerm = decidePerm;
 win.decideApproval = decideApproval;
+
+// --- GĐ 4: Executor ---
+win.startFullConfirm = startFullConfirm;
+win.submitFullPhrase = submitFullPhrase;
+win.confirmFull = confirmFull;
+win.disableFull = disableFull;
+win.setGrantedLevel = setGrantedLevel;
+win.markTaint = markTaint;
+win.clearTaint = clearTaint;
 
 win.assignTask = async (agentId: string, department: string) => {
   await openPanel("department", department);
