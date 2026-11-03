@@ -19,7 +19,8 @@ văn phòng tự làm, tự lên mạng tìm hiểu, tự học và đề xuất
 | **Phòng Tài chính** | Doanh thu, chi phí, báo cáo. |
 | **Phòng Đội AI** | Roster agent, lịch sử chạy, hội thoại. |
 | **Phòng Làm việc tự động** | Mỗi agent có máy tính riêng (trình duyệt sandbox) — bấm vào xem họ đang mở trang nào. |
-| **Phòng Thư viện** | Ghi chú nghiên cứu, kỹ năng, bài học, bản "nhìn lại" sau mỗi tác vụ. |
+| **Phòng Thư viện** | Ghi chú nghiên cứu, kỹ năng, bài học, bản "nhìn lại" sau mỗi tác vụ. **Tìm kiếm tri thức có xếp hạng** + khu vực *Tự học trong ngân sách*. |
+| **Executor & xem lại** | Cổng thực thi hành động có kiểu: 3 tầng quyền, xác nhận 2 bước cho *Toàn quyền*, nhật ký chuỗi hash, thùng rác khôi phục được, màn hình xem lại hành động. |
 
 Bố cục 3D gồm **9 phòng ban** với 8 nhân vật AI. Thanh điều hướng dưới bên trái
 để nhảy nhanh tới từng phòng; click vào sàn phòng để mở bảng điều khiển.
@@ -50,6 +51,36 @@ Bố cục 3D gồm **9 phòng ban** với 8 nhân vật AI. Thanh điều hư�
 - **Đọc hạn mức Cursor thật**: server poll API nội bộ của Cursor mỗi 60 giây,
   hiển thị % đã dùng và ngày reset trên thanh năng lượng.
 - **Đề xuất thay đổi**: agent chỉ tạo diff, bạn duyệt mới áp dụng, có nút Hoàn tác.
+
+### Executor: LLM chỉ đề xuất, máy mới thực thi
+
+- **Ranh giới cứng**: LLM **không bao giờ** gọi được `child_process`/`fs`.
+  Nó chỉ sinh JSON hành động; `Executor` mới là thành phần duy nhất chạm máy.
+- **14 loại hành động có kiểu** (zod): `run_command`, `read_file`, `write_file`,
+  `list_dir`, `delete_file`, `move_to_trash`, `open_app`, `click`, `type_text`,
+  `key_press`, `screenshot`, `search_files`, `http_request`, `wait`.
+- **3 tầng quyền**: *Sandbox* (mặc định) → *Được cấp* → *Toàn quyền*.
+  Mỗi tầng có nhãn mô tả rõ đường việc được phép.
+- **Cấp 3 cần xác nhận 2 bước**: nhập **nguyên văn** `TOAN QUYEN`, rồi chọn
+  thời lượng (15 phút / 60 phút / không hết hạn). Tự hạ về Sandbox khi hết hạn.
+- **Việc khó hoàn tác luôn phải hỏi** (kể cả ở Cấp 3): xóa hàng loạt, format
+  ổ đĩa, registry, tường lửa/antivirus, đổi mật khẩu, thanh toán, gửi
+  email/webhook, gửi dữ liệu ra ngoài, cài driver.
+- **Đánh dấu nhiễm (taint)**: đọc nội dung web/file ngoài sẽ đánh dấu phiên là
+  *nhiễm* — mọi hành động nguy hiểm phải hỏi lại.
+- **Nhật ký chỉ ghi thêm + chuỗi hash SHA-256**: sửa file log cũ sẽ bị phát
+  hiện (`verifyChain()` trả về `brokenAt`). Nội dung nhạy cảm không ghi vào log.
+- **Timeout cứng + giết cây tiến trình**: `taskkill /PID <pid> /T /F` dọn cả tiến
+  trình con (quan trọng trên Windows).
+- **Chống vòng lặp**: dừng khi cùng một lỗi lặp 3 lần, hoặc vượt giới hạn
+  bước / thời gian / token.
+- **Thùng rác thay vì xóa hẳn**: file bị xóa nằm trong `workspace/.trash/`, có
+  manifest để **khôi phục** (không ghi đè file đã tồn tại).
+- **Chuột/bàn phím có lớp trừu tượng**: mặc định là `RecordingInputController`
+  (chỉ ghi lại, không đụng máy thật). Bật thật bằng `OFFICE_INPUT_REAL=1`.
+  Overlay đỏ + nút **✋ HỦY KHẨN CẤP** hiện trong lúc thao tác.
+- **Tự học trong ngân sách**: engine chỉ học khi ví học còn đủ, chọn chủ đề theo
+  độ ưu tiên, và **tạm dừng chủ đề hỏng 3 lần** để không lãng phí token.
 
 ---
 
@@ -102,13 +133,16 @@ npm start          # http://localhost:8787
 npm test
 ```
 
-Bộ test gồm **53 trường hợp**:
+Bộ test gồm **199 trường hợp** (9 file):
 
 1. Agent **không** đọc được file ngoài `/workspace` khi chưa được phép —
    kể cả qua `../` và symlink.
 2. Agent **không** làm theo lệnh ẩn trong trang web (prompt injection).
 3. Ước lượng token, ngưỡng hỏi trước, trần ngày/tuần/tác vụ, ví học.
 4. Nhật ký chi tiêu trong SQLite và bố cục 9 phòng 3D.
+5. Executor: schema hành động, 3 tầng quyền, nhật ký chuỗi hash, chống lặp.
+6. Cấp 3: xác nhận 2 bước, hết hạn tự động, taint, thùng rác, overlay.
+7. Tự học trong ngân sách + tìm kiếm tri thức có xếp hạng.
 
 ---
 
@@ -127,12 +161,22 @@ src/
     budget/estimation.ts      ước lượng chi phí + tự hạ cấp model
     budget/tokenLedger.ts     nhật ký chi tiêu token (SQLite)
     tasks/taskRunner.ts       điều phối tác vụ, duyệt trước khi tiêu token
+    executor/actionSchema.ts  14 loại hành động có kiểu (zod)
+    executor/executor.ts      cổng thực thi duy nhất (kiểm tra quyền + log)
+    executor/planner.ts       LLM chỉ đề xuất JSON, không chạm máy
+    executor/powerShell.ts    timeout cứng + taskkill giết cây tiến trình
+    executor/actionLog.ts     nhật ký chỉ ghi thêm + chuỗi hash SHA-256
+    executor/loopGuard.ts     giới hạn bước / thời gian / token, chống lặp
+    executor/trashBin.ts      thùng rác + khôi phục không ghi đè
+    executor/inputController.ts  chuột/bàn phím có lớp trừu tượng + overlay
+    executor/permissionLevel.ts  3 tầng quyền + xác nhận 2 bước + taint
     agents/departments.ts     bố cục 9 phòng ban 3D
     activity/activityLog.ts   nhật ký hoạt động
     browser/sandboxBrowser.ts trình duyệt Playwright profile riêng
     browser/policy.ts         allowlist / blocklist / phát hiện hành động rủi ro
     knowledge/knowledgeBase.ts Thư viện Tri thức (SQLite)
     learning/                 nghiên cứu, đối chiếu nguồn, giờ học
+    learning/learningEngine.ts  tự học tự quyết trong ngân sách token
     selfdev/proposalStore.ts  đề xuất thay đổi có duyệt + hoàn tác
     automation/               3 mức tự động, giới hạn vòng lặp/thời gian/trang
   client/                     giao diện 3D (three.js)
@@ -155,6 +199,7 @@ tests/                        bộ test an toàn
 | `CURSOR_AGENT_EXE` | tự dò | Đường dẫn `cursor-agent` (mặc định tìm trong `%LOCALAPPDATA%\cursor-agent`) |
 | `CURSOR_AUTH_TOKEN` | tự đọc | Token đăng nhập Cursor (mặc định đọc từ `state.vscdb` của IDE) |
 | `CURSOR_QUOTA_ENDPOINT` | `https://api2.cursor.sh` | Endpoint đọc hạn mức Cursor |
+| `OFFICE_INPUT_REAL` | `0` | `1` = dùng chuột/bàn phím thật (chỉ khi đang ở Cấp 3) |
 
 ### Dùng token từ gói Cursor của bạn
 
@@ -191,6 +236,7 @@ tự học.
 - [`docs/02-thiet-ke.md`](docs/02-thiet-ke.md) — sơ đồ kiến trúc & quy tắc an toàn
 - [`docs/03-ngan-sach-token.md`](docs/03-ngan-sach-token.md) — ngân sách token & tích hợp Cursor
 - [`docs/04-buoc-4-code.md`](docs/04-buoc-4-code.md) — Bước 4: mã nguồn đã viết & số liệu đã đo thật
+- [`docs/REPORT.md`](docs/REPORT.md) — Báo cáo toàn bộ nâng cấp 6 giai đoạn (3D, Executor, cấp quyền, tự học)
 
 ---
 

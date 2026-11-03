@@ -1273,9 +1273,10 @@ async function openPanel(name: string, arg?: string): Promise<void> {
 
     case "library": {
       panelTitle.textContent = "Phòng Thư viện — Tri thức & Nhìn lại";
-      const [entries, retros] = await Promise.all([
+      const [entries, retros, learnStatus] = await Promise.all([
         api<any[]>("/api/kb"),
         api<any[]>("/api/kb/retrospectives"),
+        api<any>("/api/learning/status").catch(() => ({ sessions: 0, usageRatio: 0, progress: [] })),
       ]);
       const noteHtml = entries
         .map(
@@ -1299,8 +1300,41 @@ async function openPanel(name: string, arg?: string): Promise<void> {
     </div>`,
         )
         .join("");
+      // Tiến độ tự học (GĐ 6).
+      const progressHtml = (learnStatus.progress ?? [])
+        .map(
+          (p: any) => `<div class="item">
+      <h4>${esc(p.topic)}</h4>
+      <div class="meta">
+        <span class="badge ${p.paused ? "danger" : p.failures > 0 ? "warn" : "ok"}">${
+          p.paused ? "tạm dừng" : p.failures > 0 ? `${p.failures} lần lỗi` : "đang học"
+        }</span>
+        đã học ${p.timesLearned} lần${
+          p.lastLearnedAt ? " · lần cuối " + new Date(p.lastLearnedAt).toLocaleString("vi-VN") : ""
+        }
+      </div>
+      ${
+        p.paused
+          ? `<div class="row"><button class="act ghost" onclick="resumeTopic('${esc(p.topic)}')">Bỏ tạm dừng</button></div>`
+          : ""
+      }
+    </div>`,
+        )
+        .join("");
+
       panelBody.innerHTML =
-        "<h3>Ghi chú & Kỹ năng</h3>" +
+        `<h3>🔍 Tìm kiếm tri thức</h3>
+         <div class="row"><input id="kbQuery" placeholder="Nhập từ khoá…" onkeydown="if(event.key==='Enter')searchKb()" />
+         <button class="act" onclick="searchKb()">Tìm</button></div>
+         <div id="kbResults"></div>
+         <h3>📚 Tự học trong ngân sách</h3>
+         <div class="meta" style="margin-bottom:8px">
+           ${learnStatus.sessions ?? 0} phiên học · đã dùng ${((learnStatus.usageRatio ?? 0) * 100).toFixed(0)}% ví học
+           <div class="row"><button class="act ghost" onclick="runLearningNow()">Học ngay 1 phiên</button>
+           <button class="act ghost" onclick="showLearningPlan()">Xem kế hoạch</button></div>
+         </div>
+         ${progressHtml || "<p>Chưa có tiến độ học.</p>"}
+         <h3>Ghi chú & Kỹ năng</h3>` +
         (noteHtml || "<p>Chưa có.</p>") +
         "<h3>Nhìn lại</h3>" +
         (retroHtml || "<p>Chưa có.</p>");
@@ -1742,6 +1776,55 @@ function setInputOverlay(state: { active: boolean; action: string | null; aborte
   }
 }
 
+// ---------------- GĐ 6: Tìm kiếm tri thức & tự học ----------------
+async function searchKb(): Promise<void> {
+  const input = document.getElementById("kbQuery") as HTMLInputElement | null;
+  const box = document.getElementById("kbResults");
+  if (!box) return;
+  const q = input?.value.trim() ?? "";
+  if (!q) {
+    box.innerHTML = "";
+    return;
+  }
+  const r = await api<{ results: any[] }>(`/api/kb/search?q=${encodeURIComponent(q)}&limit=30`);
+  box.innerHTML = r.results.length
+    ? r.results
+        .map(
+          (e) => `<div class="item">
+      <h4>${esc(e.title)}</h4>
+      <div class="meta"><span class="badge info">${esc(e.kind)}</span>
+      <span class="badge ${e.score > 30 ? "ok" : "warn"}">điểm ${e.score}</span>
+      độ tin cậy ${(e.confidence * 100).toFixed(0)}% · ${new Date(e.createdAt).toLocaleString("vi-VN")}</div>
+      <div style="margin-top:6px;white-space:pre-wrap">${esc(String(e.body).slice(0, 300))}</div>
+    </div>`,
+        )
+        .join("")
+    : "<p>Không tìm thấy kết quả.</p>";
+}
+
+async function runLearningNow(): Promise<void> {
+  toast("Đang chạy 1 phiên tự học…", "info");
+  const r = await api<any>("/api/learning/run", { method: "POST" });
+  toast(`Đã học xong phiên. Ví học đã dùng ${(r.usageRatio * 100).toFixed(0)}%.`, "info");
+  await openPanel("library");
+}
+
+async function showLearningPlan(): Promise<void> {
+  const p = await api<any>("/api/learning/plan");
+  toast(
+    p.shouldLearn
+      ? `Kế hoạch: học ${p.topics.length} chủ đề (${p.topics.join(", ")}), ${p.maxSources} nguồn/đề.`
+      : `Chưa học: ${p.reason}`,
+    p.shouldLearn ? "info" : "warn",
+  );
+}
+
+async function resumeTopic(topic: string): Promise<void> {
+  await api("/api/learning/resume", { method: "POST", body: { topic } });
+  toast(`Đã bỏ tạm dừng "${topic}".`);
+  await openPanel("library");
+}
+
 // ---------------- Hộp thoại trong cảnh 3D ----------------
 const permDialog = document.getElementById("perm-dialog")!;
 const approvalDialog = document.getElementById("approval-dialog")!;
@@ -2020,6 +2103,12 @@ win.restoreTrash = restoreTrash;
 win.purgeTrash = purgeTrash;
 win.purgeTrashAll = purgeTrashAll;
 win.abortInput = abortInput;
+
+// --- GĐ 6: Tri thức & tự học ---
+win.searchKb = searchKb;
+win.runLearningNow = runLearningNow;
+win.showLearningPlan = showLearningPlan;
+win.resumeTopic = resumeTopic;
 
 win.assignTask = async (agentId: string, department: string) => {
   await openPanel("department", department);

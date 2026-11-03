@@ -19,6 +19,7 @@ import { resolveAgentExe } from "./budget/cursorAgent.js";
 import { SandboxBrowser } from "./browser/sandboxBrowser.js";
 import { KnowledgeBase } from "./knowledge/knowledgeBase.js";
 import { ResearchEngine } from "./learning/researchEngine.js";
+import { LearningEngine } from "./learning/learningEngine.js";
 import { ProposalStore } from "./selfdev/proposalStore.js";
 import { AgentRegistry } from "./agents/agentRegistry.js";
 import { DEPARTMENTS } from "./agents/departments.js";
@@ -84,6 +85,24 @@ budget.restoreFromLedger(ledger);
 const browser = new SandboxBrowser({ dataDir: DATA_DIR, policy: config.browser });
 const kb = new KnowledgeBase(DATA_DIR);
 const research = new ResearchEngine({ browser, kb, budget });
+
+// Bộ điều phối tự học trong ngân sách (GĐ 6).
+const learning = new LearningEngine({
+  budget,
+  getTopics: () => configStore.get().learning.topics,
+  tokensPerTopic: 12_000,
+  maxTopicsPerSession: 2,
+  intervalMinutes: configStore.get().learning.intervalMinutes,
+});
+learning.on("progress", (p) => broadcast("learning:progress", p));
+learning.on("topic-paused", (p) =>
+  activity.record({
+    kind: "system",
+    actor: "hệ thống",
+    message: `Tạm dừng chủ đề "${p.topic}" sau ${p.failures} lần thất bại.`,
+    level: "warn",
+  }),
+);
 const proposals = new ProposalStore(ROOT);
 const registry = new AgentRegistry();
 // Khôi phục token/số tác vụ đã dùng của từng nhân viên từ ledger,
@@ -809,6 +828,54 @@ app.get("/api/kb", (req, res) => {
   res.json(kb.list({ kind, agentId, query: q, limit: 200 }));
 });
 
+/**
+ * Tìm kiếm tri thức có xếp hạng (GĐ 6).
+ *
+ * Khác `LIKE` thuần: chấm điểm theo
+ *   - khớp ở tiêu đề (mạnh hơn body)
+ *   - khớp đúng cả từ (khớp cụm → điểm cao hơn)
+ *   - độ tin cậy của mục
+ *   - mới hơn = tốt hơn
+ */
+app.get("/api/kb/search", (req, res) => {
+  const { q, kind, limit } = req.query as any;
+  const query = String(q ?? "").trim();
+  if (!query) {
+    res.json({ query, results: kb.list({ kind, limit: 50 }) });
+    return;
+  }
+  const terms = query.toLowerCase().split(/\s+/).filter((t) => t.length > 1);
+  const candidates = kb.list({ kind, limit: 500 });
+
+  const scored = candidates
+    .map((e) => {
+      const title = e.title.toLowerCase();
+      const body = e.body.toLowerCase();
+      let score = 0;
+      for (const t of terms) {
+        if (title.includes(t)) score += 10;
+        if (body.includes(t)) score += 3;
+        // Khớp đúng từ (ranh giới từ) → thêm điểm.
+        const rx = new RegExp(`\\b${escapeRegex(t)}\\b`, "i");
+        if (rx.test(e.title)) score += 6;
+        if (rx.test(e.body)) score += 2;
+      }
+      // Cụm từ khớp nguyên vẹn → rất mạnh.
+      if (title.includes(query.toLowerCase())) score += 15;
+      else if (body.includes(query.toLowerCase())) score += 5;
+      // Độ tin cậy và độ mới.
+      score *= 0.5 + e.confidence;
+      const ageDays = (Date.now() - new Date(e.createdAt).getTime()) / 86_400_000;
+      score *= Math.max(0.6, 1 - ageDays / 180);
+      return { entry: e, score };
+    })
+    .filter((s) => s.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, Math.min(Number(limit ?? 30), 100));
+
+  res.json({ query, results: scored.map((s) => ({ ...s.entry, score: Number(s.score.toFixed(2)) })) });
+});
+
 app.post("/api/kb", (req, res) => {
   const body = req.body as any;
   const entry = kb.add({
@@ -1083,24 +1150,46 @@ app.post("/api/emergency-stop", (_req, res) => {
   res.json({ emergencyStop });
 });
 
-// --- Tự học định kỳ ---
+// --- Tự học định kỳ (GĐ 6: trong ngân sách) ---
 // Tự học đi qua TaskRunner để: (1) dùng ví "learning" riêng, (2) được ghi
 // vào ledger, (3) vẫn phải ước lượng và hỏi nếu vượt ngưỡng.
+//
+// LearningEngine quyết định TRƯỚC khi học:
+//   - Ví học còn bao nhiêu → học mấy chủ đề, đọc mấy nguồn.
+//   - Chủ đề nào chưa học / học lâu rồi → ưu tiên cái đó.
+//   - Chủ đề hỏng 3 lần → tạm dừng, không lãng phí token nữa.
 let learningTimer: NodeJS.Timeout | null = null;
+let learningBusy = false;
 
 function startLearningLoop(): void {
   if (learningTimer) clearInterval(learningTimer);
   const minutes = Math.max(5, configStore.get().learning.intervalMinutes);
   learningTimer = setInterval(() => {
-    const c = configStore.get();
-    if (!c.learning.enabled || emergencyStop) return;
-    if (c.automationLevel === "ask") return; // Chỉ hỏi → không tự học
-    const agent = registry.leadOf("library") ?? registry.list()[0];
-    if (!agent) return;
-    const topic = c.learning.topics[Math.floor(Math.random() * c.learning.topics.length)];
+    void runLearningSession();
+  }, minutes * 60_000);
+}
 
-    void tasks
-      .submit({
+/** Chạy 1 phiên tự học, tự điều chỉnh theo ngân sách còn lại. */async function runLearningSession(): Promise<void> {
+  if (learningBusy) return;
+  const c = configStore.get();
+  if (!c.learning.enabled || emergencyStop) return;
+  if (c.automationLevel === "ask") return; // Chỉ hỏi → không tự học
+
+  const plan = learning.planSession(c.learning.learningPercent);
+  if (!plan.shouldLearn || plan.topics.length === 0) {
+    broadcast("learning:plan", plan);
+    return;
+  }
+  broadcast("learning:plan", plan);
+
+  const agent = registry.leadOf("library") ?? registry.list()[0];
+  if (!agent) return;
+
+  learningBusy = true;
+  try {
+    for (const topic of plan.topics) {
+      if (emergencyStop) break;
+      const t = await tasks.submit({
         title: `Tự học: ${topic}`,
         prompt:
           `Nghiên cứu chủ đề "${topic}" bằng công cụ duyệt web sandbox, ` +
@@ -1110,40 +1199,77 @@ function startLearningLoop(): void {
         department: agent.department,
         mode: "ask",
         wallet: "learning",
-      })
-      .then(async (t) => {
-        if (t.status !== "done") return;
-        registry.update(agent.id, { learned: (registry.get(agent.id)?.learned ?? 0) + 1 });
-        const ret = kb.saveRetrospective({
-          taskId: t.id,
-          agentId: agent.id,
-          agentName: agent.name,
-          didWell: `Nghiên cứu "${topic}" và lưu vào Thư viện Tri thức.`,
-          didWrong: "Có thể cần đối chiếu thêm nguồn.",
-          nextTime: "Tìm thêm 2 nguồn độc lập trước khi kết luận.",
-        });
-        broadcast("kb:retrospective", ret);
-        kb.add({
-          kind: "note",
-          agentId: agent.id,
-          title: topic,
-          body: String(t.result ?? "").slice(0, 4000),
-          sources: [],
-          confidence: 0.55,
-          fromWeb: true,
-          tags: ["tự học"],
-        });
-      })
-      .catch(() => {});
-  }, minutes * 60_000);
+      });
+
+      const ok = t.status === "done";
+      learning.recordOutcome(topic, ok);
+      if (!ok) continue;
+
+      registry.update(agent.id, { learned: (registry.get(agent.id)?.learned ?? 0) + 1 });
+      const ret = kb.saveRetrospective({
+        taskId: t.id,
+        agentId: agent.id,
+        agentName: agent.name,
+        didWell: `Nghiên cứu "${topic}" và lưu vào Thư viện Tri thức.`,
+        didWrong: "Có thể cần đối chiếu thêm nguồn.",
+        nextTime: "Tìm thêm 2 nguồn độc lập trước khi kết luận.",
+      });
+      broadcast("kb:retrospective", ret);
+      kb.add({
+        kind: "note",
+        agentId: agent.id,
+        title: topic,
+        body: String(t.result ?? "").slice(0, 4000),
+        sources: [],
+        confidence: 0.55,
+        fromWeb: true,
+        tags: ["tự học"],
+      });
+    }
+    learning.recordSession();
+  } finally {
+    learningBusy = false;
+  }
 }
 startLearningLoop();
+
+// --- API tự học (GĐ 6) ---
+app.get("/api/learning/status", (_req, res) =>
+  res.json({
+    sessions: learning.sessionCount,
+    usageRatio: learning.usageRatio(),
+    progress: learning.listProgress(),
+  }),
+);
+
+/** Kế hoạch phiên học tiếp theo (xem trước mà không chạy). */
+app.get("/api/learning/plan", (_req, res) =>
+  res.json(learning.planSession(configStore.get().learning.learningPercent)),
+);
+
+/** Chạy phiên học ngay (dùng ví học). */
+app.post("/api/learning/run", async (_req, res) => {
+  await runLearningSession();
+  res.json({ ok: true, sessions: learning.sessionCount, usageRatio: learning.usageRatio() });
+});
+
+/** Bỏ tạm dừng một chủ đề đã hỏng nhiều lần. */
+app.post("/api/learning/resume", (req, res) => {
+  const { topic } = req.body as { topic: string };
+  learning.resumeTopic(topic);
+  res.json({ ok: true });
+});
 
 // --- Static client ---
 const clientDist = path.join(ROOT, "dist");
 if (fs.existsSync(clientDist)) {
   app.use(express.static(clientDist));
   app.get("*", (_req, res) => res.sendFile(path.join(clientDist, "index.html")));
+}
+
+/** Escape regex để tìm kiếm tri thức an toàn với ký tự đặc biệt. */
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 const server = http.createServer(app);
