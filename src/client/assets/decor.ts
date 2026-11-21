@@ -83,6 +83,14 @@ export function getSkyUniforms(): SkyUniforms | null {
 const animators: Array<(t: number) => void> = [];
 let sky: THREE.Mesh | null = null;
 
+/** Xoá trạng thái toàn cục (hàm chuyển động, vật liệu phát sáng) trước khi dựng lại cảnh — tránh rò rỉ khi mount lại. */
+export function resetDecor(): void {
+  animators.length = 0;
+  glowMats.clear();
+  sky = null;
+  skyUniforms = null;
+}
+
 /** Gọi mỗi khung hình từ vòng lặp chính. */
 export function tickDecor(t: number, camera: THREE.Camera): void {
   if (sky) sky.position.copy(camera.position);
@@ -190,7 +198,7 @@ function makeFountain(x: number, z: number): THREE.Group {
 }
 
 /** Bầu trời, mây, mặt đất, nền lát gạch, cây xanh và tiểu cảnh quanh toà nhà. */
-export function buildEnvironment(scene: THREE.Scene, ground: THREE.Mesh): void {
+export function buildEnvironment(scene: THREE.Object3D, ground: THREE.Mesh): void {
   const envStatic = new THREE.Group();
 
   // --- Bầu trời chuyển màu (đi theo camera) ---
@@ -757,7 +765,7 @@ export interface RoomLike {
 }
 
 /** Trang trí chung + đặc trưng cho một phòng ban. */
-export function buildRoomDecor(scene: THREE.Scene, room: RoomLike): void {
+export function buildRoomDecor(scene: THREE.Object3D, room: RoomLike): void {
   const { center: c, size: s } = room;
   // `g`: phần có chuyển động (đồng hồ, địa cầu, tủ server). `st`: phần tĩnh, gộp lại cho nhẹ.
   const g = new THREE.Group();

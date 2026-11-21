@@ -826,7 +826,8 @@ function animate(): void {
   lastFrameT = t;
   for (const { visual, state, bubble, behavior } of agents.values()) {
     behavior.update(dt, state.status);
-    const b = behavior.away ? { text: "☕ Nghỉ giải lao", color: "#8b949e" } : statusBubble(state);
+    const idleLabel = behavior.label();
+    const b = idleLabel ? { text: idleLabel, color: "#8b949e" } : statusBubble(state);
     bubble.set(b?.text ?? null, b?.color);
     bubble.update(dt);
     updateAgentVisual(visual, 1 / 60);

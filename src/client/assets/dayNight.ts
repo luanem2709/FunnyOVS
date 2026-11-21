@@ -43,6 +43,8 @@ export interface DayNight {
   /** Cập nhật theo giờ (số thực 0–24). */
   apply(hour: number): void;
   hour(): number;
+  /** Dừng bộ hẹn giờ cập nhật theo giờ máy. */
+  dispose(): void;
 }
 
 export function createDayNight(scene: THREE.Scene, lights: LightingSetup): DayNight {
@@ -82,13 +84,20 @@ export function createDayNight(scene: THREE.Scene, lights: LightingSetup): DayNi
   };
 
   apply(hasForced ? forced : new Date().getHours() + new Date().getMinutes() / 60);
+  let timer: ReturnType<typeof setInterval> | null = null;
   if (!hasForced) {
-    setInterval(() => {
+    timer = setInterval(() => {
       const d = new Date();
       apply(d.getHours() + d.getMinutes() / 60);
     }, 60_000);
   }
   (window as unknown as { __setHour?: (h: number) => void }).__setHour = apply;
 
-  return { apply, hour: () => current };
+  return {
+    apply,
+    hour: () => current,
+    dispose: () => {
+      if (timer) clearInterval(timer);
+    },
+  };
 }

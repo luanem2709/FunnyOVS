@@ -28,6 +28,8 @@ let mainWindow = null;
 let tray = null;
 let quitting = false;
 let pendingCount = 0;
+/** Gốc URL của giao diện đang chạy (dev: Vite :5173; đóng gói: server nội bộ). */
+let baseUrl = "";
 let trayHintShown = false;
 
 function iconPath() {
@@ -146,6 +148,31 @@ function stopServer() {
   }, 3000).unref();
 }
 
+/** Giao diện đang chọn: "classic" (/) hoặc "unified" (/office-3d/), lưu trong thư mục dữ liệu người dùng. */
+function viewFile() {
+  return path.join(app.getPath("userData"), "view.json");
+}
+function readView() {
+  try {
+    const v = JSON.parse(fs.readFileSync(viewFile(), "utf8")).view;
+    return v === "unified" ? "unified" : "classic";
+  } catch {
+    return "classic";
+  }
+}
+function viewUrl(view) {
+  return view === "unified" ? `${baseUrl}/office-3d/` : `${baseUrl}/`;
+}
+function switchView(view) {
+  try {
+    fs.writeFileSync(viewFile(), JSON.stringify({ view }));
+  } catch {
+    /* không lưu được thì chỉ áp dụng lần này */
+  }
+  if (mainWindow) void mainWindow.loadURL(viewUrl(view));
+  buildMenu();
+}
+
 function createWindow(url) {
   mainWindow = new BrowserWindow({
     width: 1440,
@@ -262,6 +289,13 @@ function buildMenu() {
         ],
       },
       {
+        label: "Giao diện",
+        submenu: [
+          { label: "Văn phòng hợp nhất (React 3D)", type: "radio", checked: readView() === "unified", click: () => switchView("unified") },
+          { label: "Cổ điển", type: "radio", checked: readView() === "classic", click: () => switchView("classic") },
+        ],
+      },
+      {
         label: "Xem",
         submenu: [
           { role: "reload", label: "Tải lại" },
@@ -286,7 +320,9 @@ if (!app.requestSingleInstanceLock()) {
     buildTray();
     try {
       const port = await startServer();
-      createWindow(IS_DEV ? DEV_CLIENT_URL : `http://127.0.0.1:${port}`);
+      baseUrl = IS_DEV ? DEV_CLIENT_URL : `http://127.0.0.1:${port}`;
+      createWindow(viewUrl(readView()));
+      buildMenu();
       // Khởi động cùng Windows thì chạy ẩn dưới khay.
       if (process.argv.includes("--hidden")) mainWindow.hide();
       else mainWindow.once("focus", () => mainWindow.flashFrame(false));

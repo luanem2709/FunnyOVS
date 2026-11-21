@@ -26,6 +26,9 @@ import { TaskRunner } from "./tasks/taskRunner.js";
 import { ActivityLog } from "./activity/activityLog.js";
 import { policyForLevel, type AutomationLevel } from "./automation/automationPolicy.js";
 import { loadLlmConfig } from "./llm.js";
+import { MachineProbe } from "./office/machine.js";
+import { OfficeBridge } from "./office/entityAdapter.js";
+import { OFFICE_WS_EVENT, type OfficeEvent } from "../shared/officeEntity.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // OFFICE_HOME: ứng dụng desktop đặt thư mục gốc ghi được (workspace, đề xuất) ra ngoài thư mục cài đặt.
@@ -74,7 +77,7 @@ app.use(express.json({ limit: "2mb" }));
 type Listener = (event: string, data: unknown) => void;
 const listeners = new Set<Listener>();
 
-function broadcast(event: string, data: unknown): void {
+function fanout(event: string, data: unknown): void {
   for (const l of listeners) {
     try {
       l(event, data);
@@ -82,6 +85,19 @@ function broadcast(event: string, data: unknown): void {
       /* ignore */
     }
   }
+}
+
+/** Cầu nối sang schema chung (khởi tạo sau khi registry/tasks sẵn sàng). */
+let officeBridge: OfficeBridge | null = null;
+
+function broadcastOffice(events: OfficeEvent[]): void {
+  for (const ev of events) fanout(OFFICE_WS_EVENT, ev);
+}
+
+/** Phát sự kiện cũ cho client cổ điển và đồng thời dịch sang `OfficeEvent` cho văn phòng hợp nhất. */
+function broadcast(event: string, data: unknown): void {
+  fanout(event, data);
+  if (officeBridge) broadcastOffice(officeBridge.translate(event, data));
 }
 
 // ---- Task runner (điều phối tác vụ + duyệt trước khi tốn nhiều token) ----
@@ -625,6 +641,22 @@ function startLearningLoop(): void {
 }
 startLearningLoop();
 
+// --- Văn phòng hợp nhất: bảng máy + cầu nối OfficeEntity ---
+const machineProbe = new MachineProbe();
+officeBridge = new OfficeBridge({
+  listAgents: () => registry.list(),
+  listTasks: () => tasks.list(),
+  machine: () => machineProbe.current,
+});
+machineProbe.start(5000, (sample) => {
+  if (officeBridge && listeners.size > 0) broadcastOffice(officeBridge.onMachine(sample));
+});
+
+app.get("/api/office/entities", (_req, res) => {
+  const snap = officeBridge!.snapshot();
+  res.json(snap.type === "snapshot" ? snap.entities : []);
+});
+
 // --- Static client ---
 const clientDist = process.env.OFFICE_CLIENT_DIST ? path.resolve(process.env.OFFICE_CLIENT_DIST) : path.join(ROOT, "dist");
 if (fs.existsSync(clientDist)) {
@@ -640,6 +672,8 @@ wss.on("connection", (ws) => {
     if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ event, data }));
   };
   listeners.add(listener);
+  // Ảnh chụp đầy đủ theo schema chung cho client văn phòng hợp nhất.
+  ws.send(JSON.stringify({ event: OFFICE_WS_EVENT, data: officeBridge!.snapshot() }));
   ws.send(
     JSON.stringify({
       event: "state",
@@ -666,6 +700,7 @@ if (HOST) server.listen(PORT, HOST, onListening);
 else server.listen(PORT, onListening);
 
 async function shutdown(): Promise<void> {
+  machineProbe.stop();
   await browser.close();
   kb.close();
   process.exit(0);

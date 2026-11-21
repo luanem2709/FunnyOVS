@@ -69,8 +69,9 @@ describe("agent nghỉ giải lao", () => {
         dept.center.z + dept.size.d / 2 + 1.1,
         a.position.x + 1.4,
         () => seated++,
+        { rand: () => 0.99 }, // luôn chọn việc cuối cùng khả dụng = uống cà phê ở cửa
       );
-      (b as unknown as { nextBreakAt: number }).nextBreakAt = 0;
+      (b as unknown as { nextActionAt: number }).nextActionAt = 0;
       const root = (visual as { root: THREE.Group }).root;
       const phases = new Set<string>();
       for (let i = 0; i < 4000 && !(seated > 0); i++) {
@@ -107,8 +108,8 @@ describe("agent nghỉ giải lao", () => {
   it("có việc mới thì bỏ giải lao và quay về bàn", () => {
     const visual = fakeVisual();
     let seated = 0;
-    const b = new AgentBehavior(visual, 0, 0.4, 4, 1.4, () => seated++);
-    (b as unknown as { nextBreakAt: number }).nextBreakAt = 0;
+    const b = new AgentBehavior(visual, 0, 0.4, 4, 1.4, () => seated++, { rand: () => 0.99 });
+    (b as unknown as { nextActionAt: number }).nextActionAt = 0;
     for (let i = 0; i < 40; i++) b.update(0.05, "idle");
     expect(b.away).toBe(true);
     b.onStatus("working");
@@ -120,7 +121,7 @@ describe("agent nghỉ giải lao", () => {
   it("agent đang bận thì không bao giờ đứng dậy", () => {
     const visual = fakeVisual();
     const b = new AgentBehavior(visual, 0, 0.4, 4, 1.4, () => undefined);
-    (b as unknown as { nextBreakAt: number }).nextBreakAt = 0;
+    (b as unknown as { nextActionAt: number }).nextActionAt = 0;
     for (let i = 0; i < 2000; i++) b.update(0.05, "working");
     expect(b.away).toBe(false);
   });
