@@ -96,13 +96,30 @@ npm run build
 npm start          # http://localhost:8787
 ```
 
+### Ứng dụng desktop (Windows)
+
+Bản app bọc server + giao diện 3D vào một cửa sổ Electron; dữ liệu nằm ở
+`%APPDATA%\FunnyOVS` (`data/` và `workspace/`). Muốn đặt biến môi trường
+(API key LLM...), tạo file `%APPDATA%\FunnyOVS\.env` theo mẫu `.env.example`.
+
+```bash
+npm run app:dev          # chạy app ở chế độ phát triển (Vite + Electron)
+npm run desktop:dir      # build bản chạy thẳng: release/win-unpacked/FunnyOVS.exe
+npm run desktop:dist     # build bộ cài + bản portable trong release/
+```
+
+Bản app có thêm: thông báo Windows khi agent cần bạn duyệt, biểu tượng ở khay hệ thống
+(đóng cửa sổ chỉ thu xuống khay, chọn *Thoát hẳn* để tắt), tuỳ chọn *Khởi động cùng Windows*,
+ngày/đêm theo giờ máy (thử bằng `?hour=22` trên URL), bong bóng thoại trên đầu agent,
+pháo giấy khi xong việc và agent đi nghỉ giải lao khi rảnh lâu.
+
 ### Chạy test
 
 ```bash
 npm test
 ```
 
-Bộ test gồm **53 trường hợp**:
+Bộ test gồm **62 trường hợp**:
 
 1. Agent **không** đọc được file ngoài `/workspace` khi chưa được phép —
    kể cả qua `../` và symlink.

@@ -1,0 +1,20 @@
+appId: com.luanem2709.funnyovs
+productName: FunnyOVS
+directories:
+  app: build/app
+  buildResources: assets
+  output: release
+# Mọi file đã nằm sẵn trong build/app (do scripts/build-desktop.mjs tạo).
+asar: false
+npmRebuild: true
+win:
+  icon: assets/icon.ico
+  target:
+    - nsis
+    - portable
+  signAndEditExecutable: true
+  forceCodeSigning: false
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  perMachine: false

@@ -28,7 +28,8 @@ import { policyForLevel, type AutomationLevel } from "./automation/automationPol
 import { loadLlmConfig } from "./llm.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.resolve(__dirname, "..", "..");
+// OFFICE_HOME: ứng dụng desktop đặt thư mục gốc ghi được (workspace, đề xuất) ra ngoài thư mục cài đặt.
+const ROOT = process.env.OFFICE_HOME ? path.resolve(process.env.OFFICE_HOME) : path.resolve(__dirname, "..", "..");
 
 const DATA_DIR = process.env.OFFICE_DATA_DIR ?? path.join(ROOT, ".data");
 const CONFIG_PATH = path.join(DATA_DIR, "config.json");
@@ -625,7 +626,7 @@ function startLearningLoop(): void {
 startLearningLoop();
 
 // --- Static client ---
-const clientDist = path.join(ROOT, "dist");
+const clientDist = process.env.OFFICE_CLIENT_DIST ? path.resolve(process.env.OFFICE_CLIENT_DIST) : path.join(ROOT, "dist");
 if (fs.existsSync(clientDist)) {
   app.use(express.static(clientDist));
   app.get("*", (_req, res) => res.sendFile(path.join(clientDist, "index.html")));
@@ -654,14 +655,25 @@ wss.on("connection", (ws) => {
 });
 
 const PORT = Number(process.env.PORT ?? 8787);
-server.listen(PORT, () => {
+// OFFICE_HOST: ứng dụng desktop chỉ lắng nghe 127.0.0.1; mặc định giữ nguyên hành vi cũ.
+const HOST = process.env.OFFICE_HOST;
+const onListening = () => {
   console.log(`[office3d] server: http://localhost:${PORT}`);
   console.log(`[office3d] workspace: ${config.workspace}`);
   console.log(`[office3d] llm: ${loadLlmConfig() ? "yes" : "no (rule-based mode)"}`);
-});
+};
+if (HOST) server.listen(PORT, HOST, onListening);
+else server.listen(PORT, onListening);
 
-process.on("SIGINT", async () => {
+async function shutdown(): Promise<void> {
   await browser.close();
   kb.close();
   process.exit(0);
+}
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);
+// Khi chạy dưới Electron (fork), kênh IPC đóng = ứng dụng đã thoát → tự dừng, không để tiến trình mồ côi.
+process.on("disconnect", shutdown);
+process.on("message", (m) => {
+  if (m === "shutdown") void shutdown();
 });

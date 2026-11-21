@@ -18,7 +18,7 @@ export interface LightingSetup {
 export function setupLighting(scene: THREE.Scene): LightingSetup {
   // Nền trời sáng → không còn nền đen "cyberpunk" cũ.
   scene.background = new THREE.Color(0xcdd9e6);
-  scene.fog = new THREE.Fog(0xcdd9e6, 55, 130);
+  scene.fog = new THREE.Fog(0xcdd9e6, 70, 170);
 
   const ambient = new THREE.AmbientLight(0xffffff, 0.45);
   scene.add(ambient);
