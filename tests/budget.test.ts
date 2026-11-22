@@ -328,7 +328,6 @@ describe("L. Bố cục 3D: 9 phòng ban và nhân vật", () => {
   it("mỗi phòng có ít nhất một nhân vật trực thuộc", () => {
     const registry = new AgentRegistry();
     for (const d of DEPARTMENTS) {
-      if (d.id === "project") continue; // phòng dự phòng, chưa có nhân vật
       expect(registry.listByDepartment(d.id).length).toBeGreaterThan(0);
     }
   });

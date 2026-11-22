@@ -10,7 +10,7 @@ import path from "node:path";
 import fs from "node:fs";
 
 export type WalletKind = "normal" | "learning";
-export type QuotaSource = "cli-usage" | "cursor-api" | "estimated";
+export type QuotaSource = "cli-usage" | "cursor-api" | "estimated" | "provider-usage";
 
 export interface LedgerEntry {
   id: number;

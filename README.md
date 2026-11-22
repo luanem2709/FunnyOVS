@@ -1,8 +1,9 @@
 # FunnyOVS — Văn phòng 3D
 
-Văn phòng 3D cho người làm việc một mình: bạn giao việc, các nhân viên AI trong
-văn phòng tự làm, tự lên mạng tìm hiểu, tự học và đề xuất cải tiến — nhưng
-**không được chạm vào thư mục trên máy bạn nếu chưa được phép**.
+Văn phòng 3D cho người làm việc một mình: bạn giao việc cho **Giám đốc**, Giám đốc lập kế hoạch
+(bằng AI) và chia xuống **Trưởng phòng → Nhân viên**; họ dùng **công cụ thật** (CRM, email, lịch, file,
+web, GitHub), tự học và đề xuất cải tiến — nhưng **không được chạm vào thư mục trên máy bạn nếu chưa
+được phép**, và **không gửi email/tạo issue nếu bạn chưa duyệt**.
 
 ![Văn phòng 3D](docs/media/office.png)
 
@@ -21,8 +22,36 @@ văn phòng tự làm, tự lên mạng tìm hiểu, tự học và đề xuất
 | **Phòng Làm việc tự động** | Mỗi agent có máy tính riêng (trình duyệt sandbox) — bấm vào xem họ đang mở trang nào. |
 | **Phòng Thư viện** | Ghi chú nghiên cứu, kỹ năng, bài học, bản "nhìn lại" sau mỗi tác vụ. |
 
-Bố cục 3D gồm **9 phòng ban** với 8 nhân vật AI. Thanh điều hướng dưới bên trái
-để nhảy nhanh tới từng phòng; click vào sàn phòng để mở bảng điều khiển.
+Bố cục 3D gồm **9 phòng ban** với **17 nhân viên** theo 3 tầng (Giám đốc, 8 Trưởng phòng, 8 Nhân viên — mỗi người một ngoại hình riêng, trang phục theo tầng)
+và 3 **phòng tiện ích**: **Phòng họp** (Giám đốc họp với các trưởng phòng khi chia việc cho ≥ 2 phòng), **Pantry**, **Sảnh lễ tân** (logo công ty, bảng tin số liệu thật).
+Thanh điều hướng dưới bên trái nhảy nhanh tới từng phòng; click vào sàn phòng để bay tới đó.
+Luồng việc đã xong **tải được thành báo cáo Markdown** (tóm tắt của Giám đốc + kết quả từng người).
+**Việc đang chạy hiện ngay trong cảnh**: bảng việc sống trên tường Phòng Giao việc (luồng nào đang chạy / chờ duyệt / xong / lỗi, tiến độ, ai đang làm) và huy hiệu số việc mở trên bàn từng người.
+
+![Toàn cảnh khi đang giao việc](docs/shots/v3-overview.png)
+
+*Giám đốc họp với các trưởng phòng; luồng việc chạy xuống từng cấp; bảng việc sống ở Phòng Giao việc.* Thêm ảnh ở [`docs/office-3d.md`](docs/office-3d.md#ảnh-chụp).
+
+### Giao diện hợp nhất (`/office-3d/`)
+
+Tiếng Việt / English (kể cả thông báo do server sinh), 5 tab: **Tổ chức** (giao việc, cây giao việc, nghiệm thu, báo cáo của Giám đốc),
+**AI** (kết nối), **CRM** (pipeline, liên hệ, email, lịch), **Nhật ký**, **Tổng quan**. Chi tiết: [`docs/office-3d.md`](docs/office-3d.md).
+
+### Kết nối AI tự động
+
+Mở app là nó **tự dò** OmniRoute (`:20128`), Ollama (`:11434`), LM Studio (`:1234`) và nhận khoá miễn phí từ biến môi trường
+(`GROQ_API_KEY`, `GEMINI_API_KEY`, `CEREBRAS_API_KEY`, `MISTRAL_API_KEY`, `OPENROUTER_API_KEY`, `GITHUB_MODELS_TOKEN`) hoặc ô dán khoá trong tab **AI**.
+Nhiều nguồn cùng sẵn sàng thì tự dự phòng khi lỗi/hết hạn mức. Không cần Cursor. Khoá chỉ lưu trên máy bạn (quyền 0600) và không bao giờ hiện lại.
+
+### Vận hành
+
+**Việc lặp lại** (hằng ngày/tuần, tự giao cho Giám đốc đúng giờ), **sao lưu/khôi phục** dữ liệu ra một tệp JSON (không chứa khoá hay mật khẩu), **nhật ký bảo mật** chỉ-ghi-thêm
+(đặt khoá, bật LAN, duyệt/từ chối hành động, gửi email…), chất lượng đồ hoạ **tự hạ khi máy yếu**, tự nối lại khi mất kết nối — xem [`docs/office-3d.md`](docs/office-3d.md).
+**Tiếp cận**: dùng được bằng bàn phím, hộp duyệt được đọc to cho trình đọc màn hình, có chế độ giảm chuyển động.
+
+### Truy cập từ máy khác (tuỳ chọn)
+
+Mặc định chỉ máy này truy cập được. Bật **Cài đặt → Truy cập từ máy khác (LAN)** thì máy khác trong mạng nội bộ **bắt buộc nhập mã truy cập** (hiện trong cùng hộp Cài đặt).
 
 ### An toàn (điểm cốt lõi)
 
@@ -47,8 +76,9 @@ Bố cục 3D gồm **9 phòng ban** với 8 nhân vật AI. Thanh điều hư�
 - **Ước lượng trước khi chạy**: mọi tác vụ được ước lượng chi phí token trước.
   Vượt ngưỡng thì hộp thoại duyệt hiện **ngay trong cảnh 3D** — bạn quyết định
   trước khi agent tiêu token của bạn.
-- **Đọc hạn mức Cursor thật**: server poll API nội bộ của Cursor mỗi 60 giây,
-  hiển thị % đã dùng và ngày reset trên thanh năng lượng.
+- **Hành động ra ngoài cần bạn duyệt**: gửi email, tạo issue GitHub hiện hộp duyệt trong cảnh; hết hạn sau 10 phút nếu không ai trả lời.
+- **Đọc hạn mức Cursor (tuỳ chọn, tắt mặc định)**: nếu bạn bật, server poll API nội bộ của Cursor mỗi 60 giây
+  và hiển thị % đã dùng. Không dùng Cursor thì bỏ qua hoàn toàn.
 - **Đề xuất thay đổi**: agent chỉ tạo diff, bạn duyệt mới áp dụng, có nút Hoàn tác.
 
 ---
@@ -96,19 +126,49 @@ npm run build
 npm start          # http://localhost:8787
 ```
 
+### Ứng dụng desktop (Windows)
+
+Bản app bọc server + giao diện 3D vào một cửa sổ Electron; dữ liệu nằm ở
+`%APPDATA%\FunnyOVS` (`data/` và `workspace/`). Muốn đặt biến môi trường
+(API key LLM...), tạo file `%APPDATA%\FunnyOVS\.env` theo mẫu `.env.example`.
+
+```bash
+npm run app:dev          # chạy app ở chế độ phát triển (Vite + Electron)
+npm run desktop:dir      # build bản chạy thẳng: release/win-unpacked/FunnyOVS.exe
+npm run desktop:dist     # build bộ cài + bản portable trong release/
+```
+
+Công ty có 3 tầng — Giám đốc → Trưởng phòng → Nhân viên: giao việc cho Giám đốc, việc được tách theo phòng rồi đẩy xuống từng người (xem `docs/office-3d.md`, trang `/office-3d/`).
+
+Bản app có thêm: thông báo Windows khi agent cần bạn duyệt, biểu tượng ở khay hệ thống
+(đóng cửa sổ chỉ thu xuống khay, chọn *Thoát hẳn* để tắt), tuỳ chọn *Khởi động cùng Windows*,
+ngày/đêm theo giờ máy (thử bằng `?hour=22` trên URL), bong bóng thoại trên đầu agent,
+pháo giấy khi xong việc và agent đi nghỉ giải lao khi rảnh lâu.
+
 ### Chạy test
 
 ```bash
 npm test
 ```
 
-Bộ test gồm **53 trường hợp**:
+Bộ test gồm **hơn 350 trường hợp**:
 
 1. Agent **không** đọc được file ngoài `/workspace` khi chưa được phép —
-   kể cả qua `../` và symlink.
-2. Agent **không** làm theo lệnh ẩn trong trang web (prompt injection).
-3. Ước lượng token, ngưỡng hỏi trước, trần ngày/tuần/tác vụ, ví học.
-4. Nhật ký chi tiêu trong SQLite và bố cục 9 phòng 3D.
+   kể cả qua `../` và symlink; không làm theo lệnh ẩn trong trang web (prompt injection); công cụ web chặn SSRF.
+2. Ước lượng token, ngưỡng hỏi trước, trần ngày/tuần/tác vụ, ví học; nhật ký chi tiêu trong SQLite.
+3. Điều phối: Giám đốc lập kế hoạch bằng LLM (có dự phòng), thử lại, phụ thuộc giữa các bước, nghiệm thu có cấu trúc.
+4. Kết nối AI (dò dịch vụ, router, ngắt mạch), công cụ thật (CRM, email, lịch, GitHub) với máy chủ/`fetch` giả, xác thực token khi mở LAN.
+5. Sao lưu/khôi phục, nhật ký bảo mật, việc lặp lại, i18n vi/en (quét tĩnh mọi khoá), cơ sở vật chất/đường đi A*, nhân vật, bảng việc sống, giảm chuyển động.
+
+Kiểm giao diện bằng **Chrome thật** (cần `npx vite build` trước):
+
+```bash
+npm run verify:ui                 # AI/CRM/lịch lặp/sao lưu/a11y/bàn phím/duyệt bằng Enter/ngân sách dựng hình/bảng việc sống/máy chủ chết rồi tự nối lại
+npm run desktop:dir && npm run verify:desktop         # chạy bản đóng gói FunnyOVS.exe thật
+npm run score                      # chấm điểm theo docs/07-diem-so.md
+```
+
+Các kịch bản dùng máy chủ cách ly (dữ liệu tạm) và LLM giả, nên không đụng dữ liệu hay khoá AI thật của bạn.
 
 ---
 
@@ -150,34 +210,26 @@ tests/                        bộ test an toàn
 | `OFFICE_WORKSPACE` | `./workspace` | Thư mục duy nhất agent được chạm |
 | `OFFICE_DATA_DIR` | `./.data` | Nơi lưu SQLite, nhật ký, cấu hình quyền |
 | `OFFICE_CHROME_PATH` | tự dò | Đường dẫn Chrome/Edge cho sandbox |
-| `OFFICE_LLM_BASE_URL` | rỗng | Endpoint OpenAI-compatible |
-| `OFFICE_LLM_API_KEY` | rỗng | API key |
+| `OFFICE_LLM_BASE_URL` | rỗng | Endpoint OpenAI-compatible tuỳ chỉnh (thêm vào chuỗi dự phòng) |
+| `OFFICE_LLM_API_KEY` | rỗng | API key cho endpoint đó |
+| `OFFICE_OMNIROUTE_URL` / `OLLAMA_HOST` | cổng mặc định | Đổi địa chỉ OmniRoute / Ollama |
+| `GROQ_API_KEY`, `GEMINI_API_KEY`, `CEREBRAS_API_KEY`, `MISTRAL_API_KEY`, `OPENROUTER_API_KEY`, `GITHUB_MODELS_TOKEN` | rỗng | Khoá miễn phí được tự nhận |
+| `OFFICE_REQUIRE_TOKEN` | tắt | `1` = đòi mã truy cập cả với chính máy này |
 | `CURSOR_AGENT_EXE` | tự dò | Đường dẫn `cursor-agent` (mặc định tìm trong `%LOCALAPPDATA%\cursor-agent`) |
 | `CURSOR_AUTH_TOKEN` | tự đọc | Token đăng nhập Cursor (mặc định đọc từ `state.vscdb` của IDE) |
 | `CURSOR_QUOTA_ENDPOINT` | `https://api2.cursor.sh` | Endpoint đọc hạn mức Cursor |
 
-### Dùng token từ gói Cursor của bạn
+### Cursor (tuỳ chọn, nâng cao)
 
-Ứng dụng gọi model qua **Cursor CLI**, nên token tiêu thụ đi vào đúng hạn mức
-gói Cursor bạn đang trả tiền — không cần API key riêng.
-
-```powershell
-# Cài Cursor CLI (một lần)
-irm 'https://cursor.com/install?win32=true' | iex
-```
-
-Sau đó đăng nhập (nếu chưa đăng nhập trong Cursor IDE):
+Nếu bạn đã trả tiền gói Cursor, có thể cho ứng dụng gọi model qua **Cursor CLI** (`llmBackend: "cursor-agent"` trong cấu hình) để token đi vào đúng hạn mức gói đó.
+Mặc định ứng dụng ưu tiên bộ kết nối AI ở trên và chỉ dùng Cursor khi không có nguồn nào khác mà bạn đã đăng nhập.
 
 ```powershell
-agent login
+irm 'https://cursor.com/install?win32=true' | iex   # cài Cursor CLI (một lần)
+agent login                                          # đăng nhập nếu chưa
 ```
 
-Ứng dụng sẽ tự tìm token trong `%APPDATA%\Cursor\User\globalStorage\state.vscdb`.
-Mục **Cài đặt** hiển thị trạng thái: CLI đã cài, đã đăng nhập, gói hiện tại,
-% đã dùng và ngày reset.
-
-> Gói **Free** chỉ cho phép `--model auto`. Gói Pro cho phép chọn model cụ thể
-> (`composer-2.5`, `grok-4.7`…) qua mục Cài đặt.
+Đọc **hạn mức** gói Cursor là tính năng riêng, **tắt mặc định** (Cài đặt → Quyền riêng tư): khi bật, ứng dụng đọc token đăng nhập Cursor trên máy này và gọi API nội bộ không chính thức của Cursor.
 
 Trong giao diện, mục **Cài đặt** cho phép chỉnh allowlist/blocklist trình duyệt,
 hạn mức token (ngày/tuần/tác vụ), phần trăm dành cho tự học và danh sách chủ đề
@@ -191,6 +243,9 @@ tự học.
 - [`docs/02-thiet-ke.md`](docs/02-thiet-ke.md) — sơ đồ kiến trúc & quy tắc an toàn
 - [`docs/03-ngan-sach-token.md`](docs/03-ngan-sach-token.md) — ngân sách token & tích hợp Cursor
 - [`docs/04-buoc-4-code.md`](docs/04-buoc-4-code.md) — Bước 4: mã nguồn đã viết & số liệu đã đo thật
+- [`docs/office-3d.md`](docs/office-3d.md) — kiến trúc giao diện hợp nhất, kết nối AI, công cụ thật, LAN/token, cơ sở vật chất & nhân vật
+- [`docs/06-san-sang-thi-truong.md`](docs/06-san-sang-thi-truong.md) — đánh giá thẳng thắn trước khi bán
+- [`docs/07-diem-so.md`](docs/07-diem-so.md) — bảng chấm điểm kiểm chứng được (`npm run score`)
 
 ---
 

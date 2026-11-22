@@ -1,6 +1,6 @@
 ﻿/**
- * Lá»›p truy cáº­p file cÃ³ kiá»ƒm soÃ¡t â€” má»i agent Ä‘á»u pháº£i Ä‘i qua Ä‘Ã¢y.
- * KhÃ´ng cÃ³ Ä‘Æ°á»ng nÃ o Ä‘á»ƒ agent Ä‘á»c/ghi file trÃªn mÃ¡y ngÆ°á»i dÃ¹ng mÃ  bá» qua PermissionManager.
+ * Lớp truy cập file có kiểm soát — mọi agent đều phải đi qua đây.
+ * Không có đường nào để agent đọc/ghi file trên máy người dùng mà bỏ qua PermissionManager.
  */
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -17,7 +17,7 @@ export interface FileOpResult<T> {
 export class GuardedFs {
   constructor(private perms: PermissionManager) {}
 
-  /** Kiá»ƒm tra trÆ°á»›c, tráº£ vá» {ok:false, requestId} náº¿u cáº§n xin quyá»n. */
+  /** Kiểm tra trước, trả về {ok:false, requestId} nếu cần xin quyền. */
   private precheck(
     agentId: string,
     agentName: string,

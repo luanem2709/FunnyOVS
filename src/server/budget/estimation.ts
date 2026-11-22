@@ -56,8 +56,11 @@ export interface Estimation {
   estimatedCostUsd: number;
   /** Có cần hỏi người dùng trước khi chạy không. */
   needsApproval: boolean;
-  /** Lý do nếu cần hỏi. */
+  /** Lý do nếu cần hỏi (tiếng Việt, dự phòng). */
   reason?: string;
+  /** Khoá i18n + biến của lý do — client dịch theo ngôn ngữ người dùng. */
+  reasonKey?: string;
+  reasonVars?: { tokens: string; limit: string };
 }
 
 /**
@@ -175,9 +178,13 @@ export function estimateTask(input: EstimationInput, opts: { freeTierOnly?: bool
   if (estimatedTokens > THRESHOLDS.perTaskLimit) {
     est.needsApproval = true;
     est.reason = `Ước lượng ${estimatedTokens.toLocaleString()} token vượt trần mỗi tác vụ (${THRESHOLDS.perTaskLimit.toLocaleString()}). Nên chia nhỏ tác vụ.`;
+    est.reasonKey = "approval.reason.overLimit";
+    est.reasonVars = { tokens: estimatedTokens.toLocaleString(), limit: THRESHOLDS.perTaskLimit.toLocaleString() };
   } else if (estimatedTokens > THRESHOLDS.askAbove) {
     est.needsApproval = true;
     est.reason = `Ước lượng ${estimatedTokens.toLocaleString()} token — vượt ngưỡng ${THRESHOLDS.askAbove.toLocaleString()} nên cần bạn xác nhận trước.`;
+    est.reasonKey = "approval.reason.askAbove";
+    est.reasonVars = { tokens: estimatedTokens.toLocaleString(), limit: THRESHOLDS.askAbove.toLocaleString() };
   }
 
   return est;

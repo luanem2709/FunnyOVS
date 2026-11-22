@@ -11,6 +11,11 @@ import {
 } from "./assets/manifest.js";
 import { preloadAssets, peekAsset } from "./assets/loader.js";
 import { setupLighting } from "./assets/lighting.js";
+import { buildEnvironment, buildRoomDecor, tickDecor } from "./assets/decor.js";
+import { createDayNight } from "./assets/dayNight.js";
+import { Bubble, createEffects } from "./assets/effects.js";
+import { AgentBehavior } from "./assets/behavior.js";
+import { translate } from "./office-3d/i18n/index.js";
 import { buildFurniture, deskLayout, propLayout, DESK_TOP_Y } from "./assets/roomBuilder.js";
 import {
   createAgentVisual,
@@ -212,7 +217,7 @@ const camera = new THREE.PerspectiveCamera(52, innerWidth / innerHeight, 0.1, 22
 camera.position.set(0, 12, 18);
 
 // Ánh sáng: nền sáng + hemisphere + bóng mềm (xem assets/lighting.ts)
-setupLighting(scene);
+const lights = setupLighting(scene);
 
 // Sàn chung
 const floor = new THREE.Mesh(
@@ -222,6 +227,9 @@ const floor = new THREE.Mesh(
 floor.rotation.x = -Math.PI / 2;
 floor.receiveShadow = true;
 scene.add(floor);
+buildEnvironment(scene, floor);
+const dayNight = createDayNight(scene, lights);
+const effects = createEffects(scene);
 
 // Hook cho script kiểm thử ảnh (không ảnh hưởng runtime).
 (window as any).__threeInfo = {
@@ -403,6 +411,13 @@ function buildRoom(dept: Department): void {
   scene.add(lamp);
 
   buildProps(dept);
+  buildRoomDecor(scene, {
+    id: dept.id,
+    center: dept.center,
+    size: dept.size,
+    floor: dept.floor,
+    props: dept.props as string[],
+  });
 }
 
 /**
@@ -535,10 +550,37 @@ class Screen {
 }
 
 // ---------------- Scene state ----------------
+/** Câu hiện trên đầu agent theo trạng thái (null = không hiện). */
+function statusBubble(a: AgentState): { text: string; color: string } | null {
+  switch (a.status) {
+    case "working":
+      return { text: a.task ? `Đang làm: ${a.task}` : "Đang làm việc…", color: "#3fb950" };
+    case "researching": {
+      let host = "";
+      try {
+        host = a.currentUrl ? new URL(a.currentUrl).hostname : "";
+      } catch {
+        host = a.currentUrl ?? "";
+      }
+      return { text: host ? `Đang đọc: ${host}` : "Đang nghiên cứu…", color: "#4f9cf9" };
+    }
+    case "learning":
+      return { text: a.currentTitle ? `Đang học: ${a.currentTitle}` : "Đang tự học…", color: "#8f7bf0" };
+    case "waiting":
+      return { text: "Cần bạn duyệt ✋", color: "#d29922" };
+    case "blocked":
+      return { text: "Bị chặn! Cần xem lại", color: "#f85149" };
+    default:
+      return null;
+  }
+}
+
 interface AgentRecord {
   state: AgentState;
   visual: AgentVisual;
   screen: Screen;
+  bubble: Bubble;
+  behavior: AgentBehavior;
 }
 const agents = new Map<string, AgentRecord>();
 const rooms = new Map<string, Department>();
@@ -594,7 +636,15 @@ function setupAgents(list: AgentState[]): void {
     scene.add(visual.root);
     const screen = new Screen(a.position.x + 0.52, a.position.z + 0.72);
     scene.add(screen.mesh);
-    agents.set(a.id, { state: a, visual, screen });
+    const bubble = new Bubble(visual.root, (visual.chibi ? 1.78 : visual.animated ? 2.35 : 2.5) + 0.85);
+    // Giao diện cổ điển không có lưới A*: nhân vật chỉ làm việc nhỏ tại chỗ (đi lại có ở /office-3d/).
+    const behavior = new AgentBehavior(visual, a.position.x, a.position.z, () => {
+      const rec = agents.get(a.id);
+      if (rec) {
+        applyAgentStatus(rec.visual, rec.state.status as RigStatus, STATUS_COLOR[rec.state.status] ?? STATUS_COLOR.idle, clipAliases);
+      }
+    });
+    agents.set(a.id, { state: a, visual, screen, bubble, behavior });
     updateAgentTag(a);
   }
 }
@@ -655,7 +705,23 @@ function updateAgentTag(a: AgentState): void {
 function applyStatus(a: AgentState): void {
   const rec = agents.get(a.id);
   if (!rec) return;
+  const prev = rec.state.status;
   rec.state = a;
+  rec.behavior.onStatus(a.status);
+  if (prev !== a.status) {
+    const at = rec.visual.root.position.clone();
+    const busy = prev === "working" || prev === "researching" || prev === "learning";
+    if (busy && a.status === "idle") {
+      // Xong việc: pháo giấy + ăn mừng.
+      effects.burst(at.setY(1.7), [0xf7b32b, 0x4f9cf9, 0xef6f8e, 0x43c59e, 0x8f7bf0], 46);
+      rec.behavior.celebrate();
+    } else if (a.status === "blocked") {
+      effects.pulse(at, 0xf85149, 2.8, 1.4);
+      effects.burst(at.setY(1.2), [0xf85149, 0xff9b8f], 26, 2.4, 2.6);
+    } else if (a.status === "waiting") {
+      effects.pulse(at, 0xd29922, 2.2, 1.2);
+    }
+  }
   applyAgentStatus(
     rec.visual,
     a.status as RigStatus,
@@ -744,6 +810,7 @@ canvas.addEventListener("click", (e) => {
   }
 });
 
+let lastFrameT = performance.now() / 1000;
 function animate(): void {
   requestAnimationFrame(animate);
   const t = performance.now() / 1000;
@@ -754,7 +821,14 @@ function animate(): void {
   );
   camera.lookAt(target.x, 1, target.z);
 
-  for (const { visual, state } of agents.values()) {
+  const dt = Math.min(0.1, t - lastFrameT);
+  lastFrameT = t;
+  for (const { visual, state, bubble, behavior } of agents.values()) {
+    behavior.update(dt, state.status);
+    const idleLabel = behavior.label();
+    const b = idleLabel ? { text: translate("vi", idleLabel), color: "#8b949e" } : statusBubble(state);
+    bubble.set(b?.text ?? null, b?.color);
+    bubble.update(dt);
     updateAgentVisual(visual, 1 / 60);
     const ring = visual.ring;
     const pulse =
@@ -763,6 +837,8 @@ function animate(): void {
         : 0.85;
     (ring.material as THREE.MeshBasicMaterial).opacity = pulse;
   }
+  tickDecor(t, camera);
+  effects.update(dt);
   renderer.render(scene, camera);
 }
 animate();
@@ -1066,6 +1142,30 @@ async function renderPermissions(): Promise<void> {
      <h3>Nhật ký truy cập</h3>${logs || "<p>Chưa có log.</p>"}`;
 }
 
+// ---------------- Thông báo desktop ----------------
+interface FunnyDesktop {
+  notify(title: string, body: string): void;
+  setPending(count: number): void;
+}
+const desktop = (window as unknown as { funnyDesktop?: FunnyDesktop }).funnyDesktop;
+
+/** Báo ra ngoài cửa sổ (Windows notification khi chạy trong app; Web Notification khi mở bằng trình duyệt). */
+function desktopNotify(title: string, body: string): void {
+  if (desktop) {
+    desktop.notify(title, body);
+    return;
+  }
+  if (!document.hidden || typeof Notification === "undefined") return;
+  if (Notification.permission === "granted") new Notification(title, { body });
+  else if (Notification.permission === "default") void Notification.requestPermission();
+}
+
+/** Số việc đang chờ bạn quyết định (quyền thư mục + duyệt token). */
+function syncPending(): void {
+  const n = (permDialog.classList.contains("hidden") ? 0 : 1) + (approvalDialog.classList.contains("hidden") ? 0 : 1);
+  desktop?.setPending(n);
+}
+
 // ---------------- Hộp thoại trong cảnh 3D ----------------
 const permDialog = document.getElementById("perm-dialog")!;
 const approvalDialog = document.getElementById("approval-dialog")!;
@@ -1073,6 +1173,7 @@ const approvalDialog = document.getElementById("approval-dialog")!;
 function hideDialogs(): void {
   permDialog.classList.add("hidden");
   approvalDialog.classList.add("hidden");
+  syncPending();
 }
 
 function showPermissionDialog(req: PermissionRequest): void {
@@ -1088,6 +1189,8 @@ function showPermissionDialog(req: PermissionRequest): void {
       <button class="act ghost" onclick="decidePerm('${req.id}','readwrite')">Cho phép đọc và ghi</button>
       <button class="act danger" onclick="decidePerm('${req.id}','deny')">Từ chối</button>
     </div>`;
+  desktopNotify("Agent xin quyền truy cập", `${req.agentName} cần ${req.reason}: ${req.path}`);
+  syncPending();
 }
 
 /** Hộp thoại xin duyệt tác vụ tốn nhiều token — hiện ngay trong cảnh 3D. */
@@ -1107,17 +1210,21 @@ function showApprovalDialog(req: NonNullable<typeof pendingApproval>): void {
       <button class="act" onclick="decideApproval('${req.taskId}','approve')">Cho chạy</button>
       <button class="act danger" onclick="decideApproval('${req.taskId}','reject')">Từ chối</button>
     </div>`;
+  desktopNotify("Cần bạn duyệt tác vụ", `${req.agentName} muốn chạy: ${req.title}`);
+  syncPending();
 }
 
 async function decidePerm(id: string, mode: string): Promise<void> {
   await api("/api/permissions/decide", { method: "POST", body: { requestId: id, mode } });
   permDialog.classList.add("hidden");
+  syncPending();
   toast("Đã xử lý yêu cầu quyền: " + mode);
 }
 
 async function decideApproval(taskId: string, action: "approve" | "reject"): Promise<void> {
   await api(`/api/tasks/${taskId}/${action}`, { method: "POST" });
   approvalDialog.classList.add("hidden");
+  syncPending();
   pendingApproval = null;
   toast(action === "approve" ? "Đã duyệt, tác vụ đang chạy." : "Đã từ chối tác vụ.");
 }
@@ -1204,6 +1311,7 @@ function connectWs(): void {
         toast("Yêu cầu quyền đã được xử lý.", "info");
         break;
       case "injection":
+        desktopNotify("Phát hiện prompt injection", `Đã bỏ qua lệnh ẩn tại ${(data as any).url}`);
         toast(
           `⚠ Phát hiện prompt injection tại ${(data as any).url} — đã bỏ qua, không làm theo.`,
           "danger",

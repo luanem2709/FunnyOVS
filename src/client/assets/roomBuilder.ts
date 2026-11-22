@@ -11,6 +11,13 @@
 import * as THREE from "three";
 import { cloneAsset, peekAsset, placeOnFloor, centerXZ } from "./loader.js";
 import type { Manifest } from "./manifest.js";
+import {
+  buildPhoneProp,
+  buildFunnelProp,
+  buildChartProp,
+  buildServerRackProp,
+  buildBoardArt,
+} from "./decor.js";
 
 /** Kích thước vật thể dự phòng (w, h, d) khi không có model. */
 export type FallbackSize = [number, number, number];
@@ -35,6 +42,8 @@ export interface Placement {
   group?: string;
   /** Bỏ qua instancing (dùng cho vật thể cần tương tác riêng). */
   unique?: boolean;
+  /** Nội dung vẽ sẵn trên bảng. */
+  art?: "roadmap" | "content";
 }
 
 /** Bố cục đồ đạc cho từng loại phòng (theo `props` của server). */
@@ -115,6 +124,9 @@ export function deskLayout(
   return out;
 }
 
+/** Bảng roadmap ở phòng Giao việc (tâm bảng cao `y`, lùi `zFrac` × chiều sâu phòng). Bảng việc sống phủ lên đúng mặt bảng này. */
+export const ROADMAP_BOARD = { y: 1.7, zFrac: -0.42, w: 4.2, h: 1.5 } as const;
+
 /** Bố cục trang trí đặc trưng cho từng phòng (trả về vị trí tương đối). */
 export function propLayout(kind: PropKind, roomW: number, roomD: number): Placement[] {
   switch (kind) {
@@ -148,6 +160,7 @@ export function propLayout(kind: PropKind, roomW: number, roomD: number): Placem
           z: -roomD * 0.42,
           y: 1.7,
           fallback: [3.2, 1.8, 0.12],
+          art: "content",
           unique: true,
         },
       ];
@@ -202,9 +215,10 @@ export function propLayout(kind: PropKind, roomW: number, roomD: number): Placem
         {
           keywords: ["board", "whiteboard", "sign", "tv", "television"],
           x: 0,
-          z: -roomD * 0.42,
-          y: 1.7,
-          fallback: [4.2, 1.5, 0.1],
+          z: roomD * ROADMAP_BOARD.zFrac,
+          y: ROADMAP_BOARD.y,
+          fallback: [ROADMAP_BOARD.w, ROADMAP_BOARD.h, 0.1],
+          art: "roadmap",
           unique: true,
         },
       ];
@@ -282,7 +296,7 @@ function buildDesk(): THREE.Group {
 }
 
 /** Ghế văn phòng: chân sao + mặt ghế + lưng. */
-function buildChair(): THREE.Group {
+export function buildChair(): THREE.Group {
   const g = new THREE.Group();
   for (let k = 0; k < 5; k++) {
     const a = (k / 5) * Math.PI * 2;
@@ -336,11 +350,16 @@ function buildMonitor(): THREE.Group {
 }
 
 /** Bảng trắng / bảng thông tin trên tường. */
-function buildBoard(w: number, h: number): THREE.Group {
+function buildBoard(w: number, h: number, art?: "roadmap" | "content"): THREE.Group {
   const g = new THREE.Group();
   const board = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.08), M.panel);
   board.castShadow = true;
   g.add(board);
+  if (art) {
+    const face = buildBoardArt(art, w - 0.16, h - 0.16);
+    face.position.z = 0.045;
+    g.add(face);
+  }
   const frame = new THREE.Mesh(new THREE.BoxGeometry(w + 0.08, h + 0.08, 0.04), M.accent);
   frame.position.z = -0.03;
   g.add(frame);
@@ -448,8 +467,21 @@ export function buildFurniture(
       continue;
     }
     if (kind === "board" || kind === "whiteboard") {
-      const g = buildBoard(p.fallback[0], p.fallback[1]);
+      const g = buildBoard(p.fallback[0], p.fallback[1], p.art);
       g.position.set(p.x, p.y ?? 1.6, p.z);
+      container.add(g);
+      continue;
+    }
+    // Đồ đặc trưng dựng bằng code, thay cho hộp xám dự phòng (chỉ khi không có model Kenney).
+    const special =
+      kind === "phone" ? buildPhoneProp
+      : kind === "funnel" ? buildFunnelProp
+      : kind === "barrel" ? buildChartProp
+      : kind === "router" ? buildServerRackProp
+      : null;
+    if (special && !resolveAsset(manifest, p.keywords)) {
+      const g = special();
+      g.position.set(p.x, p.y ?? 0, p.z);
       container.add(g);
       continue;
     }

@@ -26,8 +26,13 @@ export interface AppConfig {
   perTaskTokenLimit: number;
   /** Ngưỡng cảnh báo (0..1). */
   warnRatio: number;
-  /** Backend LLM: "cursor-agent" (dùng pool gói Cursor) hoặc "rule". */
-  llmBackend: "cursor-agent" | "rule";
+  /**
+   * Backend LLM: "auto" (router nếu có nhà cung cấp AI sẵn sàng, không thì Cursor nếu đã đăng nhập),
+   * "router" (chỉ nhà cung cấp tự kết nối), "cursor-agent" (Cursor CLI) hoặc "rule" (không gọi LLM).
+   */
+  llmBackend: "auto" | "router" | "cursor-agent" | "rule";
+  /** Người dùng đã tự chọn llmBackend (nếu chưa thì mặc định mới "auto" thay cho giá trị cũ). */
+  llmBackendChosen?: boolean;
   /** Model mặc định gửi cho Cursor CLI. Gói Free chỉ cho phép "auto". */
   cursorModel: string;
   /** Chỉ dùng model thuộc bucket "auto" của gói (true với gói Free). */
@@ -61,15 +66,18 @@ export class ConfigStore {
       weeklyTokenLimit: 900_000,
       perTaskTokenLimit: 200_000,
       warnRatio: 0.8,
-      llmBackend: "cursor-agent",
+      llmBackend: "auto",
       cursorModel: "auto",
       freeTierOnly: true,
-      cursorQuotaEnabled: true,
+      // Mặc định TẮT: bật là app đọc token đăng nhập Cursor trên máy và gọi API nội bộ (không chính thức) — người dùng phải chủ động đồng ý.
+      cursorQuotaEnabled: false,
       cursorQuotaPollMs: 60_000,
     };
     try {
       const raw = fs.readFileSync(this.configPath, "utf8");
       const parsed = JSON.parse(raw);
+      // Cấu hình cũ lưu "cursor-agent" do mặc định của bản trước (không phải lựa chọn của người dùng) → chuyển sang "auto".
+      if (parsed.llmBackend === "cursor-agent" && !parsed.llmBackendChosen) parsed.llmBackend = "auto";
       return {
         ...defaults,
         ...parsed,
@@ -92,6 +100,7 @@ export class ConfigStore {
 
   update(patch: Partial<AppConfig>): AppConfig {
     this.config = { ...this.config, ...patch, browser: { ...this.config.browser, ...(patch.browser ?? {}) } };
+    if (patch.llmBackend) this.config.llmBackendChosen = true;
     if (!AUTOMATION_LEVELS.includes(this.config.automationLevel)) this.config.automationLevel = "balanced";
     this.persist();
     return this.get();
