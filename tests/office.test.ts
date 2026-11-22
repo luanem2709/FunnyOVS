@@ -60,6 +60,17 @@ describe("schema OfficeEntity", () => {
     }
   });
 
+  it("nhãn việc đang làm và lý do cần duyệt mang theo khoá i18n để client dịch (E1)", () => {
+    const reg = new AgentRegistry();
+    reg.setStatus("minh", "working", "Phân việc: Chiến dịch", { key: "task.delegating", vars: { title: "Chiến dịch" } });
+    const md = agentToEntity(reg.get("minh")!).metadata;
+    expect(md).toMatchObject({ task: "Phân việc: Chiến dịch", taskKey: "task.delegating", taskVars: { title: "Chiến dịch" } });
+    const t = taskToEntity(
+      task({ status: "awaiting-approval", approvalReason: "Vượt ngưỡng", estimation: { estimatedTokens: 90_000, reasonKey: "approval.reason.overLimit", reasonVars: { tokens: "90,000", limit: "50,000" } } as TaskRecord["estimation"] }),
+    );
+    expect(t.metadata).toMatchObject({ approvalReason: "Vượt ngưỡng", approvalReasonKey: "approval.reason.overLimit", approvalReasonVars: { tokens: "90,000", limit: "50,000" } });
+  });
+
   it("waiting → pending-approval; các trạng thái khác giữ nguyên", () => {
     const reg = new AgentRegistry();
     reg.setStatus("mai", "waiting", "x");
@@ -95,7 +106,7 @@ describe("OfficeBridge", () => {
     const snap = bridge.snapshot();
     expect(snap.type).toBe("snapshot");
     if (snap.type !== "snapshot") return;
-    expect(snap.entities.filter((e) => e.kind === "agent")).toHaveLength(8);
+    expect(snap.entities.filter((e) => e.kind === "agent")).toHaveLength(17);
     expect(snap.entities.filter((e) => e.kind === "task").map((e) => e.id)).toEqual(["task:t1"]);
     expect(snap.entities.some((e) => e.id === MACHINE_ID)).toBe(true);
     for (const e of snap.entities) expect(isOfficeEvent({ type: "entity.updated", entity: e })).toBe(true);
@@ -150,6 +161,24 @@ describe("OfficeBridge", () => {
       createdAt: "x",
     })[0];
     expect(tok.type === "approval.requested" && tok.kind === "token" && tok.id === "t9").toBe(true);
+  });
+
+  it("quyết định quyền: denied → deny, approved → approve", () => {
+    const { bridge } = makeBridge({ tasks: [], machine: null });
+    const deny = bridge.translate("permission:decided", { id: "p1", agentId: "an", status: "denied" })[0];
+    const ok = bridge.translate("permission:decided", { id: "p2", agentId: "an", status: "approved" })[0];
+    expect(deny.type === "approval.decided" && deny.decision).toBe("deny");
+    expect(ok.type === "approval.decided" && ok.decision).toBe("approve");
+  });
+
+  it("dừng khẩn cấp → sự kiện emergency + nhật ký", () => {
+    const { bridge } = makeBridge({ tasks: [], machine: null });
+    const on = bridge.translate("emergency", { emergencyStop: true });
+    expect(on.map((e) => e.type)).toEqual(["emergency", "log"]);
+    expect(on[0].type === "emergency" && on[0].active).toBe(true);
+    const off = bridge.translate("emergency", { emergencyStop: false });
+    expect(off[0].type === "emergency" && off[0].active).toBe(false);
+    expect(isOfficeEvent(on[0])).toBe(true);
   });
 
   it("sự kiện lạ bị bỏ qua, nhật ký duyệt web được dịch", () => {

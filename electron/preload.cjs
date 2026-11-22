@@ -6,4 +6,6 @@ contextBridge.exposeInMainWorld("funnyDesktop", {
   notify: (title, body) => ipcRenderer.send("desktop:notify", String(title).slice(0, 120), String(body).slice(0, 300)),
   /** Báo số việc đang chờ bạn duyệt (hiện trên tooltip khay hệ thống). */
   setPending: (count) => ipcRenderer.send("desktop:pending", Number(count) || 0),
+  /** Khởi động lại ứng dụng (cần sau khi đổi chế độ LAN). */
+  restart: () => ipcRenderer.send("desktop:restart"),
 });

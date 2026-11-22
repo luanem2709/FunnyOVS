@@ -13,6 +13,25 @@ Cả năm dự án đều dùng **giấy phép MIT**; theo điều kiện của 
 
 Phân tích chi tiết và lý do chọn từng phần: `docs/05-hop-nhat-5-repo.md`.
 
+### Ý tưởng phân tầng công ty (Giám đốc → Trưởng phòng → Nhân viên)
+Chỉ tham khảo **ý tưởng**, không sao chép mã (`src/server/org/*`, `src/client/office-3d/ui/OrgPanel.tsx` do FunnyOVS tự viết):
+
+| Dự án | Giấy phép | Ý tưởng dùng |
+|---|---|---|
+| [1mancompany/OneManCompany](https://github.com/1mancompany/OneManCompany) | Apache-2.0 | Cây tác vụ: cấp trên tách việc rồi phân xuống, nghiệm thu ở mỗi cấp |
+| [abh2050/agent-org-chart](https://github.com/abh2050/agent-org-chart) | không ghi giấy phép trong repo | Sơ đồ tổ chức là dữ liệu thuần; độ sâu giao việc bị chặn, không vòng lặp |
+| [kevmurr57/knownow-office-agents](https://github.com/kevmurr57/knownow-office-agents) | không ghi giấy phép trong repo | Tách yêu cầu nhiều phòng thành từng phần; giao việc rõ ràng; việc tốn tiền/không đảo ngược trả về người |
+| [tmege/agents-company](https://github.com/tmege/agents-company) | không ghi giấy phép trong repo | Chuỗi chỉ huy hub-and-spoke, không giao việc vòng tròn |
+
+Ba dự án không ghi giấy phép được coi là "bảo lưu mọi quyền": FunnyOVS **không** copy mã hay nội dung của chúng.
+
+## Dịch vụ AI bên ngoài (không đi kèm mã)
+FunnyOVS **kết nối** (qua giao diện OpenAI-compatible) tới các dịch vụ do người dùng tự cài hoặc tự đăng ký: [OmniRoute](https://github.com/diegosouzapw/OmniRoute) (cổng gom nhiều nguồn AI, chạy cục bộ),
+Ollama, LM Studio, Groq, Google Gemini, Cerebras, Mistral, OpenRouter, GitHub Models. **Không copy mã hay asset** của các dịch vụ này; điều khoản sử dụng của từng dịch vụ do người dùng chấp nhận khi tạo khoá.
+
+## Sửa đổi trên mã port
+`src/client/assets/chibiRig.js` (port từ my-office, MIT): thêm **cà vạt** cho áo sơ mi (`cfg.tie`), **huy hiệu** ngực màu phòng ban (`cfg.badge`), và đặt các chi tiết (cà vạt, ve áo, huy hiệu) **lên đúng bề mặt thân** (`torsoSurf`) để thấy được từ xa. Phần còn lại giữ nguyên.
+
 ## Đã loại có chủ đích
 - **Firebase** (Agentes IA 3D), **Upstash Box** (cubefarm), **Minecraft/Mojang** (agent-office-3d): là dịch vụ ngoài hoặc cần đồng ý điều khoản bên thứ ba — không dùng.
 - **Asset (GLB, font, PNG)** của năm dự án trên: **không copy**. Riêng 17 file GLB của Hermes3D không ghi nguồn gốc/giấy phép.
@@ -22,7 +41,7 @@ Mã của FunnyOVS tự nạp model từ `public/models/` nếu có (xem `npm ru
 dùng giấy phép **Creative Commons CC0** (không yêu cầu ghi nguồn, nhưng nên ghi). Hiện **chưa** đưa vào repo.
 
 ## Thư viện chạy (runtime)
-React, React DOM, @react-three/fiber, Zustand, three, zod, express, ws, better-sqlite3, playwright-core, Electron: đều MIT hoặc tương đương;
+React, React DOM, @react-three/fiber, Zustand, three, zod, express, ws, better-sqlite3, playwright-core, Electron, **nodemailer** (MIT, © Andris Reinman) và **imapflow** (MIT, © Postal Systems OÜ — email SMTP/IMAP thật): đều MIT hoặc tương đương;
 xem `package.json` / `package-lock.json` để biết phiên bản.
 
 ---

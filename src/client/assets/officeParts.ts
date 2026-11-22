@@ -8,8 +8,10 @@
 import * as THREE from "three";
 import type { Manifest } from "./manifest.js";
 import { buildFurniture, deskLayout, propLayout, DESK_TOP_Y } from "./roomBuilder.js";
-import { buildRoomDecor } from "./decor.js";
+import { buildRoomDecor, registerNightLight } from "./decor.js";
+import { floorKindFor, floorMaterial } from "./floors.js";
 import type { OfficeEntity } from "../../shared/officeEntity.js";
+import { paintBadge, type BadgeInfo } from "./workboard.js";
 
 export interface RoomDef {
   id: string;
@@ -43,6 +45,8 @@ export function makeSign(text: string, w: number, h: number, color = "#4f9cf9"):
   tex.colorSpace = THREE.SRGBColorSpace;
   const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false }));
   spr.scale.set(w, h, 1);
+  // Biển phòng: renderer thu nhỏ khi camera ở gần để không che cả màn hình (xem OfficeScene).
+  spr.userData.roomSign = [w, h];
   return spr;
 }
 
@@ -52,7 +56,8 @@ export function buildRoomShell(parent: THREE.Object3D, room: RoomDef, manifest: 
 
   const floor = new THREE.Mesh(
     new THREE.PlaneGeometry(size.w, size.d),
-    new THREE.MeshStandardMaterial({ color: room.floor, roughness: 0.92 }),
+    // Sàn riêng cho từng khu: gỗ / thảm / gạch (texture sinh sẵn), tông màu theo phòng.
+    floorMaterial(floorKindFor(room.id), room.floor, size.w, size.d),
   );
   floor.rotation.x = -Math.PI / 2;
   floor.position.set(center.x, 0.01, center.z);
@@ -73,7 +78,8 @@ export function buildRoomShell(parent: THREE.Object3D, room: RoomDef, manifest: 
   sign.position.set(center.x, WALL_H + 0.75, center.z - size.d / 2);
   parent.add(sign);
 
-  const lamp = new THREE.PointLight(0xffe9c4, 0.5, Math.max(size.w, size.d) * 0.8, 2);
+  // Đèn phòng: mờ ban ngày, sáng hơn khi trời tối (xem setNight trong decor.ts).
+  const lamp = registerNightLight(new THREE.PointLight(0xffe9c4, 0.5, Math.max(size.w, size.d) * 0.8, 2), 0.5, 1.7);
   lamp.position.set(center.x, WALL_H - 0.3, center.z);
   parent.add(lamp);
 
@@ -131,6 +137,8 @@ export class AgentScreen {
   private ctx: CanvasRenderingContext2D;
   private tex: THREE.CanvasTexture;
   private lastKey = "";
+  /** Dịch chữ trên màn hình (mặc định trả nguyên khoá; renderer đặt hàm dịch thật). */
+  tt: (key: string) => string = (k) => k;
 
   constructor(x: number, z: number) {
     const cvs = document.createElement("canvas");
@@ -146,9 +154,11 @@ export class AgentScreen {
     this.draw(null, []);
   }
 
-  draw(e: OfficeEntity | null, lines: ScreenLogLine[]): void {
+  /** `taskText`: nhãn việc đang làm đã dịch (nếu không có thì dùng `metadata.task` nguyên văn). */
+  draw(e: OfficeEntity | null, lines: ScreenLogLine[], taskText?: string): void {
     const md = (e?.metadata ?? {}) as Record<string, unknown>;
-    const key = [e?.status, md.task, md.currentUrl, md.currentTitle, lines.map((l) => l.text).join("|")].join("::");
+    const task = taskText ?? (typeof md.task === "string" ? md.task : "");
+    const key = [e?.status, task, md.currentUrl, md.currentTitle, lines.map((l) => l.text).join("|")].join("::");
     if (key === this.lastKey) return;
     this.lastKey = key;
 
@@ -159,7 +169,7 @@ export class AgentScreen {
       c.fillStyle = "#30363d";
       c.font = "20px sans-serif";
       c.textAlign = "center";
-      c.fillText("Màn hình đã tắt", 256, 160);
+      c.fillText(this.tt("scene.screenOff"), 256, 160);
       this.tex.needsUpdate = true;
       return;
     }
@@ -168,7 +178,9 @@ export class AgentScreen {
     c.fillStyle = "#4f9cf9";
     c.font = "bold 20px sans-serif";
     c.textAlign = "left";
-    c.fillText(`${e.name} — ${String(md.role ?? "")}`, 12, 28);
+    const roleKey = `role.${String(md.agentId ?? "")}`;
+    const roleText = this.tt(roleKey);
+    c.fillText(`${e.name} — ${roleText === roleKey ? String(md.role ?? "") : roleText}`, 12, 28);
     c.fillStyle = statusHex(e.status);
     c.textAlign = "right";
     c.fillText(e.status.toUpperCase(), 500, 28);
@@ -176,7 +188,7 @@ export class AgentScreen {
     c.textAlign = "left";
     c.fillStyle = "#e6edf3";
     c.font = "bold 16px sans-serif";
-    c.fillText(ell(String(md.currentTitle || md.task || "Đang rảnh"), 40), 12, 68);
+    c.fillText(ell(String(md.currentTitle || task || this.tt("scene.screenIdle")), 40), 12, 68);
     c.fillStyle = "#4f9cf9";
     c.font = "13px monospace";
     c.fillText(ell(String(md.currentUrl ?? "—"), 60), 12, 90);
@@ -190,7 +202,7 @@ export class AgentScreen {
     }
     if (lines.length === 0) {
       c.fillStyle = "#8b949e";
-      c.fillText("Chưa có hoạt động nào", 12, y);
+      c.fillText(this.tt("scene.screenNoActivity"), 12, y);
     }
     this.tex.needsUpdate = true;
   }
@@ -202,26 +214,80 @@ export class AgentScreen {
   }
 }
 
+/**
+ * Huy hiệu số việc đang mở trên bàn của người phụ trách: chấm tròn nhỏ (sprite luôn quay về camera) nằm ở góc phải trên màn hình bàn,
+ * cách xa nhân vật nên không che người. Xanh = đang mở, vàng = có việc chờ duyệt, đỏ "!" = có việc vừa lỗi; không có việc thì ẩn.
+ */
+export class WorkBadge {
+  readonly sprite: THREE.Sprite;
+  private readonly ctx: CanvasRenderingContext2D;
+  private readonly tex: THREE.CanvasTexture;
+  private lastKey = "";
+  /** Thông tin đang hiển thị (null = chưa đặt lần nào). */
+  info: BadgeInfo | null = null;
+
+  constructor(x: number, z: number) {
+    const cvs = document.createElement("canvas");
+    cvs.width = 128;
+    cvs.height = 128;
+    this.ctx = cvs.getContext("2d")!;
+    this.tex = new THREE.CanvasTexture(cvs);
+    this.tex.colorSpace = THREE.SRGBColorSpace;
+    this.sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.tex, transparent: true, depthWrite: false }));
+    this.sprite.scale.set(0.34, 0.34, 1);
+    this.sprite.position.set(x, DESK_TOP_Y + 0.75, z);
+    this.sprite.renderOrder = 5;
+    this.sprite.visible = false;
+  }
+
+  set(info: BadgeInfo): void {
+    const key = `${info.tone}:${info.open}`;
+    if (key === this.lastKey) return;
+    this.lastKey = key;
+    this.info = info;
+    paintBadge(this.ctx, 128, info);
+    this.tex.needsUpdate = true;
+    this.sprite.visible = info.tone !== "none";
+  }
+
+  dispose(): void {
+    this.tex.dispose();
+    this.sprite.material.dispose();
+  }
+}
+
 function ell(s: string, n: number): string {
   return s.length > n ? s.slice(0, n - 1) + "…" : s;
 }
 
-/** Nhãn tên nổi trên đầu nhân vật (nền trắng, chữ đậm). */
-export function makeNameTag(name: string): THREE.Sprite {
+/** Màu chức danh theo tầng: Giám đốc vàng, Trưởng phòng xanh dương, Nhân viên xám. */
+export const TIER_COLOR: Record<number, string> = { 1: "#c9961a", 2: "#1f6feb", 3: "#6b7280" };
+
+/** Nhãn tên nổi trên đầu nhân vật; có `title` thì thêm dòng chức danh nhỏ và viền màu theo tầng. */
+export function makeNameTag(name: string, title?: string, tier = 3): THREE.Sprite {
   const cvs = document.createElement("canvas");
   cvs.width = 512;
-  cvs.height = 128;
+  cvs.height = 160;
   const ctx = cvs.getContext("2d")!;
-  ctx.fillStyle = "rgba(255,255,255,0.92)";
-  ctx.fillRect(0, 0, 512, 128);
+  ctx.fillStyle = "rgba(255,255,255,0.94)";
+  ctx.fillRect(0, 0, 512, 160);
+  if (title) {
+    ctx.fillStyle = TIER_COLOR[tier] ?? TIER_COLOR[3];
+    ctx.fillRect(0, 0, 512, 12);
+  }
   ctx.fillStyle = "#1f2937";
-  ctx.font = "bold 52px sans-serif";
+  ctx.font = "bold 62px sans-serif";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText(name, 256, 66);
+  ctx.fillText(name, 256, title ? 66 : 80);
+  if (title) {
+    ctx.fillStyle = TIER_COLOR[tier] ?? TIER_COLOR[3];
+    ctx.font = "bold 36px sans-serif";
+    ctx.fillText(title, 256, 122);
+  }
   const tex = new THREE.CanvasTexture(cvs);
   tex.colorSpace = THREE.SRGBColorSpace;
   const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false }));
-  spr.scale.set(2.4, 0.45, 1);
+  spr.scale.set(2.2, 0.69, 1);
   return spr;
 }

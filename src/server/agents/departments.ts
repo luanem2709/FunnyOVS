@@ -30,7 +30,7 @@ export type DepartmentId =
   | "ai-team"
   | "automation"
   | "library"
-  | "project";
+  | "executive";
 
 export interface DepartmentDef {
   id: DepartmentId;
@@ -141,14 +141,14 @@ export const DEPARTMENTS: DepartmentDef[] = [
     props: ["books", "desk"],
   },
   {
-    id: "project",
-    name: "Phòng Dự án mở rộng",
-    short: "Dự án",
-    leadId: "",
-    center: { x: 20, z: -16 },
-    size: { w: 6, d: 5.5 },
-    floor: 0xd2d2d6,
-    props: ["desk"],
+    id: "executive",
+    name: "Phòng Giám đốc",
+    short: "Giám đốc",
+    leadId: "giamdoc",
+    center: { x: 21, z: -17 },
+    size: { w: 8, d: 6.5 },
+    floor: 0xcdb98f,
+    props: ["desk", "roadmap"],
   },
 ];
 

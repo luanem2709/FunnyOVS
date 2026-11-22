@@ -10,7 +10,7 @@
  *  - Phát triển: chạy `tsx src/server/main.ts` bằng Node hệ thống (để better-sqlite3 dùng
  *    đúng bản build cho Node), cổng 8787, giao diện từ Vite ở :5173.
  */
-const { app, BrowserWindow, Menu, Tray, Notification, dialog, ipcMain, nativeImage, shell } = require("electron");
+const { app, BrowserWindow, Menu, Tray, Notification, dialog, ipcMain, nativeImage, session, shell, screen } = require("electron");
 const { spawn, fork } = require("node:child_process");
 const fs = require("node:fs");
 const net = require("node:net");
@@ -19,6 +19,55 @@ const path = require("node:path");
 const IS_DEV = !app.isPackaged;
 const DEV_SERVER_PORT = 8787;
 const DEV_CLIENT_URL = "http://localhost:5173";
+
+/** Ghi nhật ký của tiến trình chính vào userData/logs/main.log (để người dùng gửi kèm khi báo lỗi). */
+function logFile() {
+  return path.join(app.getPath("userData"), "logs", "main.log");
+}
+function log(...parts) {
+  try {
+    fs.mkdirSync(path.dirname(logFile()), { recursive: true });
+    const line = `${new Date().toISOString()} ${parts.map((p) => (p instanceof Error ? p.stack : String(p))).join(" ")}\n`;
+    fs.appendFileSync(logFile(), line);
+  } catch {
+    /* không ghi được nhật ký thì thôi */
+  }
+}
+process.on("uncaughtException", (err) => log("uncaughtException", err));
+process.on("unhandledRejection", (err) => log("unhandledRejection", err instanceof Error ? err : String(err)));
+
+/** Nhớ kích thước/vị trí cửa sổ giữa các lần mở. */
+function windowStateFile() {
+  return path.join(app.getPath("userData"), "window.json");
+}
+function readWindowState() {
+  const def = { width: 1440, height: 900 };
+  try {
+    const s = JSON.parse(fs.readFileSync(windowStateFile(), "utf8"));
+    const out = {
+      width: Math.max(960, Math.min(Number(s.width) || def.width, 7680)),
+      height: Math.max(600, Math.min(Number(s.height) || def.height, 4320)),
+      maximized: s.maximized === true,
+    };
+    // Chỉ khôi phục vị trí nếu còn nằm trong một màn hình đang cắm (tránh cửa sổ "mất tích" khi rút màn hình ngoài).
+    if (Number.isFinite(s.x) && Number.isFinite(s.y)) {
+      const visible = screen
+        .getAllDisplays()
+        .some((d) => s.x >= d.bounds.x - 50 && s.y >= d.bounds.y - 50 && s.x < d.bounds.x + d.bounds.width - 100 && s.y < d.bounds.y + d.bounds.height - 100);
+      if (visible) Object.assign(out, { x: s.x, y: s.y });
+    }
+    return out;
+  } catch {
+    return def;
+  }
+}
+function saveWindowState(win) {
+  try {
+    fs.writeFileSync(windowStateFile(), JSON.stringify({ ...win.getNormalBounds(), maximized: win.isMaximized() }));
+  } catch {
+    /* bỏ qua */
+  }
+}
 
 /** @type {import("node:child_process").ChildProcess | null} */
 let serverProc = null;
@@ -124,6 +173,7 @@ async function startServer() {
 
   serverProc.once("exit", (code) => {
     serverProc = null;
+    log("server exited", String(code));
     if (!quitting) {
       dialog.showErrorBox("FunnyOVS", `Server nội bộ đã dừng bất ngờ (mã ${code}). Ứng dụng sẽ đóng.`);
       app.quit();
@@ -174,9 +224,11 @@ function switchView(view) {
 }
 
 function createWindow(url) {
+  const ws = readWindowState();
   mainWindow = new BrowserWindow({
-    width: 1440,
-    height: 900,
+    width: ws.width,
+    height: ws.height,
+    ...(ws.x !== undefined ? { x: ws.x, y: ws.y } : {}),
     minWidth: 960,
     minHeight: 600,
     backgroundColor: "#0b0d12",
@@ -191,8 +243,11 @@ function createWindow(url) {
     },
   });
 
+  if (ws.maximized) mainWindow.maximize();
+
   // Đóng cửa sổ = thu xuống khay hệ thống, agent và vòng tự học vẫn chạy. Thoát hẳn bằng menu Thoát.
   mainWindow.on("close", (e) => {
+    saveWindowState(mainWindow);
     if (!quitting) {
       e.preventDefault();
       mainWindow.hide();
@@ -269,6 +324,13 @@ ipcMain.on("desktop:notify", (_e, title, body) => {
   notify(String(title), String(body));
   if (mainWindow && mainWindow.isVisible() && !mainWindow.isFocused()) mainWindow.flashFrame(true);
 });
+ipcMain.on("desktop:restart", (e) => {
+  // Chỉ nhận từ cửa sổ chính của chính ứng dụng (không từ trang bất kỳ nào khác).
+  if (!mainWindow || e.sender !== mainWindow.webContents) return;
+  log("restart requested");
+  app.relaunch();
+  app.quit();
+});
 ipcMain.on("desktop:pending", (_e, count) => {
   pendingCount = Math.max(0, Number(count) || 0);
   updateTray();
@@ -283,6 +345,7 @@ function buildMenu() {
         label: "Ứng dụng",
         submenu: [
           { label: "Mở thư mục workspace của agent", click: () => void shell.openPath(workspace) },
+          { label: "Mở thư mục nhật ký (gửi kèm khi báo lỗi)", click: () => void shell.openPath(path.dirname(logFile())) },
           { label: "Mở thư mục dữ liệu", click: () => void shell.openPath(IS_DEV ? path.join(__dirname, "..", ".data") : path.join(userDir, "data")) },
           { type: "separator" },
           { role: "quit", label: "Thoát" },
@@ -303,12 +366,17 @@ function buildMenu() {
           { role: "resetZoom", label: "Phóng to mặc định" },
           { role: "zoomIn", label: "Phóng to" },
           { role: "zoomOut", label: "Thu nhỏ" },
-          { role: "toggleDevTools", label: "Công cụ dev" },
+          ...(IS_DEV ? [{ role: "toggleDevTools", label: "Công cụ dev" }] : []),
         ],
       },
     ]),
   );
 }
+
+app.on("web-contents-created", (_e, contents) => {
+  // Không cho nhúng <webview>.
+  contents.on("will-attach-webview", (e) => e.preventDefault());
+});
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -316,6 +384,9 @@ if (!app.requestSingleInstanceLock()) {
   app.on("second-instance", showWindow);
 
   app.whenReady().then(async () => {
+    // Giao diện không cần quyền trình duyệt nào (thông báo đi qua tiến trình chính): từ chối tất cả.
+    session.defaultSession.setPermissionRequestHandler((_wc, _perm, cb) => cb(false));
+    session.defaultSession.setPermissionCheckHandler(() => false);
     buildMenu();
     buildTray();
     try {
@@ -327,7 +398,11 @@ if (!app.requestSingleInstanceLock()) {
       if (process.argv.includes("--hidden")) mainWindow.hide();
       else mainWindow.once("focus", () => mainWindow.flashFrame(false));
     } catch (err) {
-      dialog.showErrorBox("FunnyOVS", `Không khởi động được server nội bộ:\n${err instanceof Error ? err.message : err}`);
+      log("startServer failed", err instanceof Error ? err : String(err));
+      dialog.showErrorBox("FunnyOVS", `Không khởi động được server nội bộ:
+${err instanceof Error ? err.message : err}
+
+Nhật ký: ${logFile()}`);
       quitting = true;
       stopServer();
       app.quit();

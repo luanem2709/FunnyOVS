@@ -52,6 +52,9 @@ export interface CursorAgentResult {
   error?: string;
   /** Có phải lỗi "hết hạn mức" không. */
   quotaExhausted?: boolean;
+  /** Khoá i18n + biến cho lỗi (client dịch); `error` là bản tiếng Việt dự phòng. */
+  errorKey?: string;
+  errorVars?: Record<string, string | number>;
 }
 
 /** Tìm launcher của Cursor CLI trên máy. */
@@ -132,6 +135,7 @@ export async function runCursorAgent(opts: CursorAgentOptions): Promise<CursorAg
       usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
       durationMs: 0,
       error: "Không tìm thấy Cursor CLI. Cài bằng: irm 'https://cursor.com/install?win32=true' | iex",
+      errorKey: "err.cursor.notFound",
     };
   }
   const auth = getCursorAuth();
@@ -142,6 +146,7 @@ export async function runCursorAgent(opts: CursorAgentOptions): Promise<CursorAg
       usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
       durationMs: 0,
       error: "Chưa đăng nhập Cursor. Chạy `agent login` hoặc đặt CURSOR_AUTH_TOKEN.",
+      errorKey: "err.cursor.notLoggedIn",
     };
   }
 
@@ -198,6 +203,8 @@ export async function runCursorAgent(opts: CursorAgentOptions): Promise<CursorAg
           usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
           durationMs,
           error: `Cursor CLI quá thời gian (${timeoutMs}ms) — đã dừng.`,
+          errorKey: "err.cursor.timeout",
+          errorVars: { ms: timeoutMs },
         });
         return;
       }

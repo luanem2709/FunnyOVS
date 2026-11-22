@@ -2,51 +2,68 @@
  * Hành vi của agent trong văn phòng ngoài việc ngồi bàn.
  *
  *  - Khi RẢNH lâu, agent chọn ngẫu nhiên một việc nhỏ từ bảng `IDLE_ACTIONS`: ngồi tại chỗ
- *    (lướt điện thoại, suy nghĩ, dọn bàn, ngủ gật...) hoặc đứng dậy đi ra cửa phòng uống cà phê,
- *    dạo quanh đài phun nước, ra ghế đá — rồi đi bộ về chỗ.
+ *    (lướt điện thoại, suy nghĩ, dọn bàn, ngủ gật...) hoặc đứng dậy đi pha cà phê ở pantry (nếu gần; không thì ra cửa phòng),
+ *    xem bảng tin ở sảnh, dạo quanh đài phun nước, ra ghế đá — rồi đi bộ về chỗ.
  *  - Xong việc: giơ tay ăn mừng tại chỗ (pháo giấy do effects xử lý).
+ *  - Nhận/giao việc: phản ứng ngắn tại bàn (giơ tay "em nhận", chỉ tay giao việc) — `react()`.
+ *  - Họp: đi tới phòng họp, ngồi/đứng thuyết trình rồi quay về — `attendMeeting()`; không bị trạng thái "đang làm" cắt ngang.
  *  - Có việc mới (rời khỏi trạng thái rảnh) thì bỏ giải lao và quay về bàn ngay.
  *
  * Cấu trúc "bảng hành vi nhàn rỗi theo dữ liệu" (xác suất, thời lượng, địa điểm) lấy ý tưởng từ
  * `public/behavior.js` của agent-office-3d (https://github.com/jefferysha0627/agent-office-3d,
  * Copyright (c) 2026 Jeffery Sha, MIT). Nội dung và mã được viết lại cho FunnyOVS. Xem NOTICE.md.
  *
- * Có `NavGrid` (A*) thì đường đi né bàn/tường; không có thì đi theo cột lối đi cố định (giao diện cổ điển).
+ * Đi lại cần `NavGrid` (A*) để né bàn/tường; không có lưới thì agent chỉ làm các việc nhỏ tại chỗ.
+ * Để văn phòng không lộn xộn: tối đa `MAX_AWAY` người ra ngoài cùng lúc và có công tắc tắt hẳn (`setIdleLife`).
  */
 import * as THREE from "three";
+import type { Spot } from "../../shared/facilities.js";
 import type { AgentVisual } from "./characterFactory.js";
 import type { ChibiAnim } from "./chibi.js";
 import type { NavGrid, Point } from "./navgrid.js";
 
-type Phase = "seated" | "seatAct" | "leaving" | "break" | "returning" | "celebrate";
+export type { Spot };
 
-export type IdleWhere = "seat" | "door" | "fountain" | "bench";
+type Phase = "seated" | "seatAct" | "leaving" | "break" | "returning" | "celebrate" | "react" | "toMeeting" | "meeting";
+
+export type IdleWhere = "seat" | "door" | "fountain" | "bench" | "pantry" | "lobby";
 
 export interface IdleAction {
   id: string;
   /** Trọng số chọn (tương đối). */
   weight: number;
   where: IdleWhere;
+  /** Nơi thay thế khi `where` không có hoặc quá xa (vd. cà phê: pantry → cửa phòng). */
+  fallbackWhere?: IdleWhere;
+  /** Quãng đường tối đa tới `where` (mặc định `MAX_WALK`); nơi thay thế luôn dùng `MAX_WALK`. */
+  maxWalk?: number;
   /** Pose của rig chibi (xem chibiRig.js). */
   anim: string;
   /** Thời gian thực hiện (giây), không gồm thời gian đi bộ. */
   secs: [number, number];
+  /** Khoá i18n của nhãn (xem office-3d/i18n). */
   label: string;
 }
 
 export const IDLE_ACTIONS: IdleAction[] = [
-  { id: "phone", weight: 14, where: "seat", anim: "phone", secs: [10, 22], label: "📱 Lướt điện thoại" },
-  { id: "think", weight: 14, where: "seat", anim: "think", secs: [8, 18], label: "💭 Đang suy nghĩ" },
-  { id: "tidy", weight: 10, where: "seat", anim: "tidy", secs: [8, 16], label: "🧹 Dọn bàn" },
-  { id: "sleep", weight: 6, where: "seat", anim: "sleep", secs: [12, 24], label: "💤 Ngủ gật" },
-  { id: "coffee", weight: 22, where: "door", anim: "coffee", secs: [6, 12], label: "☕ Uống cà phê" },
-  { id: "fountain", weight: 14, where: "fountain", anim: "think", secs: [6, 12], label: "⛲ Ngắm đài phun nước" },
-  { id: "bench", weight: 12, where: "bench", anim: "phone", secs: [8, 16], label: "🪑 Nghỉ ở ghế đá" },
+  { id: "phone", weight: 14, where: "seat", anim: "phone", secs: [10, 22], label: "idle.phone" },
+  { id: "think", weight: 14, where: "seat", anim: "think", secs: [8, 18], label: "idle.think" },
+  { id: "tidy", weight: 10, where: "seat", anim: "tidy", secs: [8, 16], label: "idle.tidy" },
+  { id: "sleep", weight: 6, where: "seat", anim: "sleep", secs: [12, 24], label: "idle.sleep" },
+  { id: "coffee", weight: 22, where: "pantry", fallbackWhere: "door", maxWalk: 32, anim: "coffee", secs: [6, 12], label: "idle.coffee" },
+  { id: "lobby", weight: 6, where: "lobby", maxWalk: 32, anim: "think", secs: [6, 12], label: "idle.lobby" },
+  { id: "fountain", weight: 14, where: "fountain", anim: "think", secs: [6, 12], label: "idle.fountain" },
+  { id: "bench", weight: 12, where: "bench", anim: "phone", secs: [8, 16], label: "idle.bench" },
 ];
+
+/** Việc nhỏ có thể làm ở một nơi khả dụng: nơi chính hoặc nơi thay thế đều được tính. */
+function usable(a: IdleAction, available: ReadonlySet<IdleWhere>): boolean {
+  return available.has(a.where) || (a.fallbackWhere !== undefined && available.has(a.fallbackWhere));
+}
 
 /** Chọn một hành động theo trọng số, chỉ trong các địa điểm khả dụng. */
 export function pickIdleAction(available: ReadonlySet<IdleWhere>, rand: () => number = Math.random): IdleAction {
-  const pool = IDLE_ACTIONS.filter((a) => available.has(a.where));
+  const pool = IDLE_ACTIONS.filter((a) => usable(a, available));
   const total = pool.reduce((s, a) => s + a.weight, 0);
   let r = rand() * total;
   for (const a of pool) {
@@ -56,27 +73,66 @@ export function pickIdleAction(available: ReadonlySet<IdleWhere>, rand: () => nu
   return pool[pool.length - 1] ?? IDLE_ACTIONS[0];
 }
 
-/** Điểm đứng ngoài phòng. `yaw` là hướng mặt khi tới nơi. */
-export interface Spot {
-  x: number;
-  z: number;
-  yaw: number;
-}
-
 export interface BehaviorOptions {
-  /** Lưới A*; bỏ trống = đường cố định theo cột lối đi. */
+  /** Lưới A*; bỏ trống = chỉ làm việc nhỏ tại chỗ. */
   nav?: NavGrid;
-  /** Điểm đứng cho các địa điểm ngoài phòng. `door` luôn có. */
-  spots?: Partial<Record<Exclude<IdleWhere, "seat">, Spot>>;
+  /**
+   * Điểm đứng cho các địa điểm ngoài phòng. Một địa điểm có thể có NHIỀU điểm (vd. 3 chỗ trước quầy cà phê):
+   * agent chọn điểm gần nhất chưa có ai đứng, nên hai người không chồng lên nhau.
+   */
+  spots?: Partial<Record<Exclude<IdleWhere, "seat">, Spot | Spot[]>>;
   rand?: () => number;
 }
+
+/** Họp: ghế/chỗ đứng, thuyết trình hay nghe, thời lượng (giây) tại phòng họp. */
+export interface MeetingTask {
+  spot: Spot;
+  present?: boolean;
+  secs: number;
+}
+
+export type ReactKind = "receive" | "assign";
 
 const WALK_SPEED = 1.15;
 /** Quãng đường đi bộ tối đa (đơn vị thế giới) cho một lần ra ngoài. */
 export const MAX_WALK = 20;
+/** Đi họp được phép xa hơn (việc quan trọng): vẫn có giới hạn để không đi vòng cả toà nhà. */
+export const MAX_WALK_MEETING = 48;
+/** Số người tối đa được ra ngoài cùng lúc (giữ văn phòng gọn gàng). */
+export const MAX_AWAY = 3;
 const CELEBRATE_SECONDS = 2.6;
-const FIRST_IDLE_DELAY: [number, number] = [12, 25];
-const BETWEEN_ACTIONS: [number, number] = [20, 45];
+export const REACT_SECONDS = 1.8;
+const FIRST_IDLE_DELAY: [number, number] = [30, 70];
+const BETWEEN_ACTIONS: [number, number] = [60, 130];
+
+/** Pose khi phản ứng: nhận việc giơ tay "em nhận", giao việc đưa tay chỉ. */
+export const REACT_ANIM: Record<ReactKind, string> = { receive: "hand", assign: "board" };
+/** Pose khi họp: người thuyết trình đứng chỉ bảng; người nghe luân phiên các tư thế ngồi. */
+export const MEETING_PRESENT_ANIM = "board";
+export const MEETING_LISTEN_ANIMS = ["think", "idle", "hand", "idle", "laugh", "idle"] as const;
+const MEETING_BEAT_SECONDS = 5;
+
+let idleLifeEnabled = true;
+/** Bật/tắt toàn bộ hoạt cảnh nhàn rỗi (cài đặt của người dùng). Việc đang diễn ra vẫn kết thúc bình thường. */
+export function setIdleLife(on: boolean): void {
+  idleLifeEnabled = on;
+}
+export function isIdleLife(): boolean {
+  return idleLifeEnabled;
+}
+
+/** Bộ đếm số người đang ở ngoài, dùng chung cho mọi agent trong một cảnh. */
+const away = { count: 0 };
+/** Điểm đứng đang có người giữ (khoá theo toạ độ), dùng chung cho mọi agent trong một cảnh. */
+const claims = new Set<string>();
+const spotKey = (s: Spot): string => `${s.x.toFixed(2)},${s.z.toFixed(2)}`;
+export function resetAwayCounter(): void {
+  away.count = 0;
+  claims.clear();
+}
+export function awayCount(): number {
+  return away.count;
+}
 
 function between(range: [number, number], rand: () => number): number {
   return range[0] + rand() * (range[1] - range[0]);
@@ -87,24 +143,25 @@ export class AgentBehavior {
   private path: THREE.Vector2[] = [];
   private pos: THREE.Vector2;
   private timer = 0;
+  private elapsed = 0;
   private idleFor = 0;
   private nextActionAt: number;
   private yaw = 0;
   private faceYaw = 0;
   private current: IdleAction | null = null;
+  private meeting: MeetingTask | null = null;
+  private reaction: ReactKind | null = null;
+  private holdsAwaySlot = false;
+  private claimedSpot: string | null = null;
   private readonly seat: THREE.Vector2;
   private readonly rand: () => number;
   private readonly nav?: NavGrid;
-  private readonly spots: Partial<Record<Exclude<IdleWhere, "seat">, Spot>>;
+  private readonly spots: Partial<Record<Exclude<IdleWhere, "seat">, Spot | Spot[]>>;
 
   constructor(
     private readonly visual: AgentVisual,
     seatX: number,
     seatZ: number,
-    /** Cao độ z của cửa phòng (nơi đứng uống cà phê, trên cột lối đi). */
-    private readonly doorZ: number,
-    /** Cột x đi vòng qua bàn. */
-    private readonly exitX: number,
     /** Gọi khi ngồi lại bàn → áp lại pose theo trạng thái hiện tại. */
     private readonly onSeated: () => void,
     opts: BehaviorOptions = {},
@@ -113,31 +170,87 @@ export class AgentBehavior {
     this.pos = this.seat.clone();
     this.rand = opts.rand ?? Math.random;
     this.nav = opts.nav;
-    this.spots = { door: { x: exitX, z: doorZ, yaw: 0 }, ...(opts.spots ?? {}) };
+    this.spots = opts.spots ?? {};
     this.nextActionAt = between(FIRST_IDLE_DELAY, this.rand);
   }
 
-  /** Đang ở ngoài chỗ ngồi (đi bộ hoặc nghỉ ở điểm đứng). */
+  /** Đang ở ngoài chỗ ngồi (đi bộ, nghỉ ở điểm đứng, hoặc đi/ở phòng họp). */
   get away(): boolean {
-    return this.phase === "leaving" || this.phase === "break" || this.phase === "returning";
+    return this.phase === "leaving" || this.phase === "break" || this.phase === "returning" || this.phase === "toMeeting" || this.phase === "meeting";
   }
 
-  /** Nhãn hiển thị trong bong bóng khi đang làm việc nhàn rỗi; null nếu không. */
+  /** Đang đi họp hoặc đang họp. */
+  get inMeeting(): boolean {
+    return this.phase === "toMeeting" || this.phase === "meeting";
+  }
+
+  /** Đang làm động tác phản ứng nhận/giao việc. */
+  get reacting(): ReactKind | null {
+    return this.phase === "react" ? this.reaction : null;
+  }
+
+  /** Khoá i18n của nhãn bong bóng khi đang làm việc nhàn rỗi; null nếu không. */
   label(): string | null {
-    if (this.phase === "leaving" || this.phase === "returning") return this.current ? this.current.label : "🚶 Đi bộ";
+    if (this.inMeeting) return "idle.meeting";
+    if (this.phase === "leaving" || this.phase === "returning") return this.current?.label ?? "idle.walk";
     if (this.phase === "break" || this.phase === "seatAct") return this.current?.label ?? null;
     return null;
   }
 
+  private releaseSlot(): void {
+    if (this.holdsAwaySlot) {
+      away.count = Math.max(0, away.count - 1);
+      this.holdsAwaySlot = false;
+    }
+    if (this.claimedSpot) {
+      claims.delete(this.claimedSpot);
+      this.claimedSpot = null;
+    }
+  }
+
   /** Xong việc: ăn mừng tại chỗ. */
   celebrate(): void {
-    if ((this.phase !== "seated" && this.phase !== "seatAct") || !this.visual.chibi) return;
+    if ((this.phase !== "seated" && this.phase !== "seatAct" && this.phase !== "react") || !this.visual.chibi) return;
     this.phase = "celebrate";
     this.current = null;
+    this.reaction = null;
     this.timer = CELEBRATE_SECONDS;
   }
 
-  /** Trạng thái agent đổi: không còn rảnh thì bỏ việc nhỏ và về bàn. */
+  /**
+   * Phản ứng ngắn tại bàn khi nhận việc (giơ tay) hoặc giao việc (đưa tay chỉ).
+   * Chỉ chạy khi đang ngồi tại chỗ — không cắt ngang họp, đi lại hay ăn mừng. Trả về true nếu bắt đầu.
+   */
+  react(kind: ReactKind): boolean {
+    if ((this.phase !== "seated" && this.phase !== "seatAct") || !this.visual.chibi) return false;
+    this.phase = "react";
+    this.reaction = kind;
+    this.current = null;
+    this.timer = REACT_SECONDS;
+    return true;
+  }
+
+  /**
+   * Đi họp: tới `spot`, ngồi (hoặc đứng thuyết trình nếu `present`) `secs` giây rồi về chỗ.
+   * Từ chối (false) nếu không có lưới đường đi, đang ở ngoài chỗ, hoặc quãng đường vượt `MAX_WALK_MEETING`.
+   * Không dùng suất "ra ngoài" của việc nhàn rỗi (họp quan trọng hơn) và không bị trạng thái "đang làm" huỷ.
+   */
+  attendMeeting(task: MeetingTask): boolean {
+    if (!this.nav || !this.visual.chibi) return false;
+    if (this.phase !== "seated" && this.phase !== "seatAct" && this.phase !== "react" && this.phase !== "celebrate") return false;
+    const path = this.route(new THREE.Vector2(task.spot.x, task.spot.z));
+    if (pathLength(this.pos, path) > MAX_WALK_MEETING) return false;
+    this.phase = "toMeeting";
+    this.meeting = task;
+    this.current = null;
+    this.reaction = null;
+    this.faceYaw = task.spot.yaw;
+    this.path = path;
+    this.elapsed = 0;
+    return true;
+  }
+
+  /** Trạng thái agent đổi: không còn rảnh thì bỏ việc nhỏ và về bàn (họp và phản ứng không bị cắt). */
   onStatus(status: string): void {
     if (status === "idle") return;
     this.idleFor = 0;
@@ -150,37 +263,39 @@ export class AgentBehavior {
     }
   }
 
-  private route(from: THREE.Vector2, to: THREE.Vector2, viaColumn: boolean): THREE.Vector2[] {
-    if (this.nav) {
-      return this.nav.findPath([from.x, from.y], [to.x, to.y]).map((p: Point) => new THREE.Vector2(p[0], p[1]));
-    }
-    // Không có lưới: đi theo cột lối đi bên cạnh bàn.
-    if (viaColumn) {
-      return Math.abs(from.x - this.exitX) < 0.05
-        ? [new THREE.Vector2(this.exitX, to.y)]
-        : [new THREE.Vector2(this.exitX, from.y), new THREE.Vector2(this.exitX, to.y)];
-    }
-    return [to.clone()];
+  private route(to: THREE.Vector2): THREE.Vector2[] {
+    return this.nav!.findPath([this.pos.x, this.pos.y], [to.x, to.y]).map((p: Point) => new THREE.Vector2(p[0], p[1]));
   }
 
   private goBack(): void {
     this.phase = "returning";
-    if (this.nav) {
-      this.path = this.route(this.pos, this.seat, false);
-      return;
+    this.meeting = null;
+    this.path = this.route(this.seat);
+  }
+
+  /** Nơi đi cho một việc nhỏ: nơi chính nếu có và đủ gần, không thì nơi thay thế. null = không đi được. */
+  private plan(action: IdleAction): { spot: Spot; path: THREE.Vector2[] } | null {
+    for (const where of [action.where, action.fallbackWhere]) {
+      if (!where || where === "seat") continue;
+      const entry = this.spots[where];
+      if (!entry) continue;
+      const free = (Array.isArray(entry) ? [...entry] : [entry]).filter((sp) => !claims.has(spotKey(sp)));
+      free.sort((a, b) => Math.hypot(a.x - this.pos.x, a.z - this.pos.y) - Math.hypot(b.x - this.pos.x, b.z - this.pos.y));
+      const limit = where === action.where ? (action.maxWalk ?? MAX_WALK) : MAX_WALK;
+      for (const spot of free) {
+        const path = this.route(new THREE.Vector2(spot.x, spot.z));
+        // Điểm đứng quá xa (phải đi vòng cả toà nhà) thì thử điểm/nơi thay thế.
+        if (pathLength(this.pos, path) <= limit) return { spot, path };
+      }
     }
-    // Đang ở cột lối đi → đi dọc cột về hàng ghế rồi tới ghế; còn ở hàng ghế → đi thẳng về ghế.
-    this.path =
-      Math.abs(this.pos.x - this.exitX) < 0.05
-        ? [new THREE.Vector2(this.exitX, this.seat.y), this.seat.clone()]
-        : [this.seat.clone()];
+    return null;
   }
 
   private startAction(): void {
     const available = new Set<IdleWhere>(["seat"]);
-    for (const k of Object.keys(this.spots) as Array<Exclude<IdleWhere, "seat">>) available.add(k);
-    // Không có lưới: chỉ dùng điểm cửa (đường cố định không biết đường tới nơi khác).
-    if (!this.nav) for (const k of ["fountain", "bench"] as const) available.delete(k);
+    if (this.nav && away.count < MAX_AWAY) {
+      for (const k of Object.keys(this.spots) as Array<Exclude<IdleWhere, "seat">>) available.add(k);
+    }
     const action = pickIdleAction(available, this.rand);
     this.current = action;
     this.idleFor = 0;
@@ -189,19 +304,27 @@ export class AgentBehavior {
       this.timer = between(action.secs, this.rand);
       return;
     }
-    const spot = this.spots[action.where as Exclude<IdleWhere, "seat">]!;
-    const path = this.route(this.pos, new THREE.Vector2(spot.x, spot.z), true);
-    // Điểm đứng quá xa (phải đi vòng cả toà nhà) thì đổi sang một việc nhỏ tại chỗ.
-    if (pathLength(this.pos, path) > MAX_WALK) {
+    const plan = this.plan(action);
+    if (!plan) {
+      // Không có nơi nào đủ gần: đổi sang một việc nhỏ tại chỗ.
       const fallback = IDLE_ACTIONS.find((a) => a.id === "think")!;
       this.current = fallback;
       this.phase = "seatAct";
       this.timer = between(fallback.secs, this.rand);
       return;
     }
-    this.faceYaw = spot.yaw;
+    this.faceYaw = plan.spot.yaw;
     this.phase = "leaving";
-    this.path = path;
+    this.holdsAwaySlot = true;
+    away.count++;
+    this.claimedSpot = spotKey(plan.spot);
+    claims.add(this.claimedSpot);
+    this.path = plan.path;
+  }
+
+  /** Gọi khi gỡ khỏi cảnh — trả chỗ "ở ngoài" cho người khác. */
+  dispose(): void {
+    this.releaseSlot();
   }
 
   update(dt: number, status: string): void {
@@ -210,7 +333,7 @@ export class AgentBehavior {
 
     switch (this.phase) {
       case "seated": {
-        if (status === "idle") {
+        if (status === "idle" && idleLifeEnabled) {
           this.idleFor += dt;
           if (this.idleFor >= this.nextActionAt) this.startAction();
         } else {
@@ -229,6 +352,16 @@ export class AgentBehavior {
         }
         return;
       }
+      case "react": {
+        chibi.anim = REACT_ANIM[this.reaction ?? "receive"] as ChibiAnim;
+        this.timer -= dt;
+        if (this.timer <= 0) {
+          this.phase = "seated";
+          this.reaction = null;
+          this.onSeated();
+        }
+        return;
+      }
       case "celebrate": {
         this.timer -= dt;
         chibi.anim = "celebrate" as ChibiAnim;
@@ -238,6 +371,21 @@ export class AgentBehavior {
         }
         return;
       }
+      case "meeting": {
+        const m = this.meeting;
+        this.elapsed += dt;
+        this.timer -= dt;
+        chibi.sit = !m?.present;
+        if (m?.present) {
+          chibi.anim = MEETING_PRESENT_ANIM as ChibiAnim;
+        } else {
+          // Người nghe đổi tư thế theo nhịp, lệch pha giữa các ghế để không đồng loạt cử động.
+          const beat = Math.floor(this.elapsed / MEETING_BEAT_SECONDS + (m ? Math.abs(m.spot.x * 3 + m.spot.z) : 0));
+          chibi.anim = MEETING_LISTEN_ANIMS[beat % MEETING_LISTEN_ANIMS.length] as ChibiAnim;
+        }
+        if (this.timer <= 0) this.goBack();
+        break;
+      }
       case "break": {
         chibi.sit = false;
         chibi.anim = (this.current?.anim ?? "coffee") as ChibiAnim;
@@ -246,7 +394,8 @@ export class AgentBehavior {
         break;
       }
       case "leaving":
-      case "returning": {
+      case "returning":
+      case "toMeeting": {
         chibi.sit = false;
         chibi.anim = "walk";
         const next = this.path[0];
@@ -269,11 +418,17 @@ export class AgentBehavior {
             this.timer = between(this.current?.secs ?? [6, 12], this.rand);
             this.yaw = this.faceYaw;
             this.nextActionAt = between(BETWEEN_ACTIONS, this.rand);
+          } else if (this.phase === "toMeeting") {
+            this.phase = "meeting";
+            this.timer = this.meeting?.secs ?? 10;
+            this.elapsed = 0;
+            this.yaw = this.faceYaw;
           } else {
             this.phase = "seated";
             this.yaw = 0;
             this.current = null;
             this.idleFor = 0;
+            this.releaseSlot();
             chibi.sit = true;
             this.onSeated();
           }
@@ -283,8 +438,8 @@ export class AgentBehavior {
     }
     // Di chuyển cả cụm (vòng trạng thái, nhãn tên, bong bóng đi theo); chỉ xoay thân nhân vật.
     this.visual.root.position.set(this.pos.x, 0, this.pos.y);
-    const target = this.phase === "break" ? this.faceYaw : this.yaw;
-    chibi.root.rotation.y += shortestAngle(target - chibi.root.rotation.y) * Math.min(1, dt * 10);
+    const facing = this.phase === "break" || this.phase === "meeting" ? this.faceYaw : this.yaw;
+    chibi.root.rotation.y += shortestAngle(facing - chibi.root.rotation.y) * Math.min(1, dt * 10);
   }
 }
 

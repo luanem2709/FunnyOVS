@@ -132,6 +132,8 @@ interface Pulse {
 export interface Effects {
   /** Bắn hạt (pháo giấy / tia lửa) tại vị trí thế giới. */
   burst(at: THREE.Vector3, colors: number[], count?: number, speed?: number, up?: number): void;
+  /** Tờ giấy bay (giao việc xuống / báo cáo lên) từ `from` tới `to`, rồi gọi `onArrive`. */
+  memo(from: THREE.Vector3, to: THREE.Vector3, color: number, seconds?: number, onArrive?: () => void): void;
   /** Vòng sóng lan trên sàn. */
   pulse(at: THREE.Vector3, color: number, maxScale?: number, life?: number): void;
   update(dt: number): void;
@@ -154,6 +156,16 @@ export function createEffects(scene: THREE.Scene): Effects {
   scene.add(points);
 
   const pulses: Pulse[] = [];
+  interface Memo {
+    mesh: THREE.Mesh;
+    a: THREE.Vector3;
+    b: THREE.Vector3;
+    age: number;
+    life: number;
+    done?: () => void;
+  }
+  const memos: Memo[] = [];
+  const memoGeo = new THREE.PlaneGeometry(0.34, 0.44);
   const ringGeo = new THREE.RingGeometry(0.85, 1, 40);
   const c = new THREE.Color();
   let cursor = 0;
@@ -177,6 +189,16 @@ export function createEffects(scene: THREE.Scene): Effects {
         life[i] = 1.1 + Math.random() * 0.9;
       }
       geo.attributes.color.needsUpdate = true;
+    },
+    memo(from, to, color, seconds = 1.3, onArrive) {
+      const mesh = new THREE.Mesh(
+        memoGeo,
+        new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide, transparent: true, depthWrite: false }),
+      );
+      mesh.renderOrder = 9;
+      mesh.position.copy(from);
+      scene.add(mesh);
+      memos.push({ mesh, a: from.clone(), b: to.clone(), age: 0, life: Math.max(0.3, seconds), done: onArrive });
     },
     pulse(at, color, maxScale = 2.4, lifeSec = 1.1) {
       const mesh = new THREE.Mesh(
@@ -210,6 +232,22 @@ export function createEffects(scene: THREE.Scene): Effects {
       }
       if (touched) {
         geo.attributes.position.needsUpdate = true;
+      }
+      for (let i = memos.length - 1; i >= 0; i--) {
+        const m = memos[i];
+        m.age += dt;
+        const k = Math.min(1, m.age / m.life);
+        const e = k * k * (3 - 2 * k);
+        m.mesh.position.lerpVectors(m.a, m.b, e);
+        // Bay theo cung: nâng lên giữa chặng, xoay nhẹ như tờ giấy.
+        m.mesh.position.y += Math.sin(Math.PI * k) * (1.2 + m.a.distanceTo(m.b) * 0.12);
+        m.mesh.rotation.set(-0.9, Math.sin(k * 14) * 0.5, k * 6);
+        if (k >= 1) {
+          scene.remove(m.mesh);
+          (m.mesh.material as THREE.Material).dispose();
+          memos.splice(i, 1);
+          m.done?.();
+        }
       }
       for (let i = pulses.length - 1; i >= 0; i--) {
         const p = pulses[i];

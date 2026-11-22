@@ -5,7 +5,7 @@
  * Store chỉ là lớp mỏng bọc quanh hàm đó.
  */
 import { create } from "zustand";
-import type { EntityStatus, LogLevel, OfficeEntity, OfficeEvent } from "../../../shared/officeEntity.js";
+import type { EntityStatus, LogLevel, OfficeEntity, OfficeEvent, OrgNode } from "../../../shared/officeEntity.js";
 
 export type ConnectionState = "connecting" | "open" | "reconnecting" | "closed";
 
@@ -14,15 +14,24 @@ export interface LogItem {
   entityId?: string;
   level: LogLevel;
   text: string;
+  key?: string;
+  vars?: Record<string, string | number>;
+  extra?: string;
+  extraKey?: string;
+  extraVars?: Record<string, string | number>;
   at: string;
 }
 
 export interface ApprovalItem {
   id: string;
   entityId: string;
-  kind: "permission" | "token";
+  kind: "permission" | "token" | "action";
   summary: string;
+  key?: string;
+  vars?: Record<string, string | number>;
   detail?: string;
+  detailKey?: string;
+  detailVars?: Record<string, string | number>;
   at: string;
 }
 
@@ -57,10 +66,14 @@ export const MAX_LOGS = 300;
 export interface OfficeData {
   entities: Record<string, OfficeEntity>;
   approvals: Record<string, ApprovalItem>;
+  /** Cây giao việc theo tầng (id nút → nút). */
+  org: Record<string, OrgNode>;
   logs: LogItem[];
   lastChange: StatusChange | null;
   /** Đã nhận ít nhất một snapshot (phân biệt "đang tải" với "trống"). */
   loaded: boolean;
+  /** DỪNG KHẨN CẤP đang bật. */
+  emergency: boolean;
   logSeq: number;
   changeSeq: number;
 }
@@ -68,9 +81,11 @@ export interface OfficeData {
 export const emptyData = (): OfficeData => ({
   entities: {},
   approvals: {},
+  org: {},
   logs: [],
   lastChange: null,
   loaded: false,
+  emergency: false,
   logSeq: 0,
   changeSeq: 0,
 });
@@ -101,7 +116,7 @@ export function applyOfficeEvent(d: OfficeData, ev: OfficeEvent): OfficeData {
     }
     case "log": {
       const logSeq = d.logSeq + 1;
-      const item: LogItem = { id: logSeq, entityId: ev.entityId, level: ev.level, text: ev.text, at: ev.at };
+      const item: LogItem = { id: logSeq, entityId: ev.entityId, level: ev.level, text: ev.text, key: ev.key, vars: ev.vars, extra: ev.extra, extraKey: ev.extraKey, extraVars: ev.extraVars, at: ev.at };
       const logs = [item, ...d.logs];
       if (logs.length > MAX_LOGS) logs.length = MAX_LOGS;
       return { ...d, logSeq, logs };
@@ -111,7 +126,18 @@ export function applyOfficeEvent(d: OfficeData, ev: OfficeEvent): OfficeData {
         ...d,
         approvals: {
           ...d.approvals,
-          [ev.id]: { id: ev.id, entityId: ev.entityId, kind: ev.kind, summary: ev.summary, detail: ev.detail, at: ev.at },
+          [ev.id]: {
+            id: ev.id,
+            entityId: ev.entityId,
+            kind: ev.kind,
+            summary: ev.summary,
+            key: ev.key,
+            vars: ev.vars,
+            detail: ev.detail,
+            detailKey: ev.detailKey,
+            detailVars: ev.detailVars,
+            at: ev.at,
+          },
         },
       };
     case "approval.decided": {
@@ -120,6 +146,15 @@ export function applyOfficeEvent(d: OfficeData, ev: OfficeEvent): OfficeData {
       delete approvals[ev.id];
       return { ...d, approvals };
     }
+    case "emergency":
+      return d.emergency === ev.active ? d : { ...d, emergency: ev.active };
+    case "org.snapshot": {
+      const org: Record<string, OrgNode> = {};
+      for (const n of ev.nodes) org[n.id] = n;
+      return { ...d, org };
+    }
+    case "org.node":
+      return { ...d, org: { ...d.org, [ev.node.id]: ev.node } };
   }
 }
 
@@ -130,6 +165,8 @@ export interface OfficeStore extends OfficeData {
   attempt: number;
   departments: DepartmentLite[];
   budget: BudgetLite | null;
+  /** ask | balanced | autonomous */
+  automationLevel: string;
   selectedId: string | null;
   /** Điểm camera cần bay tới (id tăng dần để cùng một điểm vẫn kích hoạt lại). */
   focus: { x: number; z: number; n: number } | null;
@@ -138,6 +175,7 @@ export interface OfficeStore extends OfficeData {
   setConnection: (c: ConnectionState, attempt?: number, retryInSec?: number | null) => void;
   setDepartments: (d: DepartmentLite[]) => void;
   setBudget: (b: BudgetLite) => void;
+  setAutomationLevel: (l: string) => void;
   select: (id: string | null) => void;
   focusOn: (x: number, z: number) => void;
   setWebglLost: (v: boolean) => void;
@@ -151,6 +189,7 @@ export const useOfficeStore = create<OfficeStore>((set) => ({
   attempt: 0,
   departments: [],
   budget: null,
+  automationLevel: "balanced",
   selectedId: null,
   focus: null,
   webglLost: false,
@@ -158,6 +197,7 @@ export const useOfficeStore = create<OfficeStore>((set) => ({
   setConnection: (connection, attempt = 0, retryInSec = null) => set({ connection, attempt, retryInSec }),
   setDepartments: (departments) => set({ departments }),
   setBudget: (budget) => set({ budget }),
+  setAutomationLevel: (automationLevel) => set({ automationLevel }),
   select: (selectedId) => set({ selectedId }),
   focusOn: (x, z) => set((s) => ({ focus: { x, z, n: (s.focus?.n ?? 0) + 1 } })),
   setWebglLost: (webglLost) => set({ webglLost }),

@@ -8,6 +8,8 @@
  * Xem NOTICE.md.
  */
 
+import { FACILITIES, solidRects, type FacilityDef } from "../../shared/facilities.js";
+
 export type Point = [number, number];
 
 export class NavGrid {
@@ -195,6 +197,14 @@ export interface NavRoom {
   size: { w: number; d: number };
 }
 
+/** Tường 3 mặt của một phòng (mặt trước +z để mở). */
+function blockWalls(grid: NavGrid, r: NavRoom): void {
+  const { center: c, size: s } = r;
+  grid.blockRect(c.x, c.z - s.d / 2, s.w, 0.16, 0, 0.12);
+  grid.blockRect(c.x - s.w / 2, c.z, 0.16, s.d, 0, 0.12);
+  grid.blockRect(c.x + s.w / 2, c.z, 0.16, s.d, 0, 0.12);
+}
+
 /** Toạ độ cố định ngoài phòng: đài phun nước và ghế đá (khớp `buildEnvironment` trong decor.ts). */
 export const PLAZA = {
   fountain: { x: 0, z: 5.9, half: 1.35 },
@@ -207,15 +217,21 @@ export const PLAZA = {
 };
 
 /**
- * Dựng lưới cho cả toà nhà: tường 3 mặt của từng phòng (mặt trước để mở), bàn làm việc,
- * đài phun nước, ghế đá. Ghế ngồi không bị chặn để nhân vật xuất phát được từ chỗ ngồi.
+ * Dựng lưới cho cả toà nhà: tường 3 mặt của từng phòng ban và phòng tiện ích (mặt trước để mở), bàn làm việc,
+ * đồ đạc chặn đường của phòng tiện ích (bàn họp, quầy pantry, quầy lễ tân...), đài phun nước, ghế đá.
+ * Ghế ngồi không bị chặn để nhân vật xuất phát được từ chỗ ngồi.
  */
-export function buildOfficeNavGrid(rooms: NavRoom[], seats: Array<{ x: number; z: number }>, cell = 0.25): NavGrid {
+export function buildOfficeNavGrid(
+  rooms: NavRoom[],
+  seats: Array<{ x: number; z: number }>,
+  cell = 0.25,
+  facilities: FacilityDef[] = FACILITIES,
+): NavGrid {
   let minX = Infinity;
   let maxX = -Infinity;
   let minZ = Infinity;
   let maxZ = -Infinity;
-  for (const r of rooms) {
+  for (const r of [...rooms, ...facilities]) {
     minX = Math.min(minX, r.center.x - r.size.w / 2);
     maxX = Math.max(maxX, r.center.x + r.size.w / 2);
     minZ = Math.min(minZ, r.center.z - r.size.d / 2);
@@ -223,11 +239,10 @@ export function buildOfficeNavGrid(rooms: NavRoom[], seats: Array<{ x: number; z
   }
   const grid = new NavGrid(minX - 4, minZ - 4, maxX + 4, maxZ + 6, cell);
 
-  for (const r of rooms) {
-    const { center: c, size: s } = r;
-    grid.blockRect(c.x, c.z - s.d / 2, s.w, 0.16, 0, 0.12);
-    grid.blockRect(c.x - s.w / 2, c.z, 0.16, s.d, 0, 0.12);
-    grid.blockRect(c.x + s.w / 2, c.z, 0.16, s.d, 0, 0.12);
+  for (const r of rooms) blockWalls(grid, r);
+  for (const f of facilities) {
+    blockWalls(grid, f);
+    for (const r of solidRects(f)) grid.blockRect(r.x, r.z, r.w, r.d, 0, 0.1);
   }
   for (const seat of seats) grid.blockRect(seat.x, seat.z + 0.62, 1.7, 0.86, 0, 0.1);
   grid.blockRect(PLAZA.fountain.x, PLAZA.fountain.z, PLAZA.fountain.half * 2, PLAZA.fountain.half * 2, 0, 0.1);

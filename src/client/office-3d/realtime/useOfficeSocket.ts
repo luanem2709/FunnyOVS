@@ -98,11 +98,18 @@ export function useOfficeSocket(url: string = socketUrl()): OfficeSocketApi {
             if (Array.isArray(d)) store().setDepartments(d);
             const b = (frame.data as { budget?: BudgetLite } | undefined)?.budget;
             if (b) store().setBudget(b);
+            const lvl = (frame.data as { config?: { automationLevel?: string } } | undefined)?.config?.automationLevel;
+            if (lvl) store().setAutomationLevel(lvl);
             break;
           }
           case "budget":
             if (frame.data) store().setBudget(frame.data as BudgetLite);
             break;
+          case "config": {
+            const lvl = (frame.data as { automationLevel?: string } | undefined)?.automationLevel;
+            if (lvl) store().setAutomationLevel(lvl);
+            break;
+          }
         }
       };
       ws.onerror = () => {

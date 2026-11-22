@@ -15,6 +15,7 @@ import { buildEnvironment, buildRoomDecor, tickDecor } from "./assets/decor.js";
 import { createDayNight } from "./assets/dayNight.js";
 import { Bubble, createEffects } from "./assets/effects.js";
 import { AgentBehavior } from "./assets/behavior.js";
+import { translate } from "./office-3d/i18n/index.js";
 import { buildFurniture, deskLayout, propLayout, DESK_TOP_Y } from "./assets/roomBuilder.js";
 import {
   createAgentVisual,
@@ -636,10 +637,8 @@ function setupAgents(list: AgentState[]): void {
     const screen = new Screen(a.position.x + 0.52, a.position.z + 0.72);
     scene.add(screen.mesh);
     const bubble = new Bubble(visual.root, (visual.chibi ? 1.78 : visual.animated ? 2.35 : 2.5) + 0.85);
-    const dept = rooms.get(a.department);
-    const exitX = a.position.x + 1.4;
-    const doorZ = (dept ? dept.center.z + dept.size.d / 2 : a.position.z + 3) + 1.1;
-    const behavior = new AgentBehavior(visual, a.position.x, a.position.z, doorZ, exitX, () => {
+    // Giao diện cổ điển không có lưới A*: nhân vật chỉ làm việc nhỏ tại chỗ (đi lại có ở /office-3d/).
+    const behavior = new AgentBehavior(visual, a.position.x, a.position.z, () => {
       const rec = agents.get(a.id);
       if (rec) {
         applyAgentStatus(rec.visual, rec.state.status as RigStatus, STATUS_COLOR[rec.state.status] ?? STATUS_COLOR.idle, clipAliases);
@@ -827,7 +826,7 @@ function animate(): void {
   for (const { visual, state, bubble, behavior } of agents.values()) {
     behavior.update(dt, state.status);
     const idleLabel = behavior.label();
-    const b = idleLabel ? { text: idleLabel, color: "#8b949e" } : statusBubble(state);
+    const b = idleLabel ? { text: translate("vi", idleLabel), color: "#8b949e" } : statusBubble(state);
     bubble.set(b?.text ?? null, b?.color);
     bubble.update(dt);
     updateAgentVisual(visual, 1 / 60);

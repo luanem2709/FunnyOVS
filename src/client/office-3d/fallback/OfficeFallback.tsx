@@ -1,42 +1,45 @@
 /**
- * L6 — Dự phòng: bảng danh sách khi không có WebGL (hoặc WebGL mất ngữ cảnh / `?fallback=1`).
+ * L6 — Dự phòng: bảng danh sách khi không có WebGL (hoặc WebGL mất ngữ cảnh / lỗi dựng / `?fallback=1`).
  * Dùng cùng store với cảnh 3D nên số liệu luôn khớp.
  */
 import { useMemo } from "react";
+import { deptName, useT } from "../i18n/index.js";
 import { useOfficeStore, entitiesOfKind } from "../store/officeStore.js";
-import { StatusDot, statusLabel } from "../ui/panels.js";
+import { StatusDot } from "../ui/panels.js";
 
 export function OfficeFallback({ reason }: { reason: string }) {
+  const t = useT();
   const entities = useOfficeStore((s) => s.entities);
-  const departments = useOfficeStore((s) => s.departments);
   const loaded = useOfficeStore((s) => s.loaded);
   const select = useOfficeStore((s) => s.select);
   const selectedId = useOfficeStore((s) => s.selectedId);
 
-  const rows = useMemo(() => {
-    const deptName = new Map(departments.map((d) => [d.id, d.name]));
-    return [...entitiesOfKind(entities, "agent"), ...entitiesOfKind(entities, "machine"), ...entitiesOfKind(entities, "task")].map(
-      (e) => ({ e, dept: e.department ? (deptName.get(e.department) ?? e.department) : "—" }),
-    );
-  }, [entities, departments]);
+  const rows = useMemo(
+    () =>
+      [...entitiesOfKind(entities, "agent"), ...entitiesOfKind(entities, "machine"), ...entitiesOfKind(entities, "task")].map((e) => ({
+        e,
+        dept: e.department ? deptName(e.department) : t("common.none"),
+      })),
+    [entities, t],
+  );
 
   return (
-    <section className="fallback card" aria-label="Danh sách văn phòng (không dùng 3D)">
-      <h2>Văn phòng — chế độ danh sách</h2>
+    <section className="fallback card" aria-label={t("fallback.title")}>
+      <h2>{t("fallback.title")}</h2>
       <p className="muted small">{reason}</p>
       {!loaded ? (
-        <p className="muted">Đang tải dữ liệu…</p>
+        <p className="muted">{t("common.loading")}</p>
       ) : rows.length === 0 ? (
-        <p className="muted">Văn phòng đang trống.</p>
+        <p className="muted">{t("fallback.empty")}</p>
       ) : (
         <table>
           <thead>
             <tr>
               <th />
-              <th>Tên</th>
-              <th>Loại</th>
-              <th>Phòng</th>
-              <th>Trạng thái</th>
+              <th>{t("fallback.name")}</th>
+              <th>{t("fallback.type")}</th>
+              <th>{t("fallback.room")}</th>
+              <th>{t("fallback.status")}</th>
             </tr>
           </thead>
           <tbody>
@@ -46,9 +49,9 @@ export function OfficeFallback({ reason }: { reason: string }) {
                   <StatusDot status={e.status} />
                 </td>
                 <td>{e.name}</td>
-                <td>{e.kind}</td>
+                <td>{t(`kind.${e.kind}`)}</td>
                 <td>{dept}</td>
-                <td>{statusLabel(e.status)}</td>
+                <td>{t(`status.${e.status}`)}</td>
               </tr>
             ))}
           </tbody>

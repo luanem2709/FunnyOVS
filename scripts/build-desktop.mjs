@@ -29,7 +29,8 @@ fs.cpSync(path.join(root, "dist"), path.join(out, "dist"), { recursive: true });
 
 console.log("[desktop] gom server (esbuild)...");
 // Phụ thuộc native / có file đi kèm giữ ở ngoài, cài riêng vào build/app/node_modules.
-const external = ["better-sqlite3", "playwright-core"];
+// nodemailer + imapflow (email thật) nạp lười khi người dùng bật email; giữ ngoài để khỏi gom pino/worker vào bundle.
+const external = ["better-sqlite3", "playwright-core", "nodemailer", "imapflow"];
 await build({
   entryPoints: [path.join(root, "src/server/main.ts")],
   outfile: path.join(out, "server.mjs"),

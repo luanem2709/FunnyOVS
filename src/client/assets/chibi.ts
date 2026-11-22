@@ -16,6 +16,7 @@
  * Rig được port từ repo tham khảo MIT (references/my-office, © 2026 khanh020905).
  */
 import * as THREE from "three";
+import type { Persona } from "../../shared/personas.js";
 import {
   makeChibi,
   chibiPose,
@@ -26,14 +27,9 @@ import {
   type PoseOptions,
 } from "./chibiRig.js";
 
-export type ChibiAnim =
-  | "idle"
-  | "type"
-  | "read"
-  | "wave"
-  | "think"
-  | "sweat"
-  | "walk";
+/** Các pose của chibiRig.js mà giao diện dùng (test `rig.poses` kiểm từng tên đều có thật trong rig). */
+export const CHIBI_ANIMS = ["idle", "type", "read", "think", "sweat", "walk", "hand", "board", "laugh", "clap", "celebrate", "coffee", "phone", "tidy", "sleep", "shake", "slam"] as const;
+export type ChibiAnim = (typeof CHIBI_ANIMS)[number];
 
 /** Bảng màu áo cho 8 agent — màu tương phản, dễ nhận dạng từ xa. */
 export const SHIRT_COLORS = [
@@ -87,8 +83,8 @@ export interface ChibiActor {
  * Tạo nhân vật chibi với bảng màu riêng.
  * `index` = số thứ tự agent (0..7) để phân bố màu/tóc/da khác nhau.
  */
-export function createChibi(index: number, name: string, scale = CHIBI_SCALE): ChibiActor {
-  const cfg = {
+export function createChibi(index: number, name: string, scale = CHIBI_SCALE, persona?: Persona): ChibiActor {
+  const byIndex = {
     name,
     shirt: SHIRT_COLORS[index % SHIRT_COLORS.length],
     hair: HAIR_COLORS[index % HAIR_COLORS.length],
@@ -98,6 +94,23 @@ export function createChibi(index: number, name: string, scale = CHIBI_SCALE): C
     acc: index % 4 === 3 ? ("glasses" as const) : index % 4 === 2 ? ("headphones" as const) : undefined,
   };
 
+  // Có persona (ngoại hình theo id + trang phục theo tầng) thì dùng nó; không có thì phân bố theo số thứ tự như trước.
+  const cfg = persona
+    ? {
+        name,
+        shirt: persona.shirt,
+        hair: persona.hair,
+        skin: persona.skin,
+        pants: persona.pants,
+        shoes: persona.shoes,
+        style: persona.style,
+        outfit: persona.outfit,
+        acc: persona.acc,
+        tie: persona.tie,
+        badge: persona.badge,
+      }
+    : byIndex;
+  scale *= persona?.scale ?? 1;
   const { root, P } = makeChibi(cfg, scale);
 
   return {

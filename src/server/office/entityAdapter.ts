@@ -9,7 +9,8 @@ import type { AgentState } from "../agents/agentRegistry.js";
 import type { TaskRecord, ApprovalRequest } from "../tasks/taskRunner.js";
 import type { BrowserLogEntry } from "../browser/sandboxBrowser.js";
 import type { MachineSample } from "./machine.js";
-import { OfficeEntity, type EntityStatus, type OfficeEvent } from "../../shared/officeEntity.js";
+import type { ActionRequest } from "../agent/gate.js";
+import { OfficeEntity, type EntityStatus, type OfficeEvent, type OrgNode } from "../../shared/officeEntity.js";
 
 export const MACHINE_ID = "machine:local";
 
@@ -36,7 +37,11 @@ export function agentToEntity(a: AgentState): OfficeEntity {
     metadata: {
       agentId: a.id,
       role: a.role,
+      tier: a.tier,
+      reportsTo: a.reportsTo,
       task: a.task,
+      taskKey: a.taskKey,
+      taskVars: a.taskVars,
       currentUrl: a.currentUrl,
       currentTitle: a.currentTitle,
       color: a.color,
@@ -84,6 +89,8 @@ export function taskToEntity(t: TaskRecord): OfficeEntity {
       costCents: t.costCents,
       estimatedTokens: t.estimation?.estimatedTokens,
       approvalReason: t.approvalReason,
+      approvalReasonKey: t.estimation?.reasonKey,
+      approvalReasonVars: t.estimation?.reasonVars,
       createdAt: t.createdAt,
     },
     updatedAt: t.finishedAt ?? t.startedAt ?? t.createdAt,
@@ -113,7 +120,7 @@ export function machineToEntity(m: MachineSample): OfficeEntity {
 }
 
 /** Cấu trúc tối thiểu của yêu cầu quyền (server phát từ PermissionManager). */
-interface PermissionRequestLike {
+export interface PermissionRequestLike {
   id: string;
   agentId: string;
   agentName?: string;
@@ -128,6 +135,10 @@ export interface BridgeSources {
   listAgents(): AgentState[];
   listTasks(): TaskRecord[];
   machine(): MachineSample | null;
+  /** Yêu cầu còn chờ người dùng quyết định (để gửi lại khi một giao diện mới kết nối). */
+  pendingPermissions?(): PermissionRequestLike[];
+  pendingTokenApprovals?(): ApprovalRequest[];
+  pendingActions?(): ActionRequest[];
 }
 
 /** Giữ trạng thái trước đó để sinh `status.changed` và `entity.created/removed`. */
@@ -150,6 +161,29 @@ export class OfficeBridge {
     return { type: "snapshot", entities, at: now() };
   }
 
+  private actionEvent(r: ActionRequest): OfficeEvent {
+    return {
+      type: "approval.requested",
+      id: r.id,
+      entityId: `agent:${r.agentId}`,
+      kind: "action",
+      summary: `${r.agentName} muốn thực hiện: ${r.action}`,
+      key: ["email_send", "github_issue"].includes(r.action) ? `approval.action.${r.action}.summary` : "approval.action.generic.summary",
+      vars: ["email_send", "github_issue"].includes(r.action) ? r.vars : { agent: r.agentName, action: r.action },
+      detail: r.detail,
+      at: r.createdAt,
+    };
+  }
+
+  /** Các yêu cầu duyệt đang chờ (gửi cho giao diện vừa kết nối để hộp duyệt không bị trống). */
+  pendingApprovals(): OfficeEvent[] {
+    const out: OfficeEvent[] = [];
+    for (const p of this.src.pendingPermissions?.() ?? []) out.push(...this.translate("permission:request", p));
+    for (const a of this.src.pendingTokenApprovals?.() ?? []) out.push(...this.translate("task:approval", a));
+    for (const a of this.src.pendingActions?.() ?? []) out.push(this.actionEvent(a));
+    return out;
+  }
+
   /** Dịch một sự kiện cũ của FunnyOVS thành 0..n sự kiện chung. */
   translate(event: string, data: unknown): OfficeEvent[] {
     switch (event) {
@@ -166,10 +200,20 @@ export class OfficeBridge {
             entityId: `agent:${r.agentId}`,
             kind: "token",
             summary: `${r.agentName} muốn chạy: ${r.title}`,
-            detail: `${r.reason} · ước lượng ${r.estimation?.estimatedTokens ?? "?"} token`,
+            key: "approval.token.summary",
+            vars: { agent: r.agentName, title: r.title },
+            detail: r.reason,
+            detailKey: r.estimation?.reasonKey,
+            detailVars: r.estimation?.reasonVars,
             at: now(),
           },
         ];
+      }
+      case "action:request":
+        return [this.actionEvent(data as ActionRequest)];
+      case "action:decided": {
+        const r = data as ActionRequest & { outcome?: string };
+        return [{ type: "approval.decided", id: r.id, decision: r.outcome === "approved" ? "approve" : "deny", at: now() }];
       }
       case "permission:request": {
         const r = data as PermissionRequestLike;
@@ -180,14 +224,16 @@ export class OfficeBridge {
             entityId: `agent:${r.agentId}`,
             kind: "permission",
             summary: `${r.agentName ?? r.agentId} cần ${r.reason ?? "quyền truy cập"}`,
+            key: "approval.perm.summary",
+            vars: { agent: r.agentName ?? r.agentId, action: `$t:perm.action.${r.reason ?? "read"}` },
             detail: [r.path, r.purpose].filter(Boolean).join(" · "),
             at: now(),
           },
         ];
       }
       case "permission:decided": {
-        const r = data as PermissionRequestLike & { decision?: string; mode?: string };
-        const denied = r.decision === "deny" || r.mode === "deny";
+        const r = data as PermissionRequestLike & { status?: string };
+        const denied = r.status === "denied";
         return [{ type: "approval.decided", id: r.id, decision: denied ? "deny" : "approve", at: now() }];
       }
       case "browser:log": {
@@ -199,21 +245,39 @@ export class OfficeBridge {
             entityId: `agent:${l.agentId}`,
             level,
             text: `${l.agentName}: ${l.title || l.url}${l.note ? ` — ${l.note}` : ""}`,
+            key: "log.browse",
+            vars: { agent: l.agentName, title: l.title || l.url },
+            extra: l.note,
             at: l.ts ?? now(),
           },
         ];
       }
+      case "org:node":
+        return [{ type: "org.node", node: data as OrgNode }];
       case "injection":
-        return [{ type: "log", level: "error", text: `Phát hiện prompt injection tại ${(data as { url?: string }).url ?? "?"} — đã bỏ qua`, at: now() }];
-      case "emergency":
         return [
           {
             type: "log",
-            level: (data as { emergencyStop?: boolean }).emergencyStop ? "error" : "info",
-            text: (data as { emergencyStop?: boolean }).emergencyStop ? "DỪNG KHẨN CẤP đã bật" : "Đã gỡ dừng khẩn cấp",
+            level: "error",
+            text: `Phát hiện prompt injection tại ${(data as { url?: string }).url ?? "?"} — đã bỏ qua`,
+            key: "log.injection",
+            vars: { url: (data as { url?: string }).url ?? "?" },
             at: now(),
           },
         ];
+      case "emergency": {
+        const active = Boolean((data as { emergencyStop?: boolean }).emergencyStop);
+        return [
+          { type: "emergency", active, at: now() },
+          {
+            type: "log",
+            level: active ? "error" : "info",
+            text: active ? "DỪNG KHẨN CẤP đã bật" : "Đã gỡ dừng khẩn cấp",
+            key: active ? "log.emergencyOn" : "log.emergencyOff",
+            at: now(),
+          },
+        ];
+      }
       default:
         return [];
     }
@@ -270,7 +334,19 @@ export class OfficeBridge {
           : t.status === "failed"
             ? `Lỗi: ${t.title}${t.error ? ` — ${t.error}` : ""}`
             : `Từ chối: ${t.title}`;
-      out.push({ type: "log", entityId: `agent:${t.agentId}`, level: t.status === "done" ? "info" : t.status === "failed" ? "error" : "warn", text, at: now() });
+      const key = t.status === "done" ? "log.done" : t.status === "failed" ? "log.failed" : "log.rejected";
+      out.push({
+        type: "log",
+        entityId: `agent:${t.agentId}`,
+        level: t.status === "done" ? "info" : t.status === "failed" ? "error" : "warn",
+        text,
+        key,
+        vars: { title: t.title, tokens: t.tokens ?? 0 },
+        extra: t.status === "failed" ? t.error : undefined,
+        extraKey: t.status === "failed" ? t.errorKey : undefined,
+        extraVars: t.status === "failed" ? t.errorVars : undefined,
+        at: now(),
+      });
     }
     return out;
   }

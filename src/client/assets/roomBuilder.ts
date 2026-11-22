@@ -124,6 +124,9 @@ export function deskLayout(
   return out;
 }
 
+/** Bảng roadmap ở phòng Giao việc (tâm bảng cao `y`, lùi `zFrac` × chiều sâu phòng). Bảng việc sống phủ lên đúng mặt bảng này. */
+export const ROADMAP_BOARD = { y: 1.7, zFrac: -0.42, w: 4.2, h: 1.5 } as const;
+
 /** Bố cục trang trí đặc trưng cho từng phòng (trả về vị trí tương đối). */
 export function propLayout(kind: PropKind, roomW: number, roomD: number): Placement[] {
   switch (kind) {
@@ -212,9 +215,9 @@ export function propLayout(kind: PropKind, roomW: number, roomD: number): Placem
         {
           keywords: ["board", "whiteboard", "sign", "tv", "television"],
           x: 0,
-          z: -roomD * 0.42,
-          y: 1.7,
-          fallback: [4.2, 1.5, 0.1],
+          z: roomD * ROADMAP_BOARD.zFrac,
+          y: ROADMAP_BOARD.y,
+          fallback: [ROADMAP_BOARD.w, ROADMAP_BOARD.h, 0.1],
           art: "roadmap",
           unique: true,
         },
@@ -293,7 +296,7 @@ function buildDesk(): THREE.Group {
 }
 
 /** Ghế văn phòng: chân sao + mặt ghế + lưng. */
-function buildChair(): THREE.Group {
+export function buildChair(): THREE.Group {
   const g = new THREE.Group();
   for (let k = 0; k < 5; k++) {
     const a = (k / 5) * Math.PI * 2;

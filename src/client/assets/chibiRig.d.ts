@@ -12,6 +12,8 @@ export interface ChibiConfig {
   shoes?: string;
   iris?: string;
   tie?: string;
+  /** Huy hiệu tròn trên ngực (màu phòng ban). */
+  badge?: string;
   look?: "toy" | "pixar";
   style?: "bob" | "plain" | "spiky" | "ponytail" | "bun" | "curly";
   outfit?: "hoodie" | "shirt" | "suit";
@@ -69,3 +71,6 @@ export declare function applyChibiPose(P: ChibiRig, p: ChibiPose, dt: number): n
 export declare function disposeChibi(P: ChibiRig): void;
 
 export declare const LOOKS: Record<string, string>;
+
+/** Giảm độ mịn tóc/đầu cho máy yếu (đặt trước khi dựng nhân vật). */
+export declare function setChibiDetail(low: boolean): void;

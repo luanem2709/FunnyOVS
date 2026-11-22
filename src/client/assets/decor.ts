@@ -14,7 +14,7 @@ import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js
 // ---------------------------------------------------------------------------
 
 const matCache = new Map<string, THREE.MeshStandardMaterial>();
-function std(color: number, roughness = 0.8, metalness = 0, emissive = 0, emissiveIntensity = 0): THREE.MeshStandardMaterial {
+export function std(color: number, roughness = 0.8, metalness = 0, emissive = 0, emissiveIntensity = 0): THREE.MeshStandardMaterial {
   const key = `${color}|${roughness}|${metalness}|${emissive}|${emissiveIntensity}`;
   let m = matCache.get(key);
   if (!m) {
@@ -24,7 +24,7 @@ function std(color: number, roughness = 0.8, metalness = 0, emissive = 0, emissi
   return m;
 }
 
-function box(w: number, h: number, d: number, mat: THREE.Material, x = 0, y = 0, z = 0, shadow = true): THREE.Mesh {
+export function box(w: number, h: number, d: number, mat: THREE.Material, x = 0, y = 0, z = 0, shadow = true): THREE.Mesh {
   const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
   m.position.set(x, y, z);
   m.castShadow = shadow;
@@ -32,7 +32,7 @@ function box(w: number, h: number, d: number, mat: THREE.Material, x = 0, y = 0,
   return m;
 }
 
-function cyl(rTop: number, rBot: number, h: number, mat: THREE.Material, x = 0, y = 0, z = 0, seg = 16, shadow = true): THREE.Mesh {
+export function cyl(rTop: number, rBot: number, h: number, mat: THREE.Material, x = 0, y = 0, z = 0, seg = 16, shadow = true): THREE.Mesh {
   const m = new THREE.Mesh(new THREE.CylinderGeometry(rTop, rBot, h, seg), mat);
   m.position.set(x, y, z);
   m.castShadow = shadow;
@@ -40,14 +40,14 @@ function cyl(rTop: number, rBot: number, h: number, mat: THREE.Material, x = 0, 
   return m;
 }
 
-function ball(r: number, mat: THREE.Material, x = 0, y = 0, z = 0, shadow = true, seg = 14): THREE.Mesh {
+export function ball(r: number, mat: THREE.Material, x = 0, y = 0, z = 0, shadow = true, seg = 14): THREE.Mesh {
   const m = new THREE.Mesh(new THREE.SphereGeometry(r, seg, Math.max(5, Math.round(seg * 0.7))), mat);
   m.position.set(x, y, z);
   m.castShadow = shadow;
   return m;
 }
 
-function canvasTexture(w: number, h: number, draw: (c: CanvasRenderingContext2D) => void): THREE.CanvasTexture {
+export function canvasTexture(w: number, h: number, draw: (c: CanvasRenderingContext2D) => void): THREE.CanvasTexture {
   const cvs = document.createElement("canvas");
   cvs.width = w;
   cvs.height = h;
@@ -60,14 +60,33 @@ function canvasTexture(w: number, h: number, draw: (c: CanvasRenderingContext2D)
 
 /** Vật liệu phát sáng: sáng hơn ban đêm (đèn đường, cửa sổ). */
 const glowMats = new Map<THREE.MeshStandardMaterial, { day: number; night: number }>();
-function registerGlow(mat: THREE.MeshStandardMaterial, day: number, night: number): THREE.MeshStandardMaterial {
+export function registerGlow(mat: THREE.MeshStandardMaterial, day: number, night: number): THREE.MeshStandardMaterial {
   glowMats.set(mat, { day, night });
   return mat;
 }
 
-/** Đặt mức "đêm" 0..1 cho các vật liệu phát sáng. */
+/** Đèn điểm (đèn phòng) sáng hơn ban đêm. */
+const nightLights = new Map<THREE.Light, { day: number; night: number }>();
+export function registerNightLight<T extends THREE.Light>(light: T, day: number, night: number): T {
+  nightLights.set(light, { day, night });
+  light.intensity = day;
+  return light;
+}
+
+/** Số vật liệu/đèn đã đăng ký theo mức đêm (để test và gỡ lỗi). */
+export function nightRegistrySize(): { glows: number; lights: number } {
+  return { glows: glowMats.size, lights: nightLights.size };
+}
+
+/** Đặt mức "đêm" 0..1 cho các vật liệu phát sáng và đèn phòng. */
 export function setNight(k: number): void {
   for (const [mat, v] of glowMats) mat.emissiveIntensity = v.day + (v.night - v.day) * k;
+  for (const [light, v] of nightLights) light.intensity = v.day + (v.night - v.day) * k;
+}
+
+/** Thêm một hàm chuyển động chạy mỗi khung hình (đồng hồ, LED nhấp nháy...). */
+export function addAnimator(fn: (t: number) => void): void {
+  animators.push(fn);
 }
 
 interface SkyUniforms {
@@ -79,6 +98,12 @@ export function getSkyUniforms(): SkyUniforms | null {
   return skyUniforms;
 }
 
+/** Bộ dịch chữ trên các bảng/biển vẽ bằng canvas (đặt từ renderer trước khi dựng cảnh). Mặc định trả nguyên khoá. */
+let T: (key: string) => string = (k) => k;
+export function setDecorTranslator(fn: (key: string) => string): void {
+  T = fn;
+}
+
 /** Danh sách hàm chuyển động, chạy mỗi khung hình. */
 const animators: Array<(t: number) => void> = [];
 let sky: THREE.Mesh | null = null;
@@ -87,6 +112,7 @@ let sky: THREE.Mesh | null = null;
 export function resetDecor(): void {
   animators.length = 0;
   glowMats.clear();
+  nightLights.clear();
   sky = null;
   skyUniforms = null;
 }
@@ -101,7 +127,7 @@ export function tickDecor(t: number, camera: THREE.Camera): void {
  * Gộp các mesh tĩnh cùng vật liệu thành một mesh duy nhất (giảm hàng trăm draw call).
  * Hình học được "nướng" theo toạ độ thế giới nên `target` phải là scene (không có biến đổi).
  */
-function mergeStatic(source: THREE.Object3D, target: THREE.Object3D, castShadow: boolean): void {
+export function mergeStatic(source: THREE.Object3D, target: THREE.Object3D, castShadow: boolean): void {
   source.updateWorldMatrix(true, true);
   const buckets = new Map<THREE.Material, THREE.BufferGeometry[]>();
   source.traverse((o) => {
@@ -127,7 +153,8 @@ function mergeStatic(source: THREE.Object3D, target: THREE.Object3D, castShadow:
 // Môi trường ngoài trời
 // ---------------------------------------------------------------------------
 
-const SLAB = { cx: 3.25, cz: -5, w: 46, d: 44 };
+/** Nền lát dưới toàn bộ toà nhà (tâm + kích thước). Mọi phòng phải nằm trong nền này (test `facilities.layout`). */
+export const SLAB = { cx: 5.25, cz: -4, w: 50, d: 46 };
 
 function makeTree(x: number, z: number, scale: number, variant: number): THREE.Group {
   const g = new THREE.Group();
@@ -310,7 +337,8 @@ export function buildEnvironment(scene: THREE.Object3D, ground: THREE.Mesh): voi
   };
   for (let x = SLAB.cx - hw - 2; x <= SLAB.cx + hw + 2; x += 5.2) {
     ring(x, SLAB.cz - hd - 2.4);
-    ring(x + 2.2, SLAB.cz + hd + 2.4);
+    // Chừa lối nhìn vào sảnh lễ tân ở góc trước-trái (x từ -18 đến -8).
+    if (x + 2.2 < -18 || x + 2.2 > -8) ring(x + 2.2, SLAB.cz + hd + 2.4);
   }
   for (let z = SLAB.cz - hd + 3; z <= SLAB.cz + hd - 3; z += 5.6) {
     ring(SLAB.cx - hw - 2.6, z);
@@ -324,7 +352,7 @@ export function buildEnvironment(scene: THREE.Object3D, ground: THREE.Mesh): voi
   }
 
   // --- Đèn đường ---
-  for (const x of [-18, 24.5]) for (const z of [-25, -14, -3, 8, 15]) envStatic.add(makeLampPost(x, z));
+  for (const x of [-18, 26.8]) for (const z of [-25, -14, -3, 8, 15]) envStatic.add(makeLampPost(x, z));
 
   // --- Tiểu cảnh giữa toà nhà ---
   scene.add(makeFountain(0, 5.9));
@@ -375,7 +403,7 @@ export function buildPhoneProp(): THREE.Group {
         c.font = "bold 36px sans-serif";
         c.textAlign = "center";
         c.textBaseline = "middle";
-        c.fillText("HỖ TRỢ 24/7", 128, 42);
+        c.fillText(T("scene.support247"), 128, 42);
       }),
     }),
   );
@@ -449,7 +477,7 @@ export function buildChartProp(): THREE.Group {
         }
         c.fillStyle = "#1f2937";
         c.font = "bold 20px sans-serif";
-        c.fillText("DOANH THU", 14, 22);
+        c.fillText(T("scene.revenue"), 14, 22);
       }),
     }),
   );
@@ -498,7 +526,7 @@ export function buildBoardArt(kind: "roadmap" | "content", w: number, h: number)
     c.font = "bold 54px sans-serif";
     c.textBaseline = "middle";
     if (kind === "roadmap") {
-      c.fillText("LỘ TRÌNH DỰ ÁN", 40, 56);
+      c.fillText(T("scene.roadmap"), 40, 56);
       const y = H * 0.58;
       c.strokeStyle = "#1f6feb";
       c.lineWidth = 10;
@@ -507,10 +535,10 @@ export function buildBoardArt(kind: "roadmap" | "content", w: number, h: number)
       c.lineTo(W - 70, y);
       c.stroke();
       const items = [
-        ["Q1", "Khởi động", "#43c59e"],
-        ["Q2", "Phát triển", "#4f9cf9"],
-        ["Q3", "Ra mắt", "#f7b32b"],
-        ["Q4", "Mở rộng", "#8f7bf0"],
+        ["Q1", T("scene.q1"), "#43c59e"],
+        ["Q2", T("scene.q2"), "#4f9cf9"],
+        ["Q3", T("scene.q3"), "#f7b32b"],
+        ["Q4", T("scene.q4"), "#8f7bf0"],
       ];
       items.forEach(([q, label, color], i) => {
         const x = 130 + i * ((W - 260) / 3);
@@ -528,7 +556,7 @@ export function buildBoardArt(kind: "roadmap" | "content", w: number, h: number)
         c.textAlign = "left";
       });
     } else {
-      c.fillText("LỊCH NỘI DUNG", 40, 56);
+      c.fillText(T("scene.contentCal"), 40, 56);
       const colors = ["#fde68a", "#bbf7d0", "#bfdbfe", "#fbcfe8"];
       const cols = 5;
       const rows = 2;
@@ -552,7 +580,7 @@ export function buildBoardArt(kind: "roadmap" | "content", w: number, h: number)
 // Trang trí trong phòng
 // ---------------------------------------------------------------------------
 
-function makePlant(x: number, z: number, scale = 1): THREE.Group {
+export function makePlant(x: number, z: number, scale = 1): THREE.Group {
   const g = new THREE.Group();
   g.add(cyl(0.26 * scale, 0.2 * scale, 0.42 * scale, std(0xc9694a, 0.8), 0, 0.21 * scale, 0, 12));
   g.add(cyl(0.24 * scale, 0.24 * scale, 0.03, std(0x4a3a2b), 0, 0.42 * scale, 0, 12, false));
@@ -570,7 +598,7 @@ function makePlant(x: number, z: number, scale = 1): THREE.Group {
   return g;
 }
 
-function makeSofa(x: number, z: number, rotY: number, color: number): THREE.Group {
+export function makeSofa(x: number, z: number, rotY: number, color: number): THREE.Group {
   const g = new THREE.Group();
   const m = std(color, 0.9);
   const dark = std(color, 0.9);
@@ -585,7 +613,7 @@ function makeSofa(x: number, z: number, rotY: number, color: number): THREE.Grou
   return g;
 }
 
-function makeCoffeeTable(x: number, z: number): THREE.Group {
+export function makeCoffeeTable(x: number, z: number): THREE.Group {
   const g = new THREE.Group();
   g.add(box(0.9, 0.05, 0.6, std(0xa87f52, 0.6), 0, 0.4, 0));
   for (const sx of [-0.38, 0.38]) for (const sz of [-0.24, 0.24]) g.add(box(0.05, 0.4, 0.05, std(0x30363d, 0.5, 0.6), sx, 0.2, sz, false));
@@ -659,49 +687,6 @@ function makeGlobe(x: number, z: number): THREE.Group {
   return g;
 }
 
-function makeCrateStack(x: number, z: number): THREE.Group {
-  const g = new THREE.Group();
-  const wood = std(0xb88a56, 0.85);
-  g.add(box(0.8, 0.7, 0.8, wood, 0, 0.35, 0));
-  g.add(box(0.7, 0.6, 0.7, wood, 0.9, 0.3, 0.1));
-  g.add(box(0.6, 0.55, 0.6, std(0xc99a64, 0.85), 0.1, 0.975, 0.0));
-  g.position.set(x, 0, z);
-  g.rotation.y = 0.3;
-  return g;
-}
-
-function makeBlueprintTable(x: number, z: number): THREE.Group {
-  const g = new THREE.Group();
-  g.add(box(1.6, 0.06, 0.9, std(0xf0e8d8, 0.6), 0, DESK_TOP, 0));
-  for (const sx of [-0.72, 0.72]) for (const sz of [-0.38, 0.38]) g.add(box(0.06, DESK_TOP, 0.06, std(0x8d949e, 0.4, 0.5), sx, DESK_TOP / 2, sz, false));
-  const paper = new THREE.Mesh(
-    new THREE.PlaneGeometry(1.3, 0.7),
-    new THREE.MeshBasicMaterial({
-      map: canvasTexture(256, 140, (c) => {
-        c.fillStyle = "#2a5db0";
-        c.fillRect(0, 0, 256, 140);
-        c.strokeStyle = "rgba(255,255,255,0.7)";
-        c.lineWidth = 2;
-        c.strokeRect(14, 14, 228, 112);
-        c.strokeRect(40, 36, 80, 60);
-        c.beginPath();
-        c.moveTo(150, 36);
-        c.lineTo(220, 36);
-        c.lineTo(220, 96);
-        c.stroke();
-        c.fillStyle = "rgba(255,255,255,0.85)";
-        c.font = "bold 16px sans-serif";
-        c.fillText("DỰ ÁN MỞ RỘNG", 40, 112);
-      }),
-    }),
-  );
-  paper.rotation.x = -Math.PI / 2;
-  paper.position.y = DESK_TOP + 0.035;
-  g.add(paper);
-  g.position.set(x, 0, z);
-  return g;
-}
-
 const DESK_TOP = 0.78;
 
 /** Băng ghế dài có màn hình cho phòng "Làm việc tự động" (đặt dưới 3 màn hình trôi nổi). */
@@ -713,7 +698,17 @@ function makeTerminalBench(x: number, z: number): THREE.Group {
   return g;
 }
 
-function makeClock(): THREE.Group {
+function makeWaterCooler(x: number, z: number): THREE.Group {
+  const g = new THREE.Group();
+  g.add(box(0.38, 0.9, 0.38, std(0xe7ecf1, 0.5), 0, 0.45, 0));
+  g.add(cyl(0.15, 0.15, 0.42, std(0x7cc4ee, 0.2, 0, 0x4aa3d8, 0.3), 0, 1.11, 0, 14, false));
+  g.add(box(0.12, 0.05, 0.1, std(0x3b82c4, 0.4), 0, 0.72, 0.2, false));
+  g.position.set(x, 0, z);
+  g.rotation.y = -Math.PI / 2;
+  return g;
+}
+
+export function makeClock(): THREE.Group {
   const g = new THREE.Group();
   const face = new THREE.Mesh(
     new THREE.CircleGeometry(0.24, 28),
@@ -835,23 +830,17 @@ export function buildRoomDecor(scene: THREE.Object3D, room: RoomLike): void {
     st.add(makePlant(inW - 0.4, -(inD - 0.4), 1.05));
   }
 
-  // Đồ đặc trưng từng phòng
+  // Đồ đặc trưng từng phòng. Phòng làm việc để trống phía sau hai bàn; sofa chỉ có ở phòng Giám đốc.
+  if (room.id !== "executive") st.add(makeWaterCooler(inW - 0.45, -0.7));
   switch (room.id) {
     case "dispatch":
-      st.add(makeSofa(inW - 1.0, -0.3, -Math.PI / 2, 0x5b7ea8));
-      st.add(makeCoffeeTable(inW - 2.1, -0.3));
       st.add(makeFilingCabinet(-(inW - 0.55), -(inD - 0.6)));
-      break;
-    case "support":
-      st.add(makeSofa(-(inW - 1.0), 0.4, Math.PI / 2, 0xc9694a));
       break;
     case "sales":
       st.add(makeTrophy(-(inW - 0.9), -(inD - 0.8)));
-      st.add(makeSofa(inW - 1.0, 0.6, -Math.PI / 2, 0xd9a441));
       break;
     case "marketing":
-      st.add(makeRingLight(inW - 0.8, 0.9));
-      st.add(makeSofa(-(inW - 1.0), 0.4, Math.PI / 2, 0xcf6f8e));
+      st.add(makeRingLight(inW - 0.8, 1.6));
       break;
     case "finance":
       st.add(makeFilingCabinet(-(inW - 0.55), -(inD - 0.6)));
@@ -859,19 +848,20 @@ export function buildRoomDecor(scene: THREE.Object3D, room: RoomLike): void {
       break;
     case "ai-team":
       g.add(buildServerRackProp().translateX(inW - 0.9).translateZ(-(inD - 0.7)));
-      st.add(makeSofa(inW - 1.0, 0.9, -Math.PI / 2, 0x6b5fc7));
       break;
     case "automation":
       st.add(makeTerminalBench(0, -s.d * 0.34));
-      st.add(makeSofa(inW - 1.0, 0.5, -Math.PI / 2, 0x3a9aa8));
       break;
     case "library":
-      g.add(makeGlobe(-(inW - 0.9), 1.0));
-      st.add(makeSofa(inW - 1.0, 0.8, -Math.PI / 2, 0x9a7a45));
+      g.add(makeGlobe(-(inW - 0.9), 1.4));
       break;
-    case "project":
-      st.add(makeCrateStack(-(inW - 1.0), -(inD - 1.0)));
-      st.add(makeBlueprintTable(0.2, -0.3));
+    case "executive":
+      // Phòng góc của Giám đốc: bộ sofa tiếp khách, cúp, địa cầu, tủ hồ sơ.
+      st.add(makeSofa(-(inW - 1.0), 0.0, Math.PI / 2, 0x6b5fc7));
+      st.add(makeCoffeeTable(-(inW - 2.1), 0.0));
+      st.add(makeTrophy(inW - 0.9, -(inD - 0.8)));
+      st.add(makeFilingCabinet(-(inW - 0.55), -(inD - 0.6)));
+      g.add(makeGlobe(inW - 0.9, 1.6));
       break;
   }
   mergeStatic(st, scene, true);

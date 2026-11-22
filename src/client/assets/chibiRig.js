@@ -58,9 +58,14 @@ function steamTex() {
 // Hair shell: a sphere whose latitude range is squeezed so its rim follows a hairline ([front, side, back] angles from
 // the crown). The rim dips into rounded locks, each lock bulges so grooves catch the light, the grooves twist away from
 // the crown like a cowlick, and the rim tucks in so the tips rest on the skin.
+// FunnyOVS: mức chi tiết hình học. Chế độ "thấp" (máy yếu) giảm độ mịn của tóc và đầu — phần chiếm nhiều tam giác nhất của mỗi nhân vật —
+// để giảm ~70% số tam giác mà hình dáng vẫn nhận ra được. Đặt TRƯỚC khi dựng nhân vật (xem OfficeScene).
+let LOW_DETAIL = false;
+export function setChibiDetail(low) { LOW_DETAIL = !!low; }
+
 function hairShell(R, line, o = {}) {
   const { locks = 9, tip = 0.15, bulge = 0.03, phase = 0, sweep = 0, tuck = 0.08, round = 1, bumps = 0, twist = 0.4 } = o;
-  const NI = 160, NJ = 40, pos = [], idx = [];
+  const NI = LOW_DETAIL ? 64 : 160, NJ = LOW_DETAIL ? 16 : 40, pos = [], idx = [];
   const smooth = (x) => x * x * (3 - 2 * x);
   for (let j = 0; j <= NJ; j++) for (let i = 0; i <= NI; i++) {
     const u = j / NJ, ph = -Math.PI + (2 * Math.PI * i) / NI, a = Math.abs(ph) / Math.PI;
@@ -116,8 +121,9 @@ export function makeChibi(cfg = {}, scale = 1) {
   const add = (parent, geo, m, x = 0, y = 0, z = 0, sx = 1, sy = 1, sz = 1) => {
     const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.scale.set(sx, sy, sz); o.castShadow = true; parent.add(o); return o;
   };
-  const cap = (r, l) => new THREE.CapsuleGeometry(r, Math.max(0.001, l), 6, 14);
-  const sph = (r, w = 22, h = 16) => new THREE.SphereGeometry(r, w, h);
+  // Chế độ chi tiết thấp: ít phân đoạn hơn cho tay/chân/khớp (xem setChibiDetail).
+  const cap = (r, l) => new THREE.CapsuleGeometry(r, Math.max(0.001, l), LOW_DETAIL ? 3 : 6, LOW_DETAIL ? 8 : 14);
+  const sph = (r, w = 22, h = 16) => new THREE.SphereGeometry(r, LOW_DETAIL ? Math.max(8, w >> 1) : w, LOW_DETAIL ? Math.max(6, h >> 1) : h);
 
   const sh = new THREE.Mesh(new THREE.PlaneGeometry(0.95, 0.95), new THREE.MeshBasicMaterial({ map: getShadowTex(), transparent: true, depthWrite: false }));
   sh.rotation.x = -Math.PI / 2; sh.position.y = 0.012; sh.renderOrder = -1; root.add(sh); P.shadow = sh;
@@ -145,6 +151,16 @@ export function makeChibi(cfg = {}, scale = 1) {
   const prof = D.torso.map(([x, y]) => new THREE.Vector2(x, y));
   const torso = add(spine, new THREE.LatheGeometry(prof, 36), top, 0, 0, 0, 1, 1, 0.82); P.torso = torso;
   const H = D.torso[D.torso.length - 1][1], tr = D.torso[2][0];
+  // FunnyOVS: torso radius at height y (lathe profile, torso-local space). The whole torso is z-scaled (0.82), so anything pinned to
+  // the chest must sit ON this surface (torsoSurf) — values like tr * 0.9 land inside the body at chest height and vanish.
+  const torsoSurf = (y) => {
+    for (let i = 1; i < D.torso.length; i++) {
+      const [r0, y0] = D.torso[i - 1], [r1, y1] = D.torso[i];
+      if (y <= y1 || i === D.torso.length - 1) return r0 + (r1 - r0) * Math.min(1, Math.max(0, (y - y0) / ((y1 - y0) || 1)));
+    }
+    return tr;
+  };
+  const onSurface = (mesh, y, lift = 0.006, tilt = 0.13) => { mesh.position.y = y; mesh.position.z = torsoSurf(y) + lift; mesh.rotation.x = tilt; return mesh; };
   const outfit = cfg.outfit || (seed % 2 ? 'hoodie' : 'shirt');
   if (outfit === 'hoodie') {
     add(torso, new THREE.TorusGeometry(tr * 0.93, 0.026, 8, 36), topDark, 0, -0.03, 0).rotation.x = Math.PI / 2;
@@ -152,14 +168,14 @@ export function makeChibi(cfg = {}, scale = 1) {
     add(torso, new THREE.TorusGeometry(H * 0.21, 0.055, 10, 28), topDark, 0, H * 0.93, -0.02).rotation.x = Math.PI / 2 - 0.25;
     for (const sx of [-1, 1]) add(torso, new THREE.CylinderGeometry(0.009, 0.009, H * 0.24, 6), soleM, sx * 0.045, H * 0.74, tr * 0.88).rotation.x = 0.25;
   } else if (outfit === 'suit') {   // a jacket over a white shirt and a tie (the director)
-    const shirtW = plainMat('#F4F1EA', { roughness: 0.8 }), tieM = plainMat(cfg.tie || '#B5323A', { roughness: 0.45 });
-    const v = new THREE.Shape(); v.moveTo(-tr * 0.36, 0); v.lineTo(tr * 0.36, 0); v.lineTo(0, -H * 0.46); v.closePath();
-    add(torso, new THREE.ShapeGeometry(v), shirtW, 0, H * 0.98, tr * 0.9).rotation.x = -0.12;
-    add(torso, new THREE.TorusGeometry(H * 0.18, 0.026, 10, 28), shirtW, 0, H * 0.95, 0.01, 1, 1, 0.9).rotation.x = Math.PI / 2 - 0.15;
-    add(torso, new RoundedBoxGeometry(0.05, H * 0.36, 0.014, 2, 0.006), tieM, 0, H * 0.7, tr * 0.93).rotation.x = -0.1;
-    add(torso, sph(0.026, 10, 8), tieM, 0, H * 0.9, tr * 0.9, 1.2, 0.9, 0.7);
-    for (const sx of [-1, 1]) { const l = add(torso, new RoundedBoxGeometry(0.05, H * 0.46, 0.016, 2, 0.006), topDark, sx * tr * 0.2, H * 0.74, tr * 0.92); l.rotation.set(-0.1, 0, sx * 0.42); }
-    for (let i = 0; i < 2; i++) add(torso, sph(0.014, 8, 6), topDark, 0, H * (0.4 - i * 0.13), tr * 0.95);
+    const shirtW = plainMat('#F4F1EA', { roughness: 0.8, side: THREE.DoubleSide });
+    const v = new THREE.Shape(); v.moveTo(-0.085, 0.12); v.lineTo(0.085, 0.12); v.lineTo(0, -0.13); v.closePath();
+    onSurface(add(torso, new THREE.ShapeGeometry(v), shirtW), 0.4, 0.004);          // the white shirt showing in the V
+    for (const sx of [-1, 1]) {                                                        // lapels
+      const l = onSurface(add(torso, new RoundedBoxGeometry(0.045, 0.27, 0.014, 2, 0.006), topDark, sx * 0.105), 0.38, 0.012);
+      l.rotation.z = sx * 0.34;
+    }
+    for (let i = 0; i < 2; i++) onSurface(add(torso, sph(0.014, 8, 6), topDark), 0.29 - i * 0.09, 0.012, 0);   // buttons
     add(torso, new THREE.TorusGeometry(tr * 0.93, 0.016, 8, 36), topDark, 0, -0.03, 0).rotation.x = Math.PI / 2;
   } else {
     const collarM = plainMat('#F4F1EA', { roughness: 0.8 });
@@ -168,6 +184,20 @@ export function makeChibi(cfg = {}, scale = 1) {
     add(torso, new RoundedBoxGeometry(0.045, H * 0.4, 0.012, 2, 0.005), topDark, 0, H * 0.62, tr * 0.88).rotation.x = -0.1;
     for (let i = 0; i < 3; i++) add(torso, sph(0.011, 8, 6), collarM, 0, H * (0.78 - i * 0.12), tr * 0.9);
     add(torso, new THREE.TorusGeometry(tr * 0.93, 0.016, 8, 36), topDark, 0, -0.03, 0).rotation.x = Math.PI / 2;
+  }
+  // FunnyOVS: a necktie on the suit and on the department heads' shirts. Laid ON the torso surface (see torsoSurf above), wide enough to
+  // read from across the office: a tapered blade + a knot.
+  const tieColor = cfg.tie || (outfit === 'suit' ? '#B5323A' : null);
+  if (tieColor) {
+    const tieM = plainMat(tieColor, { roughness: 0.45, side: THREE.DoubleSide });
+    const ts = new THREE.Shape(); ts.moveTo(-0.02, 0.05); ts.lineTo(0.02, 0.05); ts.lineTo(0.036, -0.16); ts.lineTo(0, -0.215); ts.lineTo(-0.036, -0.16); ts.closePath();
+    onSurface(add(torso, new THREE.ShapeGeometry(ts), tieM), 0.455, 0.016);
+    const knot = add(torso, sph(0.03, 12, 8), tieM, 0, 0.5, 0); knot.scale.set(1, 0.8, 0.7); onSurface(knot, 0.505, 0.014);
+  }
+  if (cfg.badge) {   // FunnyOVS: a round name badge on the chest in the department colour (white rim)
+    const badgeM = plainMat(cfg.badge, { roughness: 0.4 });
+    onSurface(add(torso, new THREE.CylinderGeometry(0.045, 0.045, 0.014, 24), badgeM, -0.1), 0.3, 0.008, Math.PI / 2 + 0.13);
+    onSurface(add(torso, new THREE.RingGeometry(0.03, 0.045, 24), plainMat('#FFFFFF', { roughness: 0.5, side: THREE.DoubleSide }), -0.1), 0.3, 0.017);
   }
   add(spine, new THREE.CylinderGeometry(R * (toy ? 0.22 : 0.16), R * (toy ? 0.24 : 0.18), D.neck + 0.08, 14), skin, 0, H + D.neck / 2 - 0.02, 0);
 
@@ -194,7 +224,7 @@ export function makeChibi(cfg = {}, scale = 1) {
   const cheek = toy ? 0.1 : 0.06, front = toy ? 0.07 : 0.06, chin = toy ? 0.05 : 0.2;
   const shapeX = (t) => { const lo = Math.max(0, -t); return 1 + cheek * Math.sin(Math.PI * Math.min(1, lo * 1.4)) - chin * lo ** 3; };
   const shapeZ = (t) => 1 + front * Math.sin(Math.PI * Math.max(0, -t));
-  const skull = new THREE.SphereGeometry(R, 56, 40), sp = skull.attributes.position;
+  const skull = LOW_DETAIL ? new THREE.SphereGeometry(R, 28, 20) : new THREE.SphereGeometry(R, 56, 40), sp = skull.attributes.position;
   for (let i = 0; i < sp.count; i++) {
     const t = sp.getY(i) / R;
     sp.setX(i, sp.getX(i) * D.sx * shapeX(t)); sp.setY(i, sp.getY(i) * D.sy);

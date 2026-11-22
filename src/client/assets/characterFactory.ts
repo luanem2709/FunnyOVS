@@ -12,7 +12,8 @@
 import * as THREE from "three";
 import { cloneAsset, peekAsset } from "./loader.js";
 import { createRig, setStatus, type AgentStatus, type CharacterRig } from "./characterRig.js";
-import { createChibi, setChibiAnim, updateChibi, type ChibiActor, type ChibiAnim } from "./chibi.js";
+import { CHIBI_SCALE, createChibi, setChibiAnim, updateChibi, type ChibiActor, type ChibiAnim } from "./chibi.js";
+import type { Persona } from "../../shared/personas.js";
 import type { ManifestAsset } from "./manifest.js";
 
 /** 8 bảng màu phân biệt cho 8 agent (dùng cho capsule fallback). */
@@ -71,24 +72,24 @@ function makeRing(color: number): THREE.Mesh {
   return ring;
 }
 
+/**
+ * Biểu cảm/tư thế theo trạng thái (mỗi trạng thái nhìn khác nhau, đều là pose có thật trong rig):
+ * làm việc → gõ phím; nghiên cứu/học → đọc; chờ duyệt → giơ tay xin ý kiến; bị chặn → đổ mồ hôi; dừng/rảnh → đứng nghỉ.
+ * (Xong việc → ăn mừng do hành vi `celebrate()` xử lý.)
+ */
+export const STATUS_ANIM: Record<AgentStatus, ChibiAnim> = {
+  idle: "idle",
+  working: "type",
+  researching: "read",
+  learning: "read",
+  waiting: "hand",
+  blocked: "sweat",
+  stopped: "idle",
+};
+
 /** Chibi dùng pose nào cho trạng thái này. */
-function chibiAnimFor(status: AgentStatus): ChibiAnim {
-  switch (status) {
-    case "working":
-      return "type";
-    case "researching":
-      return "read";
-    case "learning":
-      return "read";
-    case "waiting":
-      return "wave";
-    case "blocked":
-      return "sweat";
-    case "stopped":
-      return "idle";
-    default:
-      return "idle";
-  }
+export function chibiAnimFor(status: AgentStatus): ChibiAnim {
+  return STATUS_ANIM[status] ?? "idle";
 }
 
 /**
@@ -103,6 +104,7 @@ export function createAgentVisual(
   status: AgentStatus = "idle",
   index = 0,
   name = "Agent",
+  persona?: Persona,
 ): AgentVisual {
   const root = new THREE.Group();
   const ring = makeRing(0x8b949e);
@@ -135,7 +137,7 @@ export function createAgentVisual(
     }
   } else {
     // Ưu tiên 1: chibi rig procedural — nhân vật 3D thật, không cần file.
-    chibi = createChibi(index, name);
+    chibi = createChibi(index, name, CHIBI_SCALE, persona);
     root.add(chibi.root);
     setChibiAnim(chibi, chibiAnimFor(status));
     glow = new THREE.PointLight(tint, 0.9, 5.5, 2);

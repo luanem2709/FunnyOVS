@@ -28,6 +28,24 @@ import { policyForLevel, type AutomationLevel } from "./automation/automationPol
 import { loadLlmConfig } from "./llm.js";
 import { MachineProbe } from "./office/machine.js";
 import { OfficeBridge } from "./office/entityAdapter.js";
+import { OrgDispatcher } from "./org/dispatcher.js";
+import { AiHub } from "./ai/hub.js";
+import { OfficeDb } from "./crm/store.js";
+import { MailService } from "./agent/mail.js";
+import { ActionGate } from "./agent/gate.js";
+import { buildTools } from "./agent/tools.js";
+import { createRunLlm } from "./agent/backend.js";
+import { makePlanner, makeSummarizer, type ChatFn } from "./org/planner.js";
+import { registerBusinessRoutes, apiError } from "./routes/business.js";
+import { AuditLog } from "./security/audit.js";
+import { Scheduler } from "./schedule/scheduler.js";
+import { runCursorAgent } from "./budget/cursorAgent.js";
+import { getCursorAuth } from "./budget/cursorAuth.js";
+import { msg, normalizeLang } from "../shared/messages.js";
+import pkg from "../../package.json" with { type: "json" };
+import { OFFICE3D_CSP, isAllowedHost, parseAllowedHosts, verifyWsClient } from "./security/httpGuard.js";
+import { AuthManager } from "./security/auth.js";
+import { lanAddresses, readNetwork, writeNetwork } from "./security/network.js";
 import { OFFICE_WS_EVENT, type OfficeEvent } from "../shared/officeEntity.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -71,6 +89,25 @@ const activity = new ActivityLog();
 let emergencyStop = false;
 
 const app = express();
+app.disable("x-powered-by");
+
+// Chốt chặn: chỉ nhận Host là loopback (chống DNS rebinding) + header an toàn cơ bản.
+const EXTRA_HOSTS = parseAllowedHosts(process.env.OFFICE_ALLOW_HOSTS);
+const NETWORK = readNetwork(DATA_DIR);
+const auth = new AuthManager({ dataDir: DATA_DIR });
+app.use((req, res, next) => {
+  if (!isAllowedHost(req.headers.host, EXTRA_HOSTS, NETWORK.lan)) {
+    res.status(403).json({ error: "Host không được phép. Đặt OFFICE_ALLOW_HOSTS nếu bạn cố ý truy cập từ máy khác." });
+    return;
+  }
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("Referrer-Policy", "no-referrer");
+  res.setHeader("X-Frame-Options", "DENY");
+  if (req.path.startsWith("/office-3d")) res.setHeader("Content-Security-Policy", OFFICE3D_CSP);
+  next();
+});
+// Truy cập từ ngoài máy (LAN) bắt buộc token; từ chính máy này thì không.
+app.use(auth.middleware());
 app.use(express.json({ limit: "2mb" }));
 
 // ---- Realtime bus ----
@@ -87,6 +124,9 @@ function fanout(event: string, data: unknown): void {
   }
 }
 
+/** Cây giao việc theo tầng (khởi tạo sau khi registry/tasks sẵn sàng). */
+let orgDispatcher: OrgDispatcher | null = null;
+
 /** Cầu nối sang schema chung (khởi tạo sau khi registry/tasks sẵn sàng). */
 let officeBridge: OfficeBridge | null = null;
 
@@ -100,8 +140,69 @@ function broadcast(event: string, data: unknown): void {
   if (officeBridge) broadcastOffice(officeBridge.translate(event, data));
 }
 
+// ---- Kết nối AI tự động + công cụ thật + cổng duyệt hành động ----
+const STARTED_AT = Date.now();
+const hub = new AiHub({ dataDir: DATA_DIR });
+// Nhật ký bảo mật chỉ-ghi-thêm (không chứa bí mật; che cả khoá đang lưu nếu lỡ lọt vào).
+const audit = new AuditLog(path.join(DATA_DIR, "audit.log"), () => hub.secrets.allValues());
+const officeDb = new OfficeDb(DATA_DIR);
+const mail = new MailService(DATA_DIR, hub.secrets);
+const gate = new ActionGate();
+const agentTools = buildTools({
+  onEmailSent: ({ to, agent }) => audit.append("email.sent", "agent", { to, agent }),
+  fs: fsGuard,
+  perms,
+  kb,
+  db: officeDb,
+  mail,
+  gate,
+  secrets: hub.secrets,
+  policy: () => configStore.get().browser,
+  emergency: () => emergencyStop,
+});
+const runLlm = createRunLlm({
+  hub,
+  tools: agentTools,
+  registry,
+  cursor: (o) => runCursorAgent(o),
+  cursorAvailable: () => Boolean(resolveAgentExe() && getCursorAuth().token),
+  setting: () => configStore.get().llmBackend,
+  company: () => process.env.OFFICE_COMPANY ?? "FunnyOVS Corp",
+});
+
+/** Gọi AI cho việc điều phối (lập kế hoạch/báo cáo) và ghi sổ cái + trừ ngân sách như mọi lần gọi khác. */
+function chatWithLedger(label: "plan" | "summary"): ChatFn {
+  return async (messages, opts) => {
+    const r = await hub.chat(messages, opts);
+    try {
+      ledger.add({
+        taskId: `${label}_${Date.now().toString(36)}`,
+        department: "executive",
+        agentId: "giamdoc",
+        agentName: registry.get("giamdoc")?.name ?? "Director",
+        model: r.model,
+        backend: `router:${r.providerId}`,
+        inputTokens: r.usage.inputTokens,
+        outputTokens: r.usage.outputTokens,
+        cacheReadTokens: 0,
+        cacheWriteTokens: 0,
+        costCents: 0,
+        wallet: "normal",
+        quotaSource: "provider-usage",
+        durationMs: r.latencyMs,
+        ok: true,
+      });
+      budget.spend("normal", r.usage.inputTokens + r.usage.outputTokens);
+    } catch {
+      /* ghi sổ lỗi không được làm hỏng việc chính */
+    }
+    return r;
+  };
+}
+
 // ---- Task runner (điều phối tác vụ + duyệt trước khi tốn nhiều token) ----
 const tasks = new TaskRunner({
+  runLlm,
   budget,
   ledger,
   workspace: config.workspace,
@@ -111,6 +212,7 @@ const tasks = new TaskRunner({
   getCursorPercentUsed: () => budget.getQuota()?.totalPercentUsed,
   onUpdate: (t) => {
     broadcast("task:update", t);
+    orgDispatcher?.onTaskUpdate(t);
     const agent = registry.get(t.agentId);
     if (t.status === "running") {
       activity.record({ kind: "task", actor: t.agentName, message: `Bắt đầu: ${t.title}` });
@@ -283,7 +385,7 @@ app.get("/api/departments", (_req, res) =>
 
 app.post("/api/agents/:id/status", (req, res) => {
   const a = registry.setStatus(req.params.id, req.body.status ?? "idle", req.body.task);
-  if (!a) return res.status(404).json({ error: "Không tìm thấy nhân vật." });
+  if (!a) return apiError(res, 404, "unknownAgent", { id: String(req.params.id).slice(0, 40) });
   broadcast("agent:update", a);
   res.json(a);
 });
@@ -296,7 +398,7 @@ app.get("/api/permissions", (_req, res) =>
 app.post("/api/permissions/decide", (req, res) => {
   const { requestId, mode } = req.body as { requestId: string; mode: "once" | "read" | "readwrite" | "deny" };
   const decided = perms.decide(requestId, mode);
-  if (!decided) return res.status(404).json({ error: "Yêu cầu không tồn tại hoặc đã xử lý." });
+  if (!decided) return apiError(res, 404, "requestGone");
   res.json(decided);
 });
 
@@ -403,7 +505,7 @@ app.post("/api/research", async (req, res) => {
   const { agentId, topic, learningMode } = req.body as any;
   const agent = registry.get(agentId) ?? { id: agentId, name: agentId, role: "" };
   const policy = policyForLevel(configStore.get().automationLevel);
-  if (emergencyStop) return res.status(423).json({ error: "Đang bật chế độ dừng khẩn cấp." });
+  if (emergencyStop) return apiError(res, 423, "emergency");
   registry.setStatus(agentId, learningMode ? "learning" : "researching", topic);
   const result = await research.research({ agent, topic, learningMode }, policy);
   registry.setStatus(agentId, "idle");
@@ -462,11 +564,11 @@ app.post("/api/quota/refresh", async (_req, res) => {
 app.get("/api/tasks", (_req, res) => res.json(tasks.list()));
 
 app.post("/api/tasks", async (req, res) => {
-  if (emergencyStop) return res.status(423).json({ error: "Đang bật chế độ dừng khẩn cấp." });
+  if (emergencyStop) return apiError(res, 423, "emergency");
   const body = req.body as any;
   const agent = registry.get(body.agentId);
   const task = await tasks.submit({
-    title: body.title ?? "Tác vụ mới",
+    title: body.title ?? msg(normalizeLang(body.lang), "task.untitled"),
     prompt: body.prompt ?? "",
     agentId: body.agentId ?? "minh",
     agentName: agent?.name ?? body.agentName ?? "Agent",
@@ -475,6 +577,7 @@ app.post("/api/tasks", async (req, res) => {
     toolSteps: body.toolSteps,
     mode: body.mode,
     wallet: body.wallet,
+    lang: normalizeLang(body.lang),
   });
   res.json(task);
 });
@@ -482,19 +585,19 @@ app.post("/api/tasks", async (req, res) => {
 app.post("/api/tasks/:id/approve", async (req, res) => {
   // Id yêu cầu duyệt có dạng "apr_<taskId>".
   const t = await tasks.approve(`apr_${req.params.id}`);
-  if (!t) return res.status(404).json({ error: "Không tìm thấy yêu cầu duyệt." });
+  if (!t) return apiError(res, 404, "approvalGone");
   res.json(t);
 });
 
 app.post("/api/tasks/:id/reject", (req, res) => {
   const t = tasks.reject(`apr_${req.params.id}`);
-  if (!t) return res.status(404).json({ error: "Không tìm thấy yêu cầu duyệt." });
+  if (!t) return apiError(res, 404, "approvalGone");
   res.json(t);
 });
 
 app.post("/api/tasks/:id/cancel", (req, res) => {
   const t = tasks.cancel(req.params.id);
-  if (!t) return res.status(404).json({ error: "Không tìm thấy tác vụ." });
+  if (!t) return apiError(res, 404, "taskNotFound");
   res.json(t);
 });
 
@@ -558,6 +661,7 @@ app.post("/api/automation-level", (req, res) => {
 // --- Dừng khẩn cấp ---
 app.post("/api/emergency-stop", (_req, res) => {
   emergencyStop = !emergencyStop;
+  audit.append(emergencyStop ? "emergency.on" : "emergency.off", "user", {});
   if (emergencyStop) {
     // Dừng mọi agent: về trạng thái stopped và huỷ tác vụ đang chờ duyệt.
     for (const a of registry.list()) {
@@ -569,6 +673,7 @@ app.post("/api/emergency-stop", (_req, res) => {
         tasks.cancel(t.id);
       }
     }
+    gate.denyAll(); // mọi yêu cầu duyệt hành động ra bên ngoài (email, issue...) bị từ chối
   } else {
     for (const a of registry.list()) {
       registry.setStatus(a.id, "idle");
@@ -641,15 +746,188 @@ function startLearningLoop(): void {
 }
 startLearningLoop();
 
+// --- Phân tầng: Giám đốc → Trưởng phòng → Nhân viên ---
+orgDispatcher = new OrgDispatcher({
+  registry,
+  planner: makePlanner({
+    chat: chatWithLedger("plan"),
+    hasProvider: () => hub.hasProvider(),
+    director: () => ({ name: registry.get("giamdoc")?.name ?? "Director", company: process.env.OFFICE_COMPANY ?? "FunnyOVS Corp" }),
+  }),
+  summarizer: makeSummarizer({ chat: chatWithLedger("summary"), hasProvider: () => hub.hasProvider() }),
+  submit: (input) =>
+    tasks.submit({
+      title: input.title,
+      prompt: input.prompt,
+      agentId: input.agentId,
+      agentName: input.agentName,
+      department: input.department,
+      ref: input.ref,
+      lang: input.lang,
+    }),
+  openTasksOf: (agentId) =>
+    tasks.list().filter((t) => t.agentId === agentId && (t.status === "pending" || t.status === "running" || t.status === "awaiting-approval")).length,
+  emit: (node) => {
+    // Người phân việc hiện "đang làm" trong lúc cấp dưới chạy; xong thì về rảnh (nếu không còn việc khác).
+    if (node.kind === "delegation") {
+      const busy = node.status === "running" || node.status === "awaiting-approval";
+      const a = registry.get(node.assigneeId);
+      const planning = node.level === 1 && node.childIds.length === 0;
+      if (a && busy) {
+        registry.setStatus(node.assigneeId, "working", `${planning ? "Đang lập kế hoạch" : "Phân việc"}: ${node.title}`, {
+          key: planning ? "task.planning" : "task.delegating",
+          vars: { title: node.title },
+        });
+      }
+      else if (a && a.status === "working" && !tasks.list().some((t) => t.agentId === a.id && t.status === "running")) registry.setStatus(node.assigneeId, "idle");
+      if (a) broadcast("agent:update", registry.get(node.assigneeId));
+    }
+    broadcast("org:node", node);
+    saveOrg();
+  },
+});
+
+// Lưu cây giao việc ra đĩa (ghi gộp, nguyên tử) và nạp lại khi khởi động.
+const ORG_FILE = path.join(DATA_DIR, "org.json");
+try {
+  const loaded = orgDispatcher.restore(JSON.parse(fs.readFileSync(ORG_FILE, "utf8")));
+  if (loaded) console.log(`[office3d] đã nạp ${loaded} nút giao việc`);
+} catch {
+  /* chưa có file hoặc file hỏng: bắt đầu trống */
+}
+let orgSaveTimer: NodeJS.Timeout | null = null;
+function saveOrg(): void {
+  if (orgSaveTimer) return;
+  orgSaveTimer = setTimeout(() => {
+    orgSaveTimer = null;
+    try {
+      const tmp = `${ORG_FILE}.tmp`;
+      fs.writeFileSync(tmp, JSON.stringify(orgDispatcher!.list()), "utf8");
+      fs.renameSync(tmp, ORG_FILE);
+    } catch (err) {
+      console.error("[office3d] không lưu được org.json:", err instanceof Error ? err.message : err);
+    }
+  }, 500);
+  orgSaveTimer.unref();
+}
+// Dọn cây cũ (đã xong > 7 ngày) mỗi giờ để file không phình ra.
+setInterval(() => {
+  if (orgDispatcher!.prune(7 * 24 * 3600 * 1000) > 0) saveOrg();
+}, 3600_000).unref();
+
 // --- Văn phòng hợp nhất: bảng máy + cầu nối OfficeEntity ---
 const machineProbe = new MachineProbe();
 officeBridge = new OfficeBridge({
   listAgents: () => registry.list(),
   listTasks: () => tasks.list(),
   machine: () => machineProbe.current,
+  pendingPermissions: () => perms.listPending(),
+  pendingTokenApprovals: () => tasks.listApprovals(),
+  pendingActions: () => gate.list(),
 });
 machineProbe.start(5000, (sample) => {
   if (officeBridge && listeners.size > 0) broadcastOffice(officeBridge.onMachine(sample));
+});
+
+// --- Truy cập mạng & token (chỉ từ chính máy này) ---
+function loopbackOnly(req: express.Request, res: express.Response): boolean {
+  if (auth.isLoopback(req)) return true;
+  apiError(res, 403, "loopbackOnly");
+  return false;
+}
+app.get("/api/auth/info", (req, res) => {
+  if (!loopbackOnly(req, res)) return;
+  const port = Number(process.env.PORT ?? 8787);
+  res.json({
+    lan: NETWORK.lan,
+    tokenRequiredHere: auth.required(req),
+    token: auth.currentToken(),
+    urls: NETWORK.lan ? lanAddresses().map((ip) => `http://${ip}:${port}/`) : [],
+    restartRequired: readNetwork(DATA_DIR).lan !== NETWORK.lan,
+  });
+});
+app.post("/api/auth/rotate", (req, res) => {
+  if (!loopbackOnly(req, res)) return;
+  const token = auth.rotate();
+  audit.append("auth.rotate", "user", {});
+  res.json({ token });
+});
+app.post("/api/network", (req, res) => {
+  if (!loopbackOnly(req, res)) return;
+  const lan = (req.body as { lan?: unknown } | undefined)?.lan === true;
+  writeNetwork(DATA_DIR, { lan });
+  audit.append("network.lan", "user", { lan });
+  res.json({ lan, restartRequired: lan !== NETWORK.lan });
+});
+
+app.get("/api/org", (_req, res) => {
+  res.json({
+    agents: registry.list().map((a) => ({ id: a.id, name: a.name, role: a.role, department: a.department, tier: a.tier, reportsTo: a.reportsTo ?? null, status: a.status })),
+    nodes: orgDispatcher!.list(),
+  });
+});
+
+app.post("/api/org/assign", async (req, res) => {
+  if (emergencyStop) return apiError(res, 423, "emergency");
+  const body = (req.body ?? {}) as { prompt?: string; title?: string; toAgentId?: string; lang?: string };
+  const prompt = String(body.prompt ?? "").trim().slice(0, 8000);
+  if (!prompt) return apiError(res, 400, "noPrompt");
+  const toAgentId = body.toAgentId ?? orgDispatcher!.director()?.id ?? "giamdoc";
+  if (!registry.get(toAgentId)) return apiError(res, 404, "unknownAgent", { id: toAgentId.slice(0, 40) });
+  try {
+    const root = await orgDispatcher!.assign({ title: body.title, prompt, toAgentId, lang: normalizeLang(body.lang) });
+    res.json({ root, tree: orgDispatcher!.tree(root.id) });
+  } catch (err) {
+    apiError(res, 500, "badRequest", undefined, err instanceof Error ? err.message : undefined);
+  }
+});
+
+// Lịch giao việc lặp lại: đến giờ thì giao cho người nhận như khi bạn tự giao (qua đúng ước lượng/duyệt/ngân sách).
+const scheduler = new Scheduler({
+  file: path.join(DATA_DIR, "schedules.json"),
+  run: async (s) => {
+    const root = await orgDispatcher!.assign({ title: s.title, prompt: s.prompt, toAgentId: s.toAgentId, lang: s.lang });
+    return { rootId: root.id };
+  },
+  paused: () => emergencyStop,
+  agentExists: (id) => Boolean(registry.get(id)),
+  defaultAgent: () => orgDispatcher!.director()?.id ?? "giamdoc",
+  onEvent: (kind, detail) => audit.append(kind, kind === "schedule.run" ? "system" : "user", detail),
+});
+scheduler.start();
+
+registerBusinessRoutes(app, {
+  audit,
+  scheduler,
+  dataDir: DATA_DIR,
+  org: {
+    list: () => orgDispatcher!.list(),
+    replaceAll: (raw) => orgDispatcher!.replaceAll(raw),
+    busy: () => orgDispatcher!.busy() || tasks.list().some((t) => t.status === "running" || t.status === "awaiting-approval"),
+    onReplaced: () => {
+      saveOrg();
+      broadcastOffice([{ type: "org.snapshot", nodes: orgDispatcher!.list(), at: new Date().toISOString() }]);
+    },
+  },
+  hub,
+  db: officeDb,
+  mail,
+  gate,
+  isLoopback: (req) => auth.isLoopback(req),
+  version: pkg.version,
+  emergency: () => emergencyStop,
+  lan: NETWORK.lan,
+  startedAt: STARTED_AT,
+});
+gate.on("request", (r) => broadcast("action:request", r));
+gate.on("decided", (r) => {
+  broadcast("action:decided", r);
+  audit.append(r.outcome === "approved" ? "action.approved" : r.outcome === "denied" ? "action.denied" : "action.expired", r.outcome === "expired" ? "system" : "user", {
+    action: r.action,
+    agent: r.agentId,
+    ...(typeof r.vars.to === "string" ? { to: r.vars.to } : {}),
+    ...(typeof r.vars.repo === "string" ? { repo: r.vars.repo } : {}),
+  });
 });
 
 app.get("/api/office/entities", (_req, res) => {
@@ -665,7 +943,7 @@ if (fs.existsSync(clientDist)) {
 }
 
 const server = http.createServer(app);
-const wss = new WebSocketServer({ server, path: "/ws" });
+const wss = new WebSocketServer({ server, path: "/ws", verifyClient: (info: { origin: string; req: http.IncomingMessage }) => verifyWsClient(info, EXTRA_HOSTS, NETWORK.lan) && auth.verifyWs(info.req) });
 
 wss.on("connection", (ws) => {
   const listener: Listener = (event, data) => {
@@ -674,6 +952,9 @@ wss.on("connection", (ws) => {
   listeners.add(listener);
   // Ảnh chụp đầy đủ theo schema chung cho client văn phòng hợp nhất.
   ws.send(JSON.stringify({ event: OFFICE_WS_EVENT, data: officeBridge!.snapshot() }));
+  ws.send(JSON.stringify({ event: OFFICE_WS_EVENT, data: { type: "org.snapshot", nodes: orgDispatcher!.list(), at: new Date().toISOString() } }));
+  for (const ev of officeBridge!.pendingApprovals()) ws.send(JSON.stringify({ event: OFFICE_WS_EVENT, data: ev }));
+  ws.send(JSON.stringify({ event: OFFICE_WS_EVENT, data: { type: "emergency", active: emergencyStop, at: new Date().toISOString() } }));
   ws.send(
     JSON.stringify({
       event: "state",
@@ -690,7 +971,8 @@ wss.on("connection", (ws) => {
 
 const PORT = Number(process.env.PORT ?? 8787);
 // OFFICE_HOST: ứng dụng desktop chỉ lắng nghe 127.0.0.1; mặc định giữ nguyên hành vi cũ.
-const HOST = process.env.OFFICE_HOST;
+// Bật LAN trong cấu hình → lắng nghe mọi giao diện (token bắt buộc cho máy khác); ngược lại theo OFFICE_HOST (mặc định cũ).
+const HOST = NETWORK.lan ? "0.0.0.0" : process.env.OFFICE_HOST;
 const onListening = () => {
   console.log(`[office3d] server: http://localhost:${PORT}`);
   console.log(`[office3d] workspace: ${config.workspace}`);
@@ -699,8 +981,18 @@ const onListening = () => {
 if (HOST) server.listen(PORT, HOST, onListening);
 else server.listen(PORT, onListening);
 
+process.on("uncaughtException", (err) => console.error("[office3d] uncaughtException:", err));
+process.on("unhandledRejection", (err) => console.error("[office3d] unhandledRejection:", err));
+
 async function shutdown(): Promise<void> {
+  try {
+    fs.writeFileSync(ORG_FILE, JSON.stringify(orgDispatcher!.list()), "utf8");
+  } catch {
+    /* bỏ qua */
+  }
   machineProbe.stop();
+  scheduler.stop();
+  officeDb.close();
   await browser.close();
   kb.close();
   process.exit(0);

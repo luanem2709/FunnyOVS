@@ -13,6 +13,8 @@ import type { TokenBudget, WalletKind } from "../budget/tokenBudget.js";
 import type { TokenLedger, QuotaSource } from "../budget/tokenLedger.js";
 import { estimateTask, type Estimation } from "../budget/estimation.js";
 import { runCursorAgent, type CursorAgentMode } from "../budget/cursorAgent.js";
+import type { RunLlm } from "../agent/backend.js";
+import type { Lang } from "../../shared/messages.js";
 import { pricingFor, estimateCost } from "../budget/estimation.js";
 
 export type TaskStatus = "pending" | "awaiting-approval" | "running" | "done" | "failed" | "rejected";
@@ -38,8 +40,15 @@ export interface TaskRecord {
   quotaSource?: QuotaSource;
   /** Lý do cần người dùng duyệt. */
   approvalReason?: string;
+  /** Khoá i18n + biến của `error` (client dịch theo ngôn ngữ người dùng). */
+  errorKey?: string;
+  errorVars?: Record<string, string | number>;
+  /** Ngôn ngữ của người yêu cầu (lời giao việc và câu trả lời của agent). */
+  lang?: Lang;
   /** Đây là tác vụ tự học (dùng ví learning). */
   wallet: WalletKind;
+  /** Id nút trong cây giao việc (OrgDispatcher) nếu việc này do cấp trên giao xuống. */
+  ref?: string;
 }
 
 export interface ApprovalRequest {
@@ -74,8 +83,8 @@ export interface TaskRunnerDeps {
   isAutonomous?: () => boolean;
   /** Được gọi khi tác vụ thất bại — để tạo đề xuất tự sửa (không tự áp dụng). */
   onSelfPropose?: (p: { agentId: string; agentName: string; title: string; rationale: string }) => void;
-  /** Gọi LLM. Mặc định dùng Cursor CLI; test có thể thay bằng hàm giả. */
-  runLlm?: typeof runCursorAgent;
+  /** Gọi LLM. Mặc định dùng Cursor CLI; ứng dụng thật truyền bộ chọn backend (router có công cụ / Cursor). Test thay bằng hàm giả. */
+  runLlm?: RunLlm;
 }
 
 export class TaskRunner {
@@ -111,6 +120,8 @@ export class TaskRunner {
     toolSteps?: number;
     mode?: CursorAgentMode;
     wallet?: WalletKind;
+    ref?: string;
+    lang?: Lang;
   }): Promise<TaskRecord> {
     const id = `task_${++this.seq}_${randomUUID().slice(0, 8)}`;
     const wallet = input.wallet ?? "normal";
@@ -131,6 +142,8 @@ export class TaskRunner {
       createdAt: new Date().toISOString(),
       estimation,
       wallet,
+      ref: input.ref,
+      lang: input.lang,
     };
     this.tasks.set(id, task);
 
@@ -193,6 +206,7 @@ export class TaskRunner {
     if (!task) return undefined;
     task.status = "rejected";
     task.error = "Đã hủy.";
+    task.errorKey = "err.task.cancelled";
     task.finishedAt = new Date().toISOString();
     this.#emit(task);
     return task;
@@ -208,6 +222,8 @@ export class TaskRunner {
     if (est.estimatedTokens > perTaskLimit) {
       task.status = "failed";
       task.error = `Ước lượng ${est.estimatedTokens.toLocaleString()} token vượt trần mỗi tác vụ (${perTaskLimit.toLocaleString()}). Hãy chia nhỏ tác vụ.`;
+      task.errorKey = "err.budget.overTask";
+      task.errorVars = { tokens: est.estimatedTokens.toLocaleString(), limit: perTaskLimit.toLocaleString() };
       task.finishedAt = new Date().toISOString();
       this.#emit(task);
       return;
@@ -216,6 +232,7 @@ export class TaskRunner {
     if (!this.deps.budget.canSpend(task.wallet, est.estimatedTokens)) {
       task.status = "failed";
       task.error = "Không đủ hạn mức token để chạy tác vụ này.";
+      task.errorKey = "err.budget.insufficient";
       task.finishedAt = new Date().toISOString();
       this.#emit(task);
       return;
@@ -227,13 +244,22 @@ export class TaskRunner {
     task.backend = "cursor-agent";
     this.#emit(task);
 
-    const result = await (this.deps.runLlm ?? runCursorAgent)({
+    const run: RunLlm = this.deps.runLlm ?? ((o) => runCursorAgent(o));
+    const result = await run({
       prompt: task.prompt,
       workspace: this.deps.workspace,
       model: task.model,
       mode,
       timeoutMs: 120_000,
+      agentId: task.agentId,
+      agentName: task.agentName,
+      department: task.department,
+      lang: task.lang,
+      taskId: task.id,
     });
+    const backend = result.backend ?? "cursor-agent";
+    task.backend = backend;
+    if (result.model) task.model = result.model;
 
     // Bước 3: ghi ledger + trừ ngân sách
     const usage = result.usage;
@@ -241,14 +267,14 @@ export class TaskRunner {
     const pricing = pricingFor(task.model ?? "auto");
     const costCents = estimateCost(pricing, usage.inputTokens, usage.outputTokens, usage.cacheReadTokens) * 100;
 
-    const quotaSource: QuotaSource = totalTokens > 0 ? "cli-usage" : "estimated";
+    const quotaSource: QuotaSource = result.usageSource === "provider-usage" ? "provider-usage" : totalTokens > 0 ? "cli-usage" : "estimated";
     this.deps.ledger.add({
       taskId: task.id,
       department: task.department,
       agentId: task.agentId,
       agentName: task.agentName,
       model: task.model ?? "auto",
-      backend: "cursor-agent",
+      backend,
       inputTokens: usage.inputTokens,
       outputTokens: usage.outputTokens,
       cacheReadTokens: usage.cacheReadTokens,
@@ -276,7 +302,13 @@ export class TaskRunner {
     } else {
       task.status = "failed";
       task.error = result.error ?? "Lỗi không xác định.";
-      if (result.quotaExhausted) task.error = `Đã chạm hạn mức Cursor: ${task.error}`;
+      task.errorKey = result.errorKey;
+      task.errorVars = result.errorVars;
+      if (result.quotaExhausted) {
+        task.errorKey = "err.cursor.quota";
+        task.errorVars = { detail: task.error };
+        task.error = `Đã chạm hạn mức Cursor: ${task.error}`;
+      }
       // Tự đề xuất sửa (self-dev): agent không tự sửa mã, chỉ tạo đề xuất.
       this.deps.onSelfPropose?.({
         agentId: task.agentId,

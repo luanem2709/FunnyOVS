@@ -9,6 +9,7 @@ import { NavGrid, buildOfficeNavGrid, PLAZA } from "../src/client/assets/navgrid
 import { AgentBehavior, IDLE_ACTIONS, pickIdleAction, MAX_WALK, type IdleWhere } from "../src/client/assets/behavior.js";
 import { toRigStatus, bubbleFor } from "../src/client/office-3d/renderer/OfficeScene.js";
 import { DEPARTMENTS } from "../src/server/agents/departments.js";
+import { useSettings } from "../src/client/office-3d/store/settings.js";
 import { AgentRegistry } from "../src/server/agents/agentRegistry.js";
 import type { OfficeEntity, OfficeEvent } from "../src/shared/officeEntity.js";
 
@@ -60,6 +61,14 @@ describe("store (reducer thuần)", () => {
     expect(d.approvals).toEqual({});
   });
 
+  it("emergency bật/tắt; cùng giá trị thì không tạo object mới", () => {
+    let d = apply(emptyData(), { type: "emergency", active: true, at: "x" });
+    expect(d.emergency).toBe(true);
+    expect(applyOfficeEvent(d, { type: "emergency", active: true, at: "y" })).toBe(d);
+    d = apply(d, { type: "emergency", active: false, at: "z" });
+    expect(d.emergency).toBe(false);
+  });
+
   it("status.changed tăng số thứ tự để hiệu ứng chỉ bắn một lần", () => {
     let d = apply(emptyData(), { type: "status.changed", id: "agent:a", from: "idle", to: "working", at: "x" });
     const first = d.lastChange!.seq;
@@ -89,6 +98,7 @@ describe("ánh xạ trạng thái cho renderer", () => {
   });
 
   it("bong bóng thoại: có nội dung khi bận/chờ duyệt, không có khi rảnh", () => {
+    useSettings.getState().set({ lang: "vi" });
     expect(bubbleFor(ent("a", { status: "idle" }))).toBeNull();
     expect(bubbleFor(ent("a", { status: "pending-approval" }))?.text).toContain("duyệt");
     expect(bubbleFor(ent("a", { status: "researching", metadata: { currentUrl: "https://docs.python.org/3/" } }))?.text).toContain(
@@ -154,7 +164,11 @@ describe("bảng hành vi nhàn rỗi", () => {
   it("chọn theo trọng số và chỉ trong địa điểm khả dụng", () => {
     const only = new Set<IdleWhere>(["seat"]);
     for (let i = 0; i < 50; i++) expect(pickIdleAction(only, Math.random).where).toBe("seat");
-    expect(pickIdleAction(new Set<IdleWhere>(["seat", "door"]), () => 0.9999).where).toBe("door");
+    // Chưa có pantry (hoặc quá xa): việc "cà phê" vẫn khả dụng nhờ nơi thay thế là cửa phòng.
+    const coffee = pickIdleAction(new Set<IdleWhere>(["seat", "door"]), () => 0.9999);
+    expect(coffee.id).toBe("coffee");
+    expect(coffee.where).toBe("pantry");
+    expect(coffee.fallbackWhere).toBe("door");
     expect(IDLE_ACTIONS.every((a) => a.secs[0] > 0 && a.secs[1] >= a.secs[0] && a.weight > 0)).toBe(true);
   });
 
@@ -168,9 +182,10 @@ describe("bảng hành vi nhàn rỗi", () => {
     const dept = DEPARTMENTS.find((d) => d.id === a.department)!;
     const v = visual();
     let seated = 0;
-    const b = new AgentBehavior(v, a.position.x, a.position.z, dept.center.z + dept.size.d / 2 + 1.1, a.position.x + 1.4, () => seated++, {
+    const b = new AgentBehavior(v, a.position.x, a.position.z, () => seated++, {
       nav: grid,
       rand: () => 0.99, // chọn việc cuối: cà phê ở cửa
+      spots: { door: { x: a.position.x, z: dept.center.z + dept.size.d / 2 + 1.1, yaw: 0 } },
     });
     (b as unknown as { nextActionAt: number }).nextActionAt = 0;
     const root = (v as { root: THREE.Group }).root;
@@ -191,7 +206,7 @@ describe("bảng hành vi nhàn rỗi", () => {
 
   it("việc nhỏ tại chỗ có nhãn và kết thúc khi có việc thật", () => {
     const v = visual();
-    const b = new AgentBehavior(v, 0, 0.4, 4, 1.4, () => undefined, { rand: () => 0 }); // chọn việc đầu tiên: ngồi tại chỗ
+    const b = new AgentBehavior(v, 0, 0.4, () => undefined, { rand: () => 0 }); // chọn việc đầu tiên: ngồi tại chỗ
     (b as unknown as { nextActionAt: number }).nextActionAt = 0;
     b.update(0.05, "idle");
     expect(b.away).toBe(false);
