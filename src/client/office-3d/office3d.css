@@ -379,3 +379,19 @@ details summary::-webkit-details-marker { display: none; }
 details > summary { list-style: none; }
 details > summary::before { content: "▶ "; font-size: 10px; opacity: 0.6; }
 details[open] > summary::before { content: "▼ "; }
+
+/* ---- Chế độ chuyển đổi Studio đầy đủ / Tạo nhanh & Fullscreen ---- */
+.wi-header-tabs { display: flex; gap: 6px; margin-bottom: 8px; border-bottom: 1px solid var(--line, #30363d); padding-bottom: 8px; }
+.wi-header-tabs button { flex: 1; padding: 6px 10px; font-size: 12px; font-weight: 600; border: 1px solid var(--line, #30363d); border-radius: 6px; background: rgba(255,255,255,0.04); color: inherit; cursor: pointer; transition: background 0.15s; }
+.wi-header-tabs button.active { background: var(--accent, #ff8a3d); color: #141220; border-color: var(--accent, #ff8a3d); }
+.wi-studio-container { display: flex; flex-direction: column; gap: 6px; }
+.wi-studio-bar { display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-wrap: wrap; padding: 4px 0; }
+.wi-studio-bar .button-link { display: inline-flex; align-items: center; padding: 3px 8px; font-size: 12px; text-decoration: none; color: inherit; background: var(--field, #2b2740); border: 1px solid var(--line, #38334f); border-radius: 6px; }
+.wi-studio-frame { width: 100%; height: calc(100vh - 190px); min-height: 480px; border: 1px solid var(--line, #30363d); border-radius: 8px; background: #141220; }
+
+/* Modal tràn toàn màn hình bên trong app FunnyOVS */
+.wi-fullscreen-overlay { position: fixed; inset: 0; z-index: 9999; background: #141220; display: flex; flex-direction: column; }
+.wi-fullscreen-topbar { display: flex; align-items: center; justify-content: space-between; padding: 8px 16px; background: #1d1a2b; border-bottom: 1px solid #38334f; color: #f3eee4; }
+.wi-fullscreen-topbar .wi-title { font-weight: 700; font-size: 14px; }
+.wi-fullscreen-topbar .close-btn { background: #ff6a5a; color: #fff; font-weight: 600; padding: 4px 12px; border-radius: 6px; }
+.wi-fullscreen-frame { width: 100%; flex: 1; border: none; background: #141220; }

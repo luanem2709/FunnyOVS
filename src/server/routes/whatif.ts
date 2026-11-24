@@ -8,6 +8,7 @@
 import type { Express, Request, Response } from "express";
 import crypto from "node:crypto";
 import fs from "node:fs";
+import http from "node:http";
 import path from "node:path";
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 
@@ -18,6 +19,55 @@ const KIT_CANDIDATES = [
   path.resolve(process.cwd(), "../app/what-if-studio"),
   "C:\\ShotBuilder\\what-if-studio",
 ];
+
+let shotBuilderChild: ChildProcess | null = null;
+
+export function ensureShotBuilderProcess(kitDir?: string): void {
+  const kit = kitDir ?? findKitDir();
+  if (!kit) return;
+  const appPy = path.join(kit, "builder", "app.pyc");
+  const appPyAlt = path.join(kit, "builder", "app.py");
+  const targetScript = fs.existsSync(appPy) ? appPy : fs.existsSync(appPyAlt) ? appPyAlt : null;
+  if (!targetScript) return;
+
+  const py = findPython();
+  if (!py) return;
+
+  // Kiểm tra port 7870 đã bật chưa
+  const req = http.get("http://127.0.0.1:7870/api/ping", (res) => {
+    // Đã chạy, không cần khởi động lại
+    res.resume();
+  });
+  req.on("error", () => {
+    // Chưa chạy -> tự khởi động ngầm trong FunnyOVS
+    try {
+      shotBuilderChild = spawn(py, [targetScript], {
+        cwd: kit,
+        windowsHide: true,
+        stdio: "ignore",
+        env: {
+          ...process.env,
+          BUILDER_NO_BROWSER: "1",
+          BUILDER_APP: "1",
+          PYTHONIOENCODING: "utf-8",
+        },
+      });
+
+      const killChild = () => {
+        if (shotBuilderChild) {
+          killTree(shotBuilderChild);
+          shotBuilderChild = null;
+        }
+      };
+      process.once("exit", killChild);
+      process.once("SIGINT", killChild);
+      process.once("SIGTERM", killChild);
+      console.log("[whatif] Đã tự động kích hoạt ShotBuilder server ngầm (cổng 7870)");
+    } catch (e) {
+      console.warn("[whatif] Không thể khởi động ShotBuilder server ngầm:", e);
+    }
+  });
+}
 
 export interface WiJob {
   id: string;
@@ -52,7 +102,7 @@ function killTree(child: ChildProcess): void {
 export class WhatIfService {
   private jobs: WiJob[] = [];
   private current: { job: WiJob; abort: AbortController } | null = null;
-  private kitDir: string | undefined;
+  readonly kitDir: string | undefined;
 
   constructor(private workspaceRoot: string) {
     this.kitDir = findKitDir();
@@ -260,11 +310,18 @@ export class WhatIfService {
 export function registerWhatIfRoutes(app: Express, deps: { workspace: () => string; isLoopback: (req: Request) => boolean }): void {
   const svc = new WhatIfService(deps.workspace());
 
+  // Tự động khởi động ShotBuilder server (port 7870) ngầm ngay khi app FunnyOVS mở
+  ensureShotBuilderProcess(svc.kitDir);
+
   const own = (req: Request, res: Response): boolean => {
     if (deps.isLoopback(req)) return true;
     res.status(403).json({ error: "Chỉ cho phép từ máy local" });
     return false;
   };
+
+  app.get("/shotbuilder", (_req, res) => {
+    res.redirect("http://127.0.0.1:7870");
+  });
 
   app.get("/api/whatif/state", (_req, res) => { res.json(svc.state()); });
 

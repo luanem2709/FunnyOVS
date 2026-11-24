@@ -1,7 +1,8 @@
 /**
- * WhatIfPanel — Tab "What-If Studio" tích hợp ShotBuilder vào FunnyOVS.
- * Cho phép người dùng tạo kịch bản, upload file JSON cảnh (từ chatbot AI hoặc offline),
- * xem storyboard, và dựng clip hoạt hình "What If" ngay trong app — không tốn token AI khi render.
+ * WhatIfPanel — Tab "What-If Studio" tích hợp trọn vẹn ShotBuilder vào FunnyOVS.
+ * - Chế độ Studio đầy đủ: Nhúng trực tiếp toàn bộ giao diện ShotBuilder Studio (storyboard trực tiếp, chọn nhân vật, bối cảnh, đạo cụ, camera, 27 kiểu chuyển cảnh, SFX).
+ * - Chế độ Tạo nhanh: 3 bước kịch bản → AI chatbot → file JSON → dựng clip.
+ * - Hỗ trợ chế độ toàn màn hình (fullscreen) ngay trong app FunnyOVS.
  */
 import { useEffect, useRef, useState } from "react";
 import { useT } from "../i18n/index.js";
@@ -12,7 +13,7 @@ interface WiJob {
   id: string;
   project: string;
   status: WiStatus;
-  progress: number; // 0..1
+  progress: number;
   step: string;
   output?: string;
   error?: string;
@@ -38,6 +39,10 @@ async function wiApi<T>(path: string, init?: RequestInit): Promise<T> {
 
 export function WhatIfPanel() {
   const t = useT();
+  const [mode, setMode] = useState<"studio" | "quick">("studio");
+  const [fullscreen, setFullscreen] = useState(false);
+  const [iframeKey, setIframeKey] = useState(0);
+
   const [state, setState] = useState<WiState | null>(null);
   const [err, setErr] = useState("");
   const [project, setProject] = useState("");
@@ -48,7 +53,7 @@ export function WhatIfPanel() {
   const fileRef = useRef<HTMLInputElement>(null);
   const PROJECT_RE = /^[a-z0-9][a-z0-9-]{1,40}$/;
 
-  // Poll trạng thái mỗi 2s
+  // Poll trạng thái khi ở chế độ tạo nhanh
   useEffect(() => {
     let alive = true;
     const poll = async () => {
@@ -70,7 +75,6 @@ export function WhatIfPanel() {
   };
 
   const copyPrompt = () => {
-    // Lấy nội dung lệnh cho AI từ LENH_CHO_AI.txt đã copy vào chatbot/what-if-chatbot
     const basePrompt = `Bạn là storyboard artist cho kênh YouTube hoạt hình "What If". Chuyển kịch bản sau thành danh sách cảnh JSON cho công cụ hoạt hình của tôi.\n\nKỊCH BẢN:\n${scriptText}`;
     navigator.clipboard.writeText(basePrompt).then(() => { setCopyDone(true); setTimeout(() => setCopyDone(false), 2000); });
   };
@@ -89,158 +93,247 @@ export function WhatIfPanel() {
 
   return (
     <section className="whatif-panel" aria-label={t("whatif.aria")}>
-      <h3>🎬 {t("whatif.title")}</h3>
-      <p className="muted small">{t("whatif.intro")}</p>
+      <div className="wi-header-tabs">
+        <button
+          className={mode === "studio" ? "active" : ""}
+          onClick={() => setMode("studio")}
+        >
+          🎬 {t("whatif.modeStudio")}
+        </button>
+        <button
+          className={mode === "quick" ? "active" : ""}
+          onClick={() => setMode("quick")}
+        >
+          ⚡ {t("whatif.modeQuick")}
+        </button>
+      </div>
 
-      {/* Bước 1: Kịch bản */}
-      <details open>
-        <summary className="wi-step"><b>{t("whatif.step1")}</b></summary>
-        <div className="wi-body">
-          <textarea
-            className="wi-script"
-            value={scriptText}
-            onChange={(e) => setScriptText(e.target.value)}
-            placeholder={t("whatif.scriptPlaceholder")}
-            rows={6}
+      {mode === "studio" && (
+        <div className="wi-studio-container">
+          <div className="wi-studio-bar">
+            <span className="muted small">ShotBuilder Studio v1.5.1 (Remotion Engine)</span>
+            <div className="aimove">
+              <button
+                className="icon small"
+                title={t("whatif.reloadStudio")}
+                onClick={() => setIframeKey((k) => k + 1)}
+              >
+                🔄
+              </button>
+              <button
+                className="small"
+                title={t("whatif.fullscreen")}
+                onClick={() => setFullscreen(true)}
+              >
+                ⛶ {t("whatif.fullscreen")}
+              </button>
+              <a
+                href="http://127.0.0.1:7870"
+                target="_blank"
+                rel="noreferrer"
+                className="small button-link"
+                title={t("whatif.openNewTab")}
+              >
+                ↗ {t("whatif.openNewTab")}
+              </a>
+            </div>
+          </div>
+
+          <iframe
+            key={iframeKey}
+            src="http://127.0.0.1:7870"
+            className="wi-studio-frame"
+            title="ShotBuilder Studio"
           />
-          <div className="ecoactions">
-            <button onClick={copyPrompt} disabled={!scriptText.trim()}>
-              {copyDone ? t("whatif.copied") : t("whatif.copyPrompt")}
-            </button>
-            <span className="muted small">{t("whatif.copyHint")}</span>
-          </div>
-        </div>
-      </details>
 
-      {/* Bước 2: File cảnh JSON */}
-      <details open>
-        <summary className="wi-step"><b>{t("whatif.step2")}</b></summary>
-        <div className="wi-body">
-          <div className="ecoactions">
-            <button onClick={() => fileRef.current?.click()}>{t("whatif.loadJson")}</button>
-            <input ref={fileRef} type="file" accept=".json" style={{ display: "none" }} onChange={handleJsonFile} />
-          </div>
-          {scenesJson && (
-            <div className="wi-json-preview muted small">
-              ✅ {t("whatif.jsonLoaded")}: {(() => { try { return JSON.parse(scenesJson)?.shots?.length ?? "?"; } catch { return "?"; } })()} {t("whatif.shots")}
+          {fullscreen && (
+            <div className="wi-fullscreen-overlay">
+              <div className="wi-fullscreen-topbar">
+                <span className="wi-title">🎬 ShotBuilder Studio — FunnyOVS</span>
+                <div className="aimove">
+                  <button
+                    className="icon"
+                    title={t("whatif.reloadStudio")}
+                    onClick={() => setIframeKey((k) => k + 1)}
+                  >
+                    🔄 Tải lại
+                  </button>
+                  <button
+                    className="icon close-btn"
+                    title={t("common.close")}
+                    onClick={() => setFullscreen(false)}
+                  >
+                    ✕ {t("whatif.exitFullscreen")}
+                  </button>
+                </div>
+              </div>
+              <iframe
+                key={`fs-${iframeKey}`}
+                src="http://127.0.0.1:7870"
+                className="wi-fullscreen-frame"
+                title="ShotBuilder Studio Fullscreen"
+              />
             </div>
           )}
         </div>
-      </details>
+      )}
 
-      {/* Bước 3: Dự án và dựng */}
-      <details open>
-        <summary className="wi-step"><b>{t("whatif.step3")}</b></summary>
-        <div className="wi-body">
-          {projects.length === 0 ? (
-            <p className="muted small">{t("whatif.noProjects")}</p>
-          ) : (
-            <label className="small">
-              {t("whatif.project")}{" "}
-              <select value={project} onChange={(e) => setProject(e.target.value)}>
-                {projects.map((p) => <option key={p} value={p}>{p}</option>)}
-              </select>
-            </label>
-          )}
-          <div className="ecoactions">
-            <input
-              value={newName}
-              onChange={(e) => setNewName(e.target.value.toLowerCase())}
-              placeholder={t("whatif.newName")}
-              maxLength={41}
-            />
-            <button
-              disabled={!PROJECT_RE.test(newName)}
-              onClick={run(async () => {
-                await wiApi("/projects", { method: "POST", body: JSON.stringify({ project: newName, script: scriptText, scenes: scenesJson }) });
-                setProject(newName); setNewName("");
-                const s = await wiApi<WiState>("/state");
-                setState(s);
-              })}
-            >
-              {t("whatif.create")}
-            </button>
-          </div>
+      {mode === "quick" && (
+        <div className="wi-quick-container">
+          <h3>🎬 {t("whatif.title")}</h3>
+          <p className="muted small">{t("whatif.intro")}</p>
 
-          {project && (
-            <div className="ecoactions" style={{ marginTop: 8 }}>
-              <button disabled={!!activeJob || !project} onClick={run(async () => {
-                await wiApi("/render", { method: "POST", body: JSON.stringify({ project, preview: true }) });
+          {/* Bước 1: Kịch bản */}
+          <details open>
+            <summary className="wi-step"><b>{t("whatif.step1")}</b></summary>
+            <div className="wi-body">
+              <textarea
+                className="wi-script"
+                value={scriptText}
+                onChange={(e) => setScriptText(e.target.value)}
+                placeholder={t("whatif.scriptPlaceholder")}
+                rows={5}
+              />
+              <div className="ecoactions">
+                <button onClick={copyPrompt} disabled={!scriptText.trim()}>
+                  {copyDone ? t("whatif.copied") : t("whatif.copyPrompt")}
+                </button>
+                <span className="muted small">{t("whatif.copyHint")}</span>
+              </div>
+            </div>
+          </details>
+
+          {/* Bước 2: File cảnh JSON */}
+          <details open>
+            <summary className="wi-step"><b>{t("whatif.step2")}</b></summary>
+            <div className="wi-body">
+              <div className="ecoactions">
+                <button onClick={() => fileRef.current?.click()}>{t("whatif.loadJson")}</button>
+                <input ref={fileRef} type="file" accept=".json" style={{ display: "none" }} onChange={handleJsonFile} />
+              </div>
+              {scenesJson && (
+                <div className="wi-json-preview muted small">
+                  ✅ {t("whatif.jsonLoaded")}: {(() => { try { return JSON.parse(scenesJson)?.shots?.length ?? "?"; } catch { return "?"; } })()} {t("whatif.shots")}
+                </div>
+              )}
+            </div>
+          </details>
+
+          {/* Bước 3: Dự án và dựng */}
+          <details open>
+            <summary className="wi-step"><b>{t("whatif.step3")}</b></summary>
+            <div className="wi-body">
+              {projects.length === 0 ? (
+                <p className="muted small">{t("whatif.noProjects")}</p>
+              ) : (
+                <label className="small">
+                  {t("whatif.project")}{" "}
+                  <select value={project} onChange={(e) => setProject(e.target.value)}>
+                    {projects.map((p) => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                </label>
+              )}
+              <div className="ecoactions">
+                <input
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value.toLowerCase())}
+                  placeholder={t("whatif.newName")}
+                  maxLength={41}
+                />
+                <button
+                  disabled={!PROJECT_RE.test(newName)}
+                  onClick={run(async () => {
+                    await wiApi("/projects", { method: "POST", body: JSON.stringify({ project: newName, script: scriptText, scenes: scenesJson }) });
+                    setProject(newName); setNewName("");
+                    const s = await wiApi<WiState>("/state");
+                    setState(s);
+                  })}
+                >
+                  {t("whatif.create")}
+                </button>
+              </div>
+
+              {project && (
+                <div className="ecoactions" style={{ marginTop: 8 }}>
+                  <button disabled={!!activeJob || !project} onClick={run(async () => {
+                    await wiApi("/render", { method: "POST", body: JSON.stringify({ project, preview: true }) });
+                    const s = await wiApi<WiState>("/state"); setState(s);
+                  })}>
+                    {t("whatif.preview")}
+                  </button>
+                  <button disabled={!!activeJob || !project || !scenesJson} onClick={run(async () => {
+                    await wiApi("/render", { method: "POST", body: JSON.stringify({ project, scenes: scenesJson, script: scriptText }) });
+                    const s = await wiApi<WiState>("/state"); setState(s);
+                  })}>
+                    {t("whatif.render")}
+                  </button>
+                </div>
+              )}
+            </div>
+          </details>
+
+          {/* Tiến độ */}
+          {activeJob && (
+            <div className="wi-progress">
+              <div className="meter studiometer">
+                <span>{t(`whatif.step.${activeJob.step}`)}</span>
+                <div className="bar">
+                  <i style={{ width: `${Math.round(activeJob.progress * 100)}%` }} />
+                </div>
+                <b>{Math.round(activeJob.progress * 100)}%</b>
+              </div>
+              <button onClick={run(async () => {
+                await wiApi("/cancel", { method: "POST", body: JSON.stringify({ id: activeJob.id }) });
                 const s = await wiApi<WiState>("/state"); setState(s);
               })}>
-                {t("whatif.preview")}
-              </button>
-              <button disabled={!!activeJob || !project || !scenesJson} onClick={run(async () => {
-                await wiApi("/render", { method: "POST", body: JSON.stringify({ project, scenes: scenesJson, script: scriptText }) });
-                const s = await wiApi<WiState>("/state"); setState(s);
-              })}>
-                {t("whatif.render")}
+                {t("whatif.cancel")}
               </button>
             </div>
           )}
-        </div>
-      </details>
 
-      {/* Tiến độ */}
-      {activeJob && (
-        <div className="wi-progress">
-          <div className="meter studiometer">
-            <span>{t(`whatif.step.${activeJob.step}`)}</span>
-            <div className="bar">
-              <i style={{ width: `${Math.round(activeJob.progress * 100)}%` }} />
+          {/* Clip kết quả */}
+          {latestDone?.output && (
+            <div className="wi-output">
+              <h4>{t("whatif.output")}</h4>
+              <video className="studiovideo" src={`/api/whatif/projects/${project}/clip.mp4`} controls preload="metadata" />
+              <a href={`/api/whatif/projects/${project}/clip.mp4`} download={`${project}.mp4`} className="wi-download">
+                ⬇️ {t("whatif.download")}
+              </a>
             </div>
-            <b>{Math.round(activeJob.progress * 100)}%</b>
-          </div>
-          <button onClick={run(async () => {
-            await wiApi("/cancel", { method: "POST", body: JSON.stringify({ id: activeJob.id }) });
-            const s = await wiApi<WiState>("/state"); setState(s);
-          })}>
-            {t("whatif.cancel")}
-          </button>
+          )}
+
+          {/* Danh sách job */}
+          {(state?.jobs?.length ?? 0) > 0 && (
+            <>
+              <h4>{t("whatif.jobs")}</h4>
+              <ul className="ecolist studiojobs">
+                {(state?.jobs ?? []).slice(0, 5).map((j) => (
+                  <li key={j.id} data-job-status={j.status}>
+                    <b>{j.project}</b> — {t(`whatif.job.${j.status}`)}
+                    {j.error && <div className="warn small">{j.error}</div>}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+
+          {err && <div className="warn" role="alert">{err}</div>}
+
+          {/* Hướng dẫn chatbot */}
+          <details>
+            <summary className="wi-step muted small">{t("whatif.chatbotGuide")}</summary>
+            <div className="wi-body muted small">
+              <ol>
+                <li>{t("whatif.guide1")}</li>
+                <li>{t("whatif.guide2")}</li>
+                <li>{t("whatif.guide3")}</li>
+                <li>{t("whatif.guide4")}</li>
+              </ol>
+              <p>{t("whatif.guideFree")}</p>
+            </div>
+          </details>
         </div>
       )}
-
-      {/* Clip kết quả */}
-      {latestDone?.output && (
-        <div className="wi-output">
-          <h4>{t("whatif.output")}</h4>
-          <video className="studiovideo" src={`/api/whatif/projects/${project}/clip.mp4`} controls preload="metadata" />
-          <a href={`/api/whatif/projects/${project}/clip.mp4`} download={`${project}.mp4`} className="wi-download">
-            ⬇️ {t("whatif.download")}
-          </a>
-        </div>
-      )}
-
-      {/* Danh sách job */}
-      {(state?.jobs?.length ?? 0) > 0 && (
-        <>
-          <h4>{t("whatif.jobs")}</h4>
-          <ul className="ecolist studiojobs">
-            {(state?.jobs ?? []).slice(0, 5).map((j) => (
-              <li key={j.id} data-job-status={j.status}>
-                <b>{j.project}</b> — {t(`whatif.job.${j.status}`)}
-                {j.error && <div className="warn small">{j.error}</div>}
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
-
-      {err && <div className="warn" role="alert">{err}</div>}
-
-      {/* Hướng dẫn chatbot */}
-      <details>
-        <summary className="wi-step muted small">{t("whatif.chatbotGuide")}</summary>
-        <div className="wi-body muted small">
-          <ol>
-            <li>{t("whatif.guide1")}</li>
-            <li>{t("whatif.guide2")}</li>
-            <li>{t("whatif.guide3")}</li>
-            <li>{t("whatif.guide4")}</li>
-          </ol>
-          <p>{t("whatif.guideFree")}</p>
-        </div>
-      </details>
     </section>
   );
 }

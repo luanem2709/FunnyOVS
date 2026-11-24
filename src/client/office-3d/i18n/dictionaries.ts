@@ -267,6 +267,12 @@ const viOwn = {
   "whatif.guide3": "AI trả về JSON → lưu thành file .json",
   "whatif.guide4": "Bấm \"Mở file cảnh\" ở Bước 2 → chọn file .json đó → Dựng clip",
   "whatif.guideFree": "✅ Cách này KHÔNG tốn token API — dùng web chat miễn phí hoàn toàn!",
+  "whatif.modeStudio": "Studio đầy đủ",
+  "whatif.modeQuick": "Tạo nhanh (3 bước)",
+  "whatif.reloadStudio": "Tải lại Studio",
+  "whatif.fullscreen": "Toàn màn hình",
+  "whatif.exitFullscreen": "Thu nhỏ",
+  "whatif.openNewTab": "Mở tab mới",
 } as const;
 
 const enOwn: Record<keyof typeof viOwn, string> = {
@@ -512,6 +518,12 @@ const enOwn: Record<keyof typeof viOwn, string> = {
   "whatif.guide3": "AI returns JSON → save it as a .json file",
   "whatif.guide4": "Click \"Open scene file\" in Step 2 → pick the .json → Build clip",
   "whatif.guideFree": "✅ This method uses ZERO API tokens — the free web chat is enough!",
+  "whatif.modeStudio": "Full Studio",
+  "whatif.modeQuick": "Quick build (3 steps)",
+  "whatif.reloadStudio": "Reload Studio",
+  "whatif.fullscreen": "Fullscreen",
+  "whatif.exitFullscreen": "Exit fullscreen",
+  "whatif.openNewTab": "Open new tab",
 };
 
 /** Từ điển đầy đủ = chuỗi dùng chung với server (chức danh, phòng ban, vai trò, thông báo/lỗi) + chuỗi riêng của giao diện. */
