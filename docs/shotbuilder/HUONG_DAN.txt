@@ -1,0 +1,390 @@
+SHOT BUILDER - LAM PHIM "WHAT IF" KHONG CAN AI
+================================================
+
+Shot Builder dung chinh bo dung hinh Remotion cua skill what-if-animation
+(giay phep MIT), nen hinh giong het tap mau Rewind. Ban tu soan tung canh
+bang giao dien: boi canh, goc may, nhan vat, tu the, bieu cam, do vat, chu
+tren man hinh. Khong can AI, khong can ElevenLabs.
+Ban tu lo kich ban, giong doc va ghep trong CapCut.
+
+
+0. TAO VIDEO: LAM THEO 6 BUOC O COT TRAI, ROI BAM "TAO VIDEO"
+-------------------------------------------------------------
+Man hinh chia doi: cot trai la cac buoc, cot phai la danh sach canh + anh storyboard.
+  (Tren cung) Tap phim: ten tap, bo hinh, mau phim, chuyen dong, nhan vat chinh.
+  1. Kich ban (.txt)  - bam "Chon file kich ban .txt". Moi cau mot dong; dong trong
+                        hoac dong bat dau bang # = sang doan moi.
+  2. Giong doc        - chon 1 trong 2:
+       + "Noi API tool giong noi bo": mo tool giong cua ban, bat che do API, bam
+         "Ket noi", chon giong + toc do doc. Shot Builder chi gui file kich ban .txt
+         sang tool giong; tool giong tu chia cau, ngat nghi va doc, roi tra ve file
+         giong (.wav / .mp3) + phu de .srt.
+       + "Tai len file giong co san": chon file .mp3 / .wav ban da co.
+  3. Phu de SRT       - noi API: tu lay tu tool giong. Tai file giong: chon SRT neu co
+                        (khop chinh xac nhat); khong co thi tool tu nghe giong de khop.
+  4. Canh             - chon cach tao canh:
+       + Chatbot dung canh (KHUYEN DUNG, dung duoc goi ChatGPT Plus / Gemini / Claude):
+         bam "Sao chep lenh cho AI chat" -> dan vao chatbot -> luu JSON tra ve thanh
+         file .json -> bam "Mo file canh". Chatbot chi can file txt, KHONG can SRT:
+         tool tu khop tung canh voi SRT cua giong (doc nhanh hay cham deu khop).
+       + Tool tu goi AI Gemini: API key mien phi (aistudio.google.com/apikey).
+       + ChatGPT API / Claude API / API khac: can key API tra phi theo luong dung.
+         Goi Plus/Pro cua ChatGPT, Gemini, Claude KHONG dung duoc cho API.
+       + Offline: khong can mang, canh rat don gian (chi de thu).
+  5. Chuyen canh + SFX - 27 kieu chuyen canh: lia, zoom, xoay, chop trang, mo den, glitch,
+                        truot ngang/trai/tren xuong, day len, gat mau, gat cheo, khep tron,
+                        vong mau, lat the, mo trang, rem soc, rung manh, nhoe, thu nho,
+                        xoay xoay, cua khep mo, o vuong pixel, chay phim, khep trai tim,
+                        khep ngoi sao, tia truyen tranh.
+                        "Tu dong" chon theo noi dung va doi kieu cho khoi lap; "Tron ngau
+                        nhien" dung tat ca. Ty le % canh co chuyen canh + SFX, am luong SFX,
+                        chuan hoa am luong.
+                        Kho SFX co san 104 file (khong ban quyen). "Kho SFX": nghe thu tung
+                        file theo loai. "+ Them SFX...": chon loai roi chon file (chon nhieu
+                        file cung luc), SFX cua ban duoc uu tien dung truoc, xoa duoc.
+  6. Font + noi luu   - mac dinh luu video vao CUNG THU MUC voi file kich ban .txt.
+Roi bam "Xem storyboard" (kiem tra hinh) hoac "TAO VIDEO".
+Ket qua: <ten tap>.mp4 + <ten tap>.srt (+ <ten tap>_giong.wav/.mp3 neu dung tool giong).
+
+
+GIAO THUC API CHO TOOL GIONG (danh cho nguoi lam tool giong)
+------------------------------------------------------------
+Tool giong mo may chu tren may (mac dinh http://127.0.0.1:7880):
+  GET  /api/health          -> {"ok":true,"name":"...","version":"...","licensed":true}
+  GET  /api/voices          -> {"voices":[{"id":"...","name":"..."}],"selected":"..."}
+  POST /api/tts             <- {"text":"noi dung txt","txt_file":"duong dan .txt","voice":"id","speed":1.0,"title":"..."}
+                            -> {"job":"abc"}
+  GET  /api/job/abc         -> {"status":"running|done|error","progress":0..1,"message":"...","error":"..."}
+  GET  /api/job/abc/audio   -> file am thanh (.wav / .mp3)
+  GET  /api/job/abc/srt     -> file SRT
+Tool giong chua kich hoat key: tra HTTP 402/403 + {"error":"..."}, Shot Builder hien nguyen van.
+
+
+CHATBOT VIET KICH BAN + BOI CANH MOI (thu muc "chatbot" trong goi cai dat)
+--------------------------------------------------------------------------
+- Cai chatbot (ChatGPT / Gemini / Claude): xem chatbot\00_DOC_TRUOC_CAI_CHATBOT.txt.
+- Bam dup chatbot\3_CHO_KHACH\XUAT_DANH_SACH_TOOL.bat (chi doc tool, khong sua gi)
+  -> file DANH_SACH_TOOL_SHOTBUILDER.txt tren Desktop -> gui cho chatbot khi bam "Bat dau".
+- Chatbot giao 3 file: <ten>_tts.txt, <ten>_canh.json, CAI_BO_SUNG_<ten>.bat.
+  Bam dup CAI_BO_SUNG_<ten>.bat: tu cai boi canh / do vat moi vao tool (thu muc
+  what-if-studio\library\bo_sung), tat va mo lai Shot Builder la thay "Bo sung: ..." trong o Boi canh.
+  Go goi: xoa file .json tuong ung trong library\bo_sung.
+
+
+1. CAI DAT / CAP NHAT
+--------------------
+Can: Windows 10/11 64-bit, Internet (lan cai dau), khoang 3 GB trong o C.
+
+  - Giai nen ShotBuilder_v*.zip ra mot thu muc (vd. Downloads\ShotBuilder).
+  - Bam dup CAI_DAT.bat. Trinh cai dat se:
+      + tu cai Python 3.12 va Node.js neu may chua co (bam Yes neu Windows hoi),
+        neu no bao "DONG cua so nay..." thi dong lai va chay CAI_DAT.bat lan nua,
+      + chep tool vao C:\ShotBuilder, cai thu vien dung hinh (vai phut),
+      + tao C:\ShotBuilder\Shot Builder.exe va loi tat tren Desktop:
+          "Shot Builder"                   mo giao dien
+          "Shot Builder - Chay hang loat"  keo file canh .json/.txt tha vao
+  - Shot Builder MIEN PHI, khong can key. Giong doc AI nam o tool giong rieng
+    (noi qua API o buoc 2), tool giong co key rieng cua no.
+  - Cap nhat ban moi: giai nen ban moi, chay CAI_DAT.bat. Tap da luu, thiet lap
+    kenh va thu muc luu clip khong mat.
+
+
+2. MO SHOT BUILDER
+------------------
+Bam dup bieu tuong "Shot Builder" tren Desktop. Giao dien mo trong cua so rieng
+(nhu mot phan mem), khong co cua so den. Dong cua so la xong; phan chay ngam tu
+tat sau vai phut khong dung (khong tat khi dang dung video).
+Neu khong mo duoc: chay C:\ShotBuilder\Mo Shot Builder.bat de xem loi, hoac xem file
+C:\ShotBuilder\what-if-studio\out\shot_builder_log.txt
+
+Chon noi luu clip: o khung "Dung hinh", bam "Chon thu muc..." (hop chon thu muc
+co the hien sau cua so Shot Builder, xem thanh tac vu). Moi tap se luu vao
+<thu muc da chon>\<ten tap>\ gom:
+    01.mp4, 02.mp4 ...      tung canh
+    ca_tap_<ten tap>.mp4    ca tap
+    danh_sach_canh.csv, loi_thoai.srt
+"Mac dinh" = tro ve C:\ShotBuilder\what-if-studio\out\<ten tap>\clips.
+Thu muc nay dung chung cho ca file chay hang loat. "Mo thu muc clip" mo dung cho do.
+
+Tap mau co san: chon "What if you could pause time?" o o tren cung, bam "Mo".
+
+
+2B. BO HINH RIENG "POP" (MAC DINH TU BAN NAY)
+---------------------------------------------
+Tap moi mac dinh dung bo Pop: nhan vat nguoi que rieng (dau tron to, mat to co
+con nguoi, ao hoodie), 14 boi canh moi mau tuoi, them dong tac va chuyen dong may.
+Chi hoc nhip cat canh / goc may cua kenh mau, khong dung nhan vat cua kenh nao.
+O "Bo hinh" tren cung: Pop (moi) hoac Bo goc (Pip cua skill). Doi bo hinh se hoi
+co doi luon boi canh/nhan vat cua cac canh dang co khong.
+
+Nhan vat chinh: Nam. Doi "Mau ao" + "Mau phu" de thanh nhan vat cua kenh ban.
+(Nen tranh ao xanh la + dau trang vi giong kenh lon dang co.)
+Nhan vat phu (32 nguoi):
+  gia dinh   me, bo, em (em gai), embe (em be), ba, ong, chi
+  ban be     linh (crush), tuan (ban than), khoa (ban hoc), minh (mot sach),
+             hung (ke bat nat), mai (hot girl), gamethu (game thu)
+  nghe       thay (thay giao), cogiao, bacsi, yta, canhsat, daubep, congnhan,
+             vdv (van dong vien), thungan, sep, daigia, phihanh (phi hanh gia)
+  ky la      alien, robot, zombie, vua, trom
+  quan chung qc1 ... qc8 (nguoi qua duong)
+Tre con tu nho hon (em, embe). Ghi ten tieng Anh/Viet trong mo ta canh la tool
+tu them: "doctor", "canh sat", "bully", "zombie", "nha vua", "em be"...
+
+QUAN CHUNG (DAM DONG)
+Moi canh co o "Quan chung phia sau" (0-30 nguoi) va "Quan chung dang": dung choi,
+nhin theo, reo ho, vo tay, cuoi, noi chuyen, nhay, hoang loan, tuc gian, di ngang.
+Moi nguoi mot nhip rieng, dung lui sau nhan vat chinh. Trong mo ta canh viet
+"crowd", "dam dong", "ca lop", "khan gia", "nguoi qua duong"... la tool tu them
+12 nguoi (24 neu "stadium", "san van dong", "hoa nhac"), va tu chon tam trang
+theo cau ("crowd cheers", "dam dong hoang loan", "ca lop cuoi"...).
+
+Boi canh moi (danh dau * trong danh sach): duong pho, cong vien, van phong, phong
+gym, sieu thi, benh vien, xe buyt, hanh tinh la, phong khach, nha hang (hen ho),
+lop hoc ban ngay, phong ngu sang, nha bep sang, nen tia sang (canh phan ung).
+Boi canh cu van dung duoc; voi bo Pop, tool tu doi sang ban sang tuong ung.
+
+Moi canh co them:
+  Gio trong ngay   ban ngay / hoang hon / ban dem / binh minh (bau troi, den doi theo)
+  Thoi tiet        mua / tuyet / la roi / phao giay
+  Chuyen dong may  zoom vao, zoom ra (lo canh), zoom giat (soc), lia trai/phai,
+                   lia len/xuong, nghieng may, may cam tay, lia nhanh vao canh,
+                   bam theo nhan vat, khung hai nguoi (hoi thoai)
+  Dong tac moi     (ban nay them 30): om, dap tay, dam, da, nem, day, vay hai tay,
+                   nhun nhay, chi tay cuoi, gai dau, gio ngon cai, khoc nuc no,
+                   chap tay, quy nan ni, an, uong, ngap, vuon vai, bat nhay, giơ
+                   hai tay chien thang, nap, lau mo hoi, go chan sot ruot, xem dong
+                   ho, lo nhin, ngu (tu nam len giuong/sofa neu co), nam, bay nhu
+                   sieu nhan, di lui (moonwalk), bo.
+                   Va cac dong tac truoc: nhay mua, vo tay, gat/lac dau, gio nam dam, run, xoay vong, nga,
+                   ngat, bay lo lung, nhin quanh, dam chan, ron ren, lao sieu toc,
+                   go phim, cuoi ngat, chong nanh, khoanh tay, khoe co, nghe dien
+                   thoai, chao, cui chao, quy, ngoi (tu ngoi len ghe/sofa/giuong,
+                   cho khong co ghe se co ghe dau), che mat, suyt
+  Bieu cam moi     (40 bieu cam) tuc gian, mat tim, khoc, mat sao (wow), buon,
+                   cuoi sang khoai, cuoi nhe rang, nhay mat, ngai ngung, xau ho do
+                   mat, so hai tai mat, ghe tom le luoi, nghi ngo liec, boi roi,
+                   chan, hao huc, cuoi gian, buon ngu, quyet tam, lo lang do mo hoi,
+                   tu hao, dien loan, om xanh mat, doi, hon gio, dien tiet boc khoi,
+                   nhe nhom, them chay nuoc mieng, ghen ti, ngac nhien nhe, dang nghi.
+                   Viet trong mo ta: "blushes", "evil grin", "drools", "do mat",
+                   "doi", "so hai", "ghen ti"... Doi bieu cam giua canh: "..., roi ...".
+  Chu / dau hieu   bong thoai, bong suy nghi, dau ?, dau !, tim bay, vet toc do,
+                   chu no BOOM, Zzz, not nhac, mua tien, bong den y tuong,
+                   giot mo hoi, dau tuc gian. "Cua nhan vat so" = bong thoai cua ai (0 = chinh).
+Mau phim ca tap ("Mau phim"): tuoi ruc, pastel, neon, am, lanh, co dien, toi.
+
+Viet trong file canh / lenh, vi du:
+  Street at night, rain, hero walks home sad, tracking shot
+  Hospital, doctor says "Only 3 days left", hero faints
+  Nha hang, crush noi "Hi!", nhan vat mat tim, two shot
+  Close-up, hero shocked, crash zoom
+Mau day du: C:\ShotBuilder\mau\canh_mau_bo_moi.json
+
+Chuyen dong muot hon: di/chay buoc theo quang duong (chan khong truot), tang toc
+luc bat dau va giam toc truoc khi dung; doi tu the giua canh co chuyen tiep mem;
+nhan vat dung yen van tho nhe, doi trong tam; nhay co bat len - tiep dat; nga co
+roi nhanh dan va nay nhe; bong do o lai tren mat dat khi nhay.
+
+Thiet lap kenh (bo hinh, mau phim, mau ao nhan vat chinh) duoc nho lai moi lan
+bam Luu trong Shot Builder, va file chay hang loat se dung chung thiet lap do.
+
+
+2C. BO HINH "DOLL 3D" + BANG MAU + CHUYEN DONG MUOT (MOI)
+
+  O "Tap phim" -> Bo hinh: "Bo Doll 3D - nguoi go co mau".
+    - Nhan vat kieu nguoi go/bup be khop cau: dau tron mat cham, mui tron,
+      mu (fedora, bowler, mu cao, beret, luoi trai...), khan quang co bay theo gio,
+      ao khoac co cuc, tay chan ong tron co do bong (gia 3D), bong mem duoi chan.
+    - Dung CHUNG 32 nhan vat + 8 quan chung, 40 bieu cam, 66 dong tac, moi boi canh
+      cua bo Pop -> ten nhan vat trong kich ban giu nguyen (nam, linh, sep...).
+      Rieng tung nhan vat co kieu rieng: nam doi mu fedora + khan, sep mu bowler + cap da,
+      daigia mu cao + cap, linh/mai mu beret...
+    - Bang mau nhan vat (chi hien khi chon bo Doll): doi mot cho la CA TAP doi mau:
+        goc      mau rieng tung nhan vat
+        kem      kem & xanh than (giong video mau)
+        keo      keo ngot ruc ro      pastel  pastel nhe
+        bien     bien xanh            hoanghon cam do
+        rung     rung & dat           neon    neon dem
+        dat      dat set tram
+      Mau ao nhan vat chinh: bang "goc" -> doi mau ao; bang khac -> doi mau khan + day mu
+      (dau hieu rieng cua kenh).
+    - Boi canh moi "studio" (Studio phong nen 3D): tuong xanh cong, san co vach, den roi
+      - viet "studio" / "phong nen" trong mo ta canh. Hieu ung rieng = den roi theo nhan vat.
+    - Trong file JSON: "kit": "doll", "palette": "kem".
+
+  O "Chuyen dong" (dung cho ca 3 bo hinh):
+    Muot (mac dinh):
+      - tay tre 1-2 khung so voi than, khuyu tay tre hon -> vung tay tu nhien,
+      - dau nghieng theo sau than,
+      - khan / day mu / ao choang / toc vang theo toc do di, dung lai van dung dua roi tat dan,
+      - nhun lay da truoc khi nhay, dam, nem, chay...,
+      - dung yen van chuyen trong luong nhe, chop mat tu nhien (moi nhan vat nhip rieng).
+    Kieu cu: dung tu the dut khoat nhu ban truoc.
+    Trong file JSON: "motion": "muot" hoac "giat".
+
+
+3. QUY TRINH MOT TAP
+--------------------
+  a. Dat ten tap, chon nhan vat chinh va doi mau ao cho rieng kenh ban.
+  b. Dan kich ban tieng Anh vao o "Nhap kich ban", bam "Tao canh".
+     - Moi cau thanh 1 hoac 2 canh.
+     - Cau bat dau bang "What if" thanh canh tieu de chu lon.
+     - Cau co con so + don vi (times, %, seconds...) thanh canh ban ve khoa hoc.
+  c. Sua tung canh: boi canh, goc may, tu the, bieu cam, do vat, chu.
+     O "Kiem tra nhip dung" ben trai bao canh nao trai quy tac do duoc.
+  d. Bam "Xem storyboard": moi canh mot anh hien ben phai the canh.
+     Xem nhu nguoi xem: co gi che mat nhan vat, chu tran khung, sai y cau thoai?
+     Sua, roi bam lai. (Lan dau mat 1-2 phut de dong goi.)
+  e. Bam "Dung video + cat clip". Ket qua o C:\ShotBuilder\what-if-studio\out\<ten-tap>\
+       <ten-tap>.mp4        ca tap, khong tieng, 1920x1080, 30 hinh/giay
+       clips\01.mp4, 02.mp4  tung canh rieng, dung thu tu de keo vao CapCut
+       danh_sach_canh.csv   thu tu, thoi diem, do dai, cau thoai cua tung canh
+       loi_thoai.srt        phu de theo cau thoai (nhap vao CapCut de can giong)
+  f. Trong CapCut: them giong doc, nhac, hieu ung am thanh. Neu giong doc dai
+     hon canh, quay lai Shot Builder tang "Thoi luong" cua canh do roi dung lai.
+
+
+3B. BA CACH DO PHAI DUNG TUNG CANH BANG TAY
+-------------------------------------------
+CACH 0 - FILE CANH, MOI DONG MOT CANH (chay hang loat)
+  Viet file .txt (moi dong 1 canh) hoac .json (danh sach cac dong), vd:
+     Wide shot of the study at sunset, hero at his desk, coffee mug on the desk, 2.2s
+     Close-up: hero shocked, then he taps his wrist and smirks
+     Bep buoi toi, ban cua nhan vat cuoi lon, cai coc lo lung
+  Keo tha file vao "Chay hang loat (keo file vao day).bat". Tool dung lan luot
+  roi mo thu muc clip: out\<ten-file>\clips\01.mp4, 02.mp4 ...
+  Viet duoc tieng Anh hoac tieng Viet (nen go CO DAU, tool hieu tot hon).
+  Tool hieu cac tu khoa:
+     boi canh  street/duong pho, park/cong vien, office/van phong, gym,
+               supermarket/sieu thi, hospital/benh vien, bus/xe buyt,
+               planet/hanh tinh, living room/phong khach, restaurant/nha hang,
+               classroom/lop hoc, bedroom/phong ngu, kitchen/bep, reaction shot,
+               diagram/ban ve, table top/mat ban (khong ghi = giu boi canh truoc)
+     goc may   wide/toan canh, medium/trung canh, close-up/can mat,
+               extreme close/dac ta mat, insert/dac ta do vat, top-down
+     thoi luong  "2.5s" hoac "2,5 giay"
+     doi giua canh  "..., then ..." hoac "..., roi ..."
+     chu       title: "...", tag: 56 dung / tag: 54 sai, so to 95268,
+               timer 10, dong ho bao thuc 07:00
+     nang luc  pause/freeze, rewind/tua lai, copy, paste, skip
+     khac      at night/ban dem, sunset/hoang hon, rain/mua, snow/tuyet, red/do,
+               shake/rung, flash, reverse/chay nguoc, friend/ban, crush, mom/me,
+               dad/bo, teacher/thay giao, doctor/bac si, boss/sep, alien, crowd,
+               floating/lo lung, appears/hien ra, says "..."/noi "..." (bong thoai)
+     may quay  zoom in, zoom out, crash zoom/zoom giat, pan left/right,
+               dutch, handheld, whip pan, tracking shot/bam theo, two shot
+  Chinh tay khoa: them "cam=close", "set=gym", "dur=1.8", "move=crash",
+  "tod=night", "weather=rain", "pose=dance", "expr=love" vao cuoi dong.
+  Xem mau: C:\ShotBuilder\mau\canh_mau.json
+
+CACH 1 - TU DONG TU LOI THOAI
+  Trong Shot Builder dan loi thoai (moi cau 1 dong) vao o "Tao canh tu dong",
+  bam "Tu loi thoai". Tool tu chia canh theo nhip kenh mau (~2 giay/canh,
+  ~25 lan cat/phut), tu chon boi canh, goc may, bieu cam, khong de 2 canh lien
+  nhau trung boi canh + goc may. Cau dai hon 3 giay tach thanh 2 canh.
+  Bam "Xem storyboard", sua vai canh chua dung y, roi dung video.
+  Mau: C:\ShotBuilder\mau\loi_thoai.txt
+
+CACH 2 - NHO AI CHAT MIEN PHI LAM STORYBOARD
+  Dan loi thoai vao o "Tao canh tu dong", bam "Sao chep lenh cho AI".
+  Mo ChatGPT / Gemini / Claude ban mien phi, dan vao. AI tra ve JSON.
+  Chep JSON do dan lai vao o, bam "Moi dong 1 canh / JSON"
+  (hoac luu thanh file .json roi keo vao file chay hang loat).
+  Tool tu sua cac gia tri sai va bao canh bao duoi o nhap.
+  Khong co Shot Builder dang mo: dung C:\ShotBuilder\LENH_CHO_AI.txt.
+
+  O "Them vao cuoi" duoc tick: canh moi noi tiep, khong thay canh cu.
+
+3C. KHOP GIONG DOC + CHUYEN CANH + SFX CHUYEN CANH
+
+  O "Khop giong · chuyen canh · SFX" (cot trai):
+    - "Chon file giong..." -> file .wav/.mp3 TTS lien mach ca tap.
+      File .txt CUNG TEN dat canh (tts_15_phut.txt) duoc tu nhan la loi doc.
+    - "Chon thu muc SFX..." (bo trong = what-if-studio\library\sfx).
+      SFX chon theo TEN FILE:
+        lia nhanh / xoay : whoosh, swoosh, swish, transition...
+        zoom giat / chop : impact, boom, hit, title_boom...
+        glitch           : glitch, static, digital...
+        mo den           : riser, swell, whoosh (nho hon)
+    - Kieu chuyen canh: Tu dong (theo noi dung) hoac mot kieu cho tat ca.
+    - TY LE CANH CO CHUYEN CANH + SFX (0-100%, mac dinh 30%):
+        chi khoang bay nhieu % canh co chuyen canh va SFX, con lai cat thang.
+        Uu tien: tieu de > sang ngay moi > vao/ra ban ve > doi boi canh > canh soc,
+        phan con lai rai deu. 0% = chi cat thang, khong SFX.
+    - Am luong SFX.
+
+  CACH 1 - GHEP TU CLIP DA DUNG SAN (khong can dung lai):
+    1) "Chon thu muc clip..." -> thu muc co 001.mp4, 002.mp4... va danh_sach_canh.csv
+       (chinh la thu muc clip Shot Builder da xuat).
+    2) Bam "Ghep phim tu clip". Tool:
+       - tim tung cau trong giong, keo dai (giu khung cuoi) hoac cat bot tung clip
+         cho dung bang cau doc; canh im lang giu do dai cu,
+       - them hieu ung chuyen canh (ffmpeg) + SFX vao dung cho cat,
+       - ghep thanh mot video co tieng.
+    3) Ket qua trong <thu muc clip>\hoan_chinh\ :
+         <ten>_hoan_chinh.mp4     video hoan chinh (giong + SFX)
+         giong_doc_khop.wav       giong da can theo canh
+         sfx_chuyen_canh.wav      rieng SFX (chinh am luong trong CapCut)
+         loi_thoai_khop.srt       phu de dung theo giong
+         danh_sach_canh_khop.csv  thoi diem moi + kieu chuyen canh tung canh
+    Phim 15 phut mat vai phut (xu ly 240 clip).
+
+  CACH 2 - KHOP CHO TAP DANG MO ROI DUNG LAI:
+    Mo tap -> "Khop giong tap dang mo" -> do dai canh doi theo giong, o "Chuyen canh vao"
+    cua tung canh duoc dien (sua tay duoc) -> "Dung video + clip" -> tu ra ban hoan chinh.
+    Chuyen canh cach nay ve ngay trong hinh nen muot hon cach 1.
+    Sua do dai canh sau khi khop -> bam khop lai truoc khi dung.
+
+  Chay bang lenh:
+    py -3.12 builder\ghepphim.pyc <thu-muc-clip | ten-tap> <giong.wav> [loi.txt|-] [auto|whip|zoom|spin|flash|fade|glitch] [phan-tram]
+
+  CACH 3 - KHOP THEO FILE SRT (moi):
+    Mo tap (vd. file canh JSON do chatbot viet) -> "Chon file SRT..." -> "Khop theo SRT"
+    -> do dai tung canh dat dung luc tu dau tien cua canh duoc doc -> "Dung video + clip"
+    -> trong CapCut dat giong o 0:00. Huong dan chatbot viet kich ban: C:\ShotBuilder\chatbot_kich_ban\CACH_CAI_DAT.txt
+
+
+4. Y NGHIA CAC O
+----------------
+Thoi luong     giay. Kenh mau cat trung binh 1,8-2 giay/canh, 22-27 lan/phut.
+Boi canh       12 boi canh dung san (phong lam viec, lop hoc, cau thang, san thuong,
+               bep, phong ngu, ban ve khoa hoc, mat ban dac ta...).
+Goc may        Toan canh / Trung canh / Can mat / Dac ta mat / Dac ta do vat.
+               Khong nen de hai canh lien nhau cung boi canh va cung goc may.
+Day may        may tu tu tien vao trong canh (de trong = tu dong).
+Sieu nang luc  doi mau phim va hien chip (REWIND, PAUSED, COPY, PASTE, SKIP...).
+Troi do        0-1, cho doan chuyen bien xau (san thuong, bep).
+Hieu ung rieng 0-1, khac nhau theo boi canh (xem dong goi y duoi moi canh).
+Phat nguoc     canh chay nguoc (dung cho nang luc tua lai).
+Nhan vat       Vi tri 0 (trai) - 1 (phai). "Di toi" + tu the Di bo/Chay de di chuyen.
+               "Doi sang" + "Luc doi" de nhan vat doi tu the/bieu cam giua canh.
+               Bieu cam "Ngau" tu deo kinh den roi xuong.
+Do vat         "Bat ra luc" de do vat hien ra bat ngo (hieu ung pop).
+               "Nang len" de do vat lo lung (vd. coc dung giua khong trung).
+Chu            Tieu de lon, nhan dap an co dau dung/sai, so dem lon, nhan chu,
+               dong ho dem, thanh muc, chip... X, Y la toa do man hinh 1920x1080,
+               de trong thi tu dat canh dau nhan vat.
+
+
+5. GIOI HAN
+-----------
+- Chi co cac boi canh, tu the va do vat dung san. Kenh mau ve rieng gan nhu tung
+  canh (vd. bo mach dien thoai, bai do xe); muon them boi canh/do vat moi phai
+  viet code (hoac nho AI viet mot lan, roi dung lai mai).
+- Tool doc mo ta bang tu khoa, khong phai AI: cau qua la (vd. "nhan vat cuoi
+  ngua") co the bi bo qua. Luon xem storyboard truoc khi dung video.
+- Chuyen dong la tu the co san va chuyen giua hai tu the, don gian hon kenh mau.
+- Phong chu tieu de tai tu Google Fonts luc dung hinh: can mang luc bam dung.
+  Khong co mang, chu se hien bang phong thay the.
+- Remotion mien phi cho ca nhan va cong ty toi da 3 nguoi. Neu ban ban cong cu
+  nay hoac cong ty lon hon, can giay phep cong ty cua Remotion.
+- Nhan vat Pip/Mo... la cua tac gia skill (MIT, duoc phep dung). Nen doi mau ao
+  va giu mot phong cach rieng de kenh khong bi xem la sao chep.
+
+
+6. LOI THUONG GAP
+-----------------
+- "Chua thay C:\ShotBuilder\what-if-studio": chay lai CAI_DAT.bat.
+- Man hinh "Kich hoat" bao dong ho sai: chinh lai ngay gio Windows cho dung roi mo lai.
+- Bam dung ma bao loi: chup o "Dung hinh" (co dong LOI) gui de duoc ho tro.
+- Trang khong mo: mo tay http://127.0.0.1:7870 khi cua so den dang chay.

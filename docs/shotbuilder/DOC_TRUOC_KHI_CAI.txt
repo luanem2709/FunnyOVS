@@ -1,0 +1,23 @@
+SHOT BUILDER - TOOL LAM PHIM HOAT HINH "WHAT IF" NGUOI QUE
+==========================================================
+
+CAI DAT (3 BUOC)
+1. Giai nen file .zip nay ra mot thu muc (chuot phai > Extract All).
+2. Bam dup CAI_DAT.bat. Lam theo man hinh:
+   - May chua co Python 3.12 / Node.js: trinh cai dat tu cai (bam Yes neu
+     Windows hoi quyen). Neu no bao "DONG cua so nay..." thi dong lai va bam
+     dup CAI_DAT.bat lan nua.
+   - Lan dau can Internet, mat khoang 5-15 phut.
+3. Thay chu "XONG" la dung duoc ngay (mien phi).
+
+MIEN PHI, KHONG CAN KEY
+- Tao canh (AI Gemini / ChatGPT / Claude hoac offline), storyboard, dung video.
+- Giong doc: noi API toi tool giong rieng cua ban (tool giong tu doc kich ban va
+  tra ve giong + phu de), hoac tai len file giong .mp3/.wav co san.
+- Cap nhat tu ban cu: chay CAI_DAT.bat la xong, tap da luu khong mat.
+
+YEU CAU MAY
+- Windows 10/11 64-bit, RAM 8 GB tro len, trong 3 GB o C.
+- Card do hoa khong bat buoc.
+
+HUONG DAN DUNG: xem HUONG_DAN.txt (sau khi cai co ban sao trong C:\ShotBuilder).

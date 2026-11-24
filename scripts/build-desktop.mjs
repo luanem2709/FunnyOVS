@@ -65,6 +65,30 @@ for (const rel of ["build/three.module.js", "build/three.core.js", "examples/jsm
   fs.copyFileSync(path.join(threeSrc, rel), path.join(threeOut, rel));
 }
 
+// What-If Studio (ShotBuilder engine): chép vào bản desktop (không chép node_modules và out)
+console.log("[desktop] chép What-If Studio kit...");
+const wiSrc = path.join(root, "app", "what-if-studio");
+const wiOut = path.join(out, "app", "what-if-studio");
+if (fs.existsSync(wiSrc)) {
+  fs.cpSync(wiSrc, wiOut, {
+    recursive: true,
+    filter: (src) => {
+      const b = path.basename(src);
+      return b !== "node_modules" && b !== "out" && b !== ".cache";
+    },
+  });
+}
+
+const launcherSrc = path.join(root, "app", "launcher");
+const launcherOut = path.join(out, "app", "launcher");
+if (fs.existsSync(launcherSrc)) {
+  fs.cpSync(launcherSrc, launcherOut, { recursive: true });
+}
+const shotExeSrc = path.join(root, "app", "Shot Builder.exe");
+if (fs.existsSync(shotExeSrc)) {
+  fs.copyFileSync(shotExeSrc, path.join(out, "app", "Shot Builder.exe"));
+}
+
 const pkg = {
   name: "funnyovs",
   productName: "FunnyOVS",

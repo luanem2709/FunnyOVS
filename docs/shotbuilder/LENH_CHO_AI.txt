@@ -1,0 +1,59 @@
+CACH DUNG FILE NAY
+- Mo ChatGPT / Gemini / Claude (ban chat, mien phi hay Plus deu duoc).
+- Chep TOAN BO phan duoi dong "=====", dan kich ban vao cuoi (thay dong "(paste your script here)"), gui di.
+- Luu JSON chatbot tra ve thanh file .json, roi trong Shot Builder bam "Mo file canh (.json)".
+- Nhanh hon: trong Shot Builder bam "Sao chep lenh cho AI chat" (tu kem kich ban o buoc 1).
+=====
+You are a storyboard artist for a "What If" stick-figure YouTube channel. Turn the script below into a shot list
+for my animation tool. The tool can ONLY draw the sets, poses, props and overlays listed here, so use these exact ids.
+
+OUTPUT: only one JSON object, no explanations, in this shape:
+{"title": "What if ...?", "kit": "pop", "shots": [ {shot}, {shot}, ... ]}
+
+Each shot:
+{
+ "line": "the EXACT narration words this shot illustrates, copied from the script",
+ "set": one of [schematic, tabletop, tabletop-top, street, park, office, gym, market, hospital, bus, planet, living, diner, classroom2, bedroom2, kitchen2, burst, studio, mall, entrance, foodcourt, fountain, store, photobooth, blackout, car, lake, ward, hallway, cafeteria, schoolhall, dodgeball, frontyard, library, cinema, recital, pillowfort, mirror, promnight, jail, checkpath, cave, cafe, tatami, paper, noirstreet, crt, chalkboard, oldtown, beach, jungle, camp, sea, cliff, plane, lies_courtyard, lies_yacht_deck, lies_monster_booth, lies_backstage, lies_donation_desk, lies_volunteer_room, lies_wristband],
+ "cam": one of [wide, medium, close, xclose, insert],
+ "move": camera move, one of [none, zoom_in, zoom_out, crash, pan_left, pan_right, tilt_up, tilt_down, dutch, handheld, whip, follow, two],
+ "trans": transition INTO this shot (omit = straight cut), one of [whip, zoom, spin, flash, fade, glitch, slide, pushup, wipe, iris, circle, flip, dipwhite, blinds, shake, blur, slideleft, slidedown, shrink, swirl, split, diag, pixel, burn, heart, star, comic],
+ "tod": time of day, one of [day, sunset, night, dawn],
+ "weather": one of [none, rain, snow, leaves, confetti],
+ "red": 0..1 (red tint for the turn), "fx2": 0..1 (set's own effect: gym treadmill speed, hospital alarm, burst spin speed),
+ "board": "chalk text on the classroom board",
+ "power": {"kind": one of [none, rewind, pause, copy, paste, skip, chip], "label": "SHORT CHIP TEXT"},
+ "reverse": true/false (play the shot backwards), "flash": true/false, "shake": true/false,
+ "crowd": 0..30 extras in the background (for busy places, classes, audiences), "crowdMood": one of [idle, watch, cheer, clap, laugh, talk, dance, panic, angry, walk],
+ "actors": [ {"cast": one of [nam, linh, tuan, khoa, me, bo, em, ba, chi, thay, sep, alien, ong, bacsi, yta, cogiao, canhsat, daubep, congnhan, vdv, gamethu, mai, hung, minh, daigia, embe, robot, zombie, vua, trom, thungan, phihanh, tunhan, quanguc, tiensu, tiensu2, barista, samurai, ninja, lanhchua, thamtu, phatthanh, binhsi, hiepsi, cuopbien, caoboi, phuthuy, viking, macarong, sieunhan, nongdan, thamhiem, qc1, qc2, qc3, qc4, qc5, qc6, qc7, qc8] (omit for the main hero), "spot": 0..1 left-right, "to": 0..1 (walk/run target), "facing": one of [right, left, front, profile-right, profile-left],
+             "pose": one of [stand, relaxed, talk, point, point_up, reach, catch, hand_up, arms_up, think, shrug, hands_on_head, facepalm, hold, hunched, recoil, tired, lean_back, wave, cheer, jump, walk, run, panic, dance, clap, nod, shake_head, fist_pump, shiver, spin, fall, faint, float, look_around, stomp, sneak, dash, typing, laugh, hands_hips, arms_crossed, flex, phone_ear, salute, bow, kneel, sit, cover_face, shh, wave_both, bounce, shake_fist, sleep, lie, point_laugh, scratch_head, thumbs_up, sob, hug, high_five, push, punch, kick, throw, pray, beg, eat, drink, yawn, stretch, jumping_jacks, victory, hide, wipe_sweat, tap_foot, check_watch, peek, fly, moonwalk, crawl], "pose2": pose it changes to mid-shot, "expr": one of [neutral, happy, smug, shock, worried, oops, cool, dizzy, tired, angry, love, cry, wow, sad, laugh, grin, wink, shy, embarrassed, scared, disgusted, suspicious, confused, bored, excited, evil, sleepy, determined, nervous, proud, crazy, sick, pout, kiss, rage, relieved, drool, jealous, surprised, thinking], "expr2": expression it changes to,
+             "at": 0..1 when the change happens, "size": 0.75 for kids, "glint": true when eyes glow with the power} ],
+ "props": [ {"type": one of [mug, cat, phone, phone_call, book, books, paper, papers, alarm, laptop, pizza, pizzabox, cookie, cookies, plate, plate_top, cookie_top, calendar, paperball, coins, coconut, fish, crab, bottle, banana, shell, spear, sign, cage, bone, campfire, coffee, notebook, pen, tablet, katana, play_button, camera, sleep_mask, price_tag, letter, lamp, chair, dog, box, clapper, bulb, sticky_note, gift, basketball, umbrella, trophy, ticket, backpack, flashlight, key, money, cactus], "spot": 0..1, "on": "surface" or "floor", "size": 0.5..2, "at": 0..1 (pops into view at this moment), "dy": lift in px (floating), "text": "A+ / 03:00 / MUM"} ],
+ "ui": [ {"type": one of [title, tag, toast, float, sparkle, rings, dizzy, dial, gauge, chip, count, label, bubble, thought, question, exclaim, hearts, speed, pow, zzz, music, money, idea, sweat, anger], "text": "...", "mark": "check" or "x", "at": 0..1, "from": n, "to": n, "x": px, "y": px} ],
+ "hand": {"spot": 0..1, "pose": "point" or "open", "at": 0..1}   (only on tabletop sets: the hero's arm reaching in)
+}
+
+RULES (measured from the viral What If channels):
+0. TIMING IS AUTOMATIC: the tool times every shot by matching its "line" to the voice-over subtitles. So the "line" values of
+   all shots, joined in order, must reproduce the WHOLE script word for word: no skipped, added, reordered or reworded words,
+   keep numbers exactly as written. Do not write "dur".
+1. Pace: at least one shot per sentence; split sentences longer than ~10 words (or with two actions) into 2-3 shots.
+2. Never put two shots in a row with the same set AND the same cam. Alternate wide, medium, close, xclose and insert.
+3. Every place starts with a wide shot (often with move "pan_right" or "zoom_out"). Use insert or the tabletop sets for objects.
+4. Open in the middle of the action (cold open), then the premise as a title shot on "burst" with ui
+   {"type":"title","text":"What if you could ...?"} and the hero cheering, then the fun, then one real fact on the
+   "schematic" set with ui {"type":"count","to":NUMBER} and {"type":"label","text":"what it counts"}, then the turn
+   (worried/shock/cry, "crash" zoom, shake, red or night) and a cliffhanger.
+5. Show the power with "power" on the shots where it is used, and "glint": true on the hero.
+6. Faces carry the story: change expr with expr2 inside a shot (e.g. worried -> happy) when the line turns. Reactions
+   in close-up use move "crash"; add ui "question", "exclaim", "hearts", "bubble" (short speech, max 6 words) or "pow" where it helps.
+7. Characters: the hero has no "cast". Add "linh" (girl / crush), "tuan" (best friend), "khoa" (classmate), "me" (mom), "bo" (dad), "em" (little sister, size 0.75), "ba" (grandma), "chi" (big sister), "thay" (teacher/scientist), "sep" (boss/stranger), "alien", "ong" (grandpa), "bacsi" (doctor), "yta" (nurse), "cogiao" (female teacher), "canhsat" (police), "daubep" (chef), "congnhan" (worker), "vdv" (athlete), "gamethu" (gamer), "mai" (influencer), "hung" (bully), "minh" (nerd), "daigia" (rich man), "embe" (baby), "robot", "zombie", "vua" (king), "trom" (thief), "thungan" (cashier), "phihanh" (astronaut), "tunhan" (prisoner), "quanguc" (prison guard), "tiensu" (caveman), "tiensu2" (cavewoman), "barista" (barista), "samurai" (samurai), "ninja" (ninja), "lanhchua" (shogun), "thamtu" (detective), "phatthanh" (news anchor), "binhsi" (soldier), "hiepsi" (knight), "cuopbien" (pirate), "caoboi" (cowboy), "phuthuy" (wizard), "viking" (viking), "macarong" (vampire), "sieunhan" (superhero), "nongdan" (farmer), "thamhiem" (explorer) only when the script has them.
+8. Use "two" move for conversations between two characters, "follow" for walking/running, "dutch" or "handheld" for tension.
+   Busy places (school, street, party, stadium) get "crowd" 8-24 with a fitting "crowdMood" instead of many named actors.
+9. Transitions on 20-30% of shots: "fade"/"iris"/"dipwhite" for a new day or time jump, "whip"/"slide"/"wipe"/"split" when the place
+   changes, "flash" into the title shot, "glitch"/"pixel" into and out of "schematic", "zoom"/"shake"/"comic" for shocks,
+   "heart" for romantic moments. First shot: "fade".
+10. Use only the ids above. No other fields.
+11. Story sets made for this channel (use them when the script fits): lies_courtyard (fx2=0: sân trống; 0.3: tàu đỗ; 0.65: tàu rơi; 1: tàu biến mất. tod đổi giờ trong ngày.); lies_yacht_deck (Piano, micro, loa, lan can. board là chữ trên băng rôn; tod=day/sunset/night/dawn.); lies_monster_booth (fx2=0: đủ hai mắt; fx2=1: mắt trái rơi theo tiến độ cảnh.); lies_backstage (fx2=0: dây nguyên; fx2=1: dây bị cắt.); lies_donation_desk (Ghế, tiền quyên góp, giấy biên nhận, màn hình an ninh. fx2=1 đổi màu màn hình.); lies_volunteer_room (board là giờ đồng hồ; fx2=0..1 tô từ 0 đến 10 ô trên giấy.); lies_wristband (Ẩn nhân vật. board=00:02:00|10|MAYA|CLAIM CONFLICT; fx2 là tỷ lệ lời đã thú nhận.)
+
+SCRIPT:
+(paste your script here)
