@@ -16,12 +16,17 @@
 
 ## B. Kết nối AI (API miễn phí / OmniRoute)
 - [x] B1 — Tự dò OmniRoute (`:20128`), Ollama (`:11434`), LM Studio (`:1234`) (test: ai.detect.local)
-- [x] B2 — Tự nhận khoá miễn phí từ biến môi trường: Groq, OpenRouter, Gemini, Cerebras, Mistral, GitHub Models (test: ai.detect.env)
+- [x] B2 — Tự nhận khoá miễn phí từ biến môi trường: Groq, OpenRouter, Gemini, Cerebras, Mistral, NVIDIA NIM, SambaNova (test: ai.detect.env, aiCustom.catalog)
 - [x] B3 — Router thử lần lượt nhiều nhà cung cấp, ngắt mạch khi lỗi liên tiếp, tôn trọng 429/Retry-After (test: ai.router.fallback)
 - [x] B4 — Khoá API lưu file quyền 0600, không bao giờ trả về client (chỉ bản che) (test: ai.secrets)
 - [x] B5 — Giao diện "Kết nối AI": trạng thái từng nhà cung cấp, kiểm thử, nhập khoá, khởi động OmniRoute (kiểm thủ công trong trình duyệt)
 - [x] B6 — Mức dùng token của router được ghi vào sổ cái/ngân sách (test: ai.ledger)
 - [x] B7 — Chọn model tự động theo danh sách `/models` khi model mặc định không tồn tại (test: ai.router.model)
+- [x] B8 — Nút "+ Thêm API": thêm nguồn tuỳ chỉnh (mọi điểm cuối tương thích OpenAI) và dùng như mọi nguồn khác; khoá chỉ nằm ở kho khoá 0600, không ở `ai.json`/trạng thái/phản hồi/nhật ký (test: aiCustom.add; verify-ui)
+- [x] B9 — Kiểm tra điểm cuối **thật** trước khi lưu (số model, thiếu/sai khoá, lỗi HTTP, đứt mạng, địa chỉ sai — mỗi kết quả có khoá i18n); đầu vào bị chặn: giao thức lạ, tài khoản trong URL, id trùng danh mục, vượt giới hạn (test: aiCustom.check, aiCustom.validate)
+- [x] B10 — Sửa/xoá nguồn tuỳ chỉnh dọn sạch bản ghi + khoá + thứ tự; đổi sang địa chỉ khác thì khoá cũ KHÔNG tự theo sang (không rò khoá sang máy chủ lạ); nguồn dựng sẵn không sửa/xoá được (test: aiCustom.edit)
+- [x] B11 — Gom như 9router: thứ tự ưu tiên người dùng sắp (áp cho cả nguồn dựng sẵn), chiến lược dự phòng/xoay vòng đều tải và tự dự phòng khi lỗi; một nguồn chậm/đứt mạng không làm chậm cuộc gọi AI (test: aiCustom.order)
+- [x] B12 — Cổng 9router dùng chung mục OmniRoute (cùng `:20128/v1`), nút khởi động thử lần lượt `omniroute` rồi `9router` và báo lỗi nhắc cài cả hai; GitHub Models (đã ngừng) bị gỡ khỏi danh mục (test: aiCustom.gateway, aiCustom.catalog)
 
 ## C. Công cụ thật cho nhân viên
 - [x] C1 — Đọc/ghi file trong workspace qua `GuardedFs` (có hỏi quyền) (test: tools.files)
@@ -106,12 +111,44 @@
 ## M. Đầu ra công việc (v3)
 - [x] M1 — Luồng việc đã kết thúc tải được thành báo cáo Markdown: đúng ngôn ngữ, có tóm tắt của Giám đốc và kết quả/lỗi từng người, nội dung do AI viết không phá cấu trúc, tên tệp an toàn (test: flowReport; verify-ui)
 
+## N. Bố cục & đồ đạc chibi (v4)
+- [x] N1 — Mọi bàn làm việc dựng từ một bộ đồ đạc chibi (bàn bo tròn mép màu phòng, ghế màu phòng — Giám đốc ghế lưng cao, màn hình có huy hiệu phòng, món đồ riêng theo từng người); cùng cao độ với màn hình hiển thị nên không lệch/không z-fighting (test: chibiRooms.workstation)
+- [x] N2 — Mỗi phòng có bản sắc riêng: ốp chân tường + viền + tranh màu phòng nằm trọn trong phòng; thư viện có kệ sách rỗng với sách thật (test: chibiRooms.wainscot, chibiRooms.shelf)
+- [x] N3 — Hộp bo tròn (không chỉ mục) gộp được cùng hộp/trụ/cầu thường (có chỉ mục) mà không làm mất mesh; hình học cache theo kích thước, hai mức chi tiết (test: chibiRooms.softBox, chibiRooms.merge)
+- [x] N4 — Phòng tiện ích (họp, pantry, sảnh) và đồ đặc trưng từng phòng (sofa, quầy, tủ lạnh, tủ server…) cùng ngôn ngữ bo tròn mềm, vẫn khớp vùng chặn và điểm đứng/ngồi (test: facilities.layout, nav.reachability)
+- [x] N5 — Ngân sách dựng hình vẫn đạt (I2) sau khi đổi toàn bộ đồ đạc và dựng vỏ toà nhà, ở cả hai mức chất lượng (verify-ui)
+- [x] N6 — Mọi phòng nằm trong MỘT toà nhà liền: tường ngoài bao quanh cách phòng ≥ 2 m, cửa chính ở tường nam thẳng trước sảnh lễ tân, hai sân trong không đè phòng nào; lưới đường đi chặn tường ngoài, chừa cửa chính, từ sảnh đi ra cửa được (test: building.shell)
+
+## O. Kinh tế tự trị — giai đoạn 1 (v5)
+- [x] O1 — Sổ cái kinh tế băm nối, không xoay vòng, không chứa bí mật; sửa/xoá/chèn/đổi thứ tự một dòng cũ bị `verify()` phát hiện và hiện cảnh báo (test: economy.ledger)
+- [x] O2 — Cổng thanh toán CHỈ NHẬN tiền: x402 (chỉ địa chỉ công khai; khoá riêng, mạng chính, facilitator http, mạng lạ bị từ chối), Stripe (khoá live bị từ chối; chỉ chấp nhận phiên đã trả đúng số tiền/sản phẩm/chế độ), mock (test: economy.payment)
+- [x] O3 — Xuất bản sản phẩm qua hộp duyệt; quét riêng tư (email, điện thoại, IP, bí mật, tên/công ty CRM); trần giá; tệp bị sửa sau khi duyệt thì không bán (test: economy.publish, economy.products)
+- [x] O4 — Paywall: 402 kèm yêu cầu thanh toán → thanh toán → 200 + nội dung; chống phát lại (kể cả sau khởi động lại); thất bại không thu tiền; nội dung đổi → 409, dừng khẩn cấp → 503 và không thu (test: economy.paywall; verify-ui)
+- [x] O5 — Cổng công khai RIÊNG chỉ có `/health` + 2 đường dẫn insights, chỉ GET, giới hạn tốc độ theo IP và toàn cục, không lộ API chính (test: economy.public; verify-ui)
+- [x] O6 — Scout chỉ ĐỀ XUẤT: luôn qua hộp duyệt, hết hạn = từ chối, ghi sổ cái + nhật ký, không tự thực thi hay chi tiền; Phòng Tài chính vẫn không có `web_fetch` (test: economy.propose, tools.policy)
+- [x] O7 — Vòng lặp: chu kỳ = doanh thu − (token quy ước + hạ tầng + chi phí ghi tay); lỗ N chu kỳ liên tiếp → tự tạm dừng Scout và báo; tiếp tục bật lại Scout đúng như trước; đề xuất tái đầu tư có ngưỡng và thời gian chờ, chỉ ghi quyết định (test: economy.loop)
+- [x] O8 — Dừng khẩn cấp dừng cả EAL: 503 không thu tiền, không chu kỳ, từ chối xuất bản/đề xuất, từ chối hộp duyệt đang chờ (test: economy.*; verify-ui)
+- [x] O9 — Hiển thị: bảng KPI 3D ở Phòng Tài chính + thẻ ở tab Tổng quan; sự kiện `economy.state`/`economy.event` hợp lệ trong schema chung; tóm tắt hộp duyệt được dịch vi/en (test: economy.events; verify-ui)
+- [x] O10 — Mô phỏng 30 ngày chạy MÃ THẬT với dữ liệu giả, hạt giống cố định, nêu rõ giả định và giới hạn (`npm run economy:backtest` → `docs/economy-backtest.md`)
+
+## P. Studio dựng clip (v5)
+- [x] P1 — Dữ liệu mẫu của kit qua bộ kiểm tra; shot list phải phủ kín từng cảnh s1–s8 liền mạch (hở/chồng/thiếu cảnh/trùng id/toạ độ quá lớn bị từ chối); lời đọc đúng 10 câu, không rỗng, không quá dài (test: studio.schema)
+- [x] P2 — Dữ liệu chỉ ghi trong `<workspace>/studio/<dự-án>/`: tên dự án và đường dẫn bị kiểm (`../`, ký tự lạ bị từ chối), ghi nguyên tử, lời đọc chứa thứ giống khoá/bí mật không được lưu (test: studio.save)
+- [x] P3 — Gửi lời đọc ra dịch vụ giọng online LUÔN qua hộp duyệt; từ chối/hết hạn/huỷ thì không chạy bước giọng; giọng đã tạo (cùng văn bản + giọng) dùng lại không cần duyệt, sửa một câu thì phải duyệt lại (test: studio.voice; verify-ui)
+- [x] P4 — Một việc một lúc, chạy nền, tiến độ theo bước/khung hình, huỷ giữa chừng dừng cả cây tiến trình, bước lỗi báo rõ và che bí mật (test: studio.jobs)
+- [x] P5 — Dừng khẩn cấp: không lưu, không dựng, huỷ việc đang chạy và hộp duyệt đang chờ (test: studio.jobs; verify-ui)
+- [x] P6 — Công cụ agent `studio_save/render/status` theo đặc quyền tối thiểu (chỉ Marketing và Automation Lab), lỗi dữ liệu trả thông báo dễ hiểu thay vì ném lỗi (test: studio.tools)
+- [x] P7 — REST: ghi/dựng/huỷ chỉ từ chính máy (`loopbackOnly`), đọc trạng thái dùng được từ xa; chỉ phục vụ clip mp4 và ảnh xem thử của dự án hợp lệ (test: studio.rest)
+- [x] P8 — Hiển thị: thẻ Studio ở tab Tổng quan (dự án, xem thử, dựng, tiến độ, huỷ, xem clip), sự kiện `studio.state` hợp lệ trong schema chung, chuỗi vi/en đầy đủ (test: studio.i18n; verify-ui)
+- [x] P9 — Kết xuất THẬT: xem thử bằng Chrome (10 ảnh) và dựng video đầy đủ (H.264 + AAC, 74,6 s) bằng bộ chạy thật, không dùng giả lập (`scripts/studio-e2e.mts`; verify-ui)
+- [x] P10 — Bản đóng gói có kit + three tối thiểu và chạy được kết xuất thật bên trong app (verify:desktop)
+
 ---
 
 ## Bảng chứng cứ (mỗi dấu `[x]` ở trên dựa vào đâu)
 
-Lệnh kiểm tra lần cuối: `npm run typecheck` (sạch) · `npm test` (**366 test**, 24 file) · `npm run build` (sạch) · `npm audit --omit=dev` (0 lỗ hổng) ·
-`npm run verify:ui` (107 bước giao diện, Chrome thật) · `npm run verify:desktop` (24 bước trên bản đóng gói chạy thật).
+Lệnh kiểm tra lần cuối: `npm run typecheck` (sạch) · `npm test` (**477 test**, 29 file) · `npm run build` (sạch) · `npm audit --omit=dev` (0 lỗ hổng) ·
+`npm run verify:ui` (153 bước giao diện, Chrome thật) · `npm run verify:desktop` (29 bước trên bản đóng gói chạy thật, gồm dựng xem thử Studio).
 
 | Tiêu chí | Chứng cứ |
 |---|---|
@@ -151,7 +188,7 @@ Lệnh kiểm tra lần cuối: `npm run typecheck` (sạch) · `npm test` (**36
 | Tiêu chí | Chứng cứ |
 |---|---|
 | I1 | `tests/quality.test.ts` (giám sát khung hình: không hạ oan khi khởi động/đứng hình thoáng qua, hạ đúng một lần khi chậm kéo dài; mặc định "Tự động") |
-| I2 | `node scripts/verify-ui.mjs`: mức Cao ≤ 1.800 lệnh vẽ và ≤ 1.000.000 tam giác (đo: 1.564 / 858.780); mức Thấp ≤ 450.000 và < 55% mức Cao (đo: 337.284) · `tests/characters.test.ts` › "mức chi tiết hình học" |
+| I2 | `node scripts/verify-ui.mjs`: mức Cao ≤ 1.800 lệnh vẽ và ≤ 1.000.000 tam giác (đo sau khi đổi đồ đạc chibi: 1.324 / 932.908); mức Thấp ≤ 450.000 và < 55% mức Cao (đo: 390.036 ≈ 42% mức Cao) · `tests/characters.test.ts` › "mức chi tiết hình học" |
 | K1 | `tests/audit.test.ts` (6) + `tests/integration.test.ts` › "nhật ký bảo mật (K1)" · hiển thị ở Cài đặt (`scripts/verify-ui.mjs`) |
 | K2 | `tests/backup.test.ts` (7) + `tests/integration.test.ts` › "sao lưu qua REST (K2)" · tải tệp thật, đổi dữ liệu, khôi phục trong trình duyệt thật (`scripts/verify-ui.mjs`) |
 | K3 | `tests/schedule.test.ts` (10) + `tests/integration.test.ts` › "việc lặp lại qua REST (K3)" · tạo/chạy ngay/tạm dừng/xoá trong trình duyệt thật (`scripts/verify-ui.mjs`) |
@@ -167,8 +204,16 @@ Lệnh kiểm tra lần cuối: `npm run typecheck` (sạch) · `npm test` (**36
 | E7 | `tests/ui-logic.test.ts` › "nhãn do server sinh được dịch…" (`taskLabel`, `approvalReasonLabel`, `logLine`), `tests/office.test.ts` (metadata mang khoá) · `scripts/verify-ui.mjs` quét `innerText` của cả 5 tab sau khi chạy việc thật (trừ tên người). Bắt được lỗi thật: nhãn "Đang lập kế hoạch: …" của Giám đốc còn tiếng Việt |
 | H8 | Trước/sau `npm test` và `npm run verify:ui` không còn thư mục `funnyovs-*` nào (trước đó bộ test để rò hơn 1.300 thư mục) · `scripts/verify-ui.mjs` bọc mọi bước trong `try/finally` |
 | M1 | `tests/flowReport.test.ts` (6): cấu trúc báo cáo vi/en, lỗi dịch theo ngôn ngữ, nội dung do AI viết được trích dẫn nên không phá tiêu đề/khối mã, bản thay thế bị bỏ, tên tệp an toàn (bỏ dấu, không `../`) · `scripts/verify-ui.mjs` › "Báo cáo": bấm *Download report* trong Chrome thật → tệp `.md` đúng tên, nội dung có tiêu đề, trạng thái, tóm tắt Giám đốc, kết quả từng người |
+| B8–B12 | `tests/aiCustom.test.ts` (18): "kiểm tra đầu vào của nguồn tuỳ chỉnh", "thêm nguồn tuỳ chỉnh và dùng nó như mọi nguồn khác" (khoá chỉ ở kho khoá, không ở trạng thái/`ai.json`), "sửa và xoá" (đổi địa chỉ thì khoá cũ bị xoá), "gom nhiều nguồn như 9router: thứ tự ưu tiên và xoay vòng" (kể cả nguồn chậm không làm chậm cuộc gọi), "kiểm tra điểm cuối trước khi lưu", "cổng gom OmniRoute / 9router", "nguồn miễn phí dựng sẵn" · `tests/integration.test.ts` (REST `/api/ai/custom*`, `/api/ai/order`, `/api/ai/strategy`: `loopbackOnly`, nhật ký không có khoá) · `scripts/verify-ui.mjs` › "Thêm API" (mở biểu mẫu, chọn mẫu, kiểm tra, lưu, thẻ nguồn tuỳ chỉnh, mũi tên thứ tự, đổi chiến lược, sửa, xoá — Chrome thật) |
+| N6 | `tests/facilities.test.ts` › "toà nhà liền" (5): phòng trong toà nhà, cửa chính trước sảnh, sân trong không đè phòng, lưới A* (tường chặn/cửa thông/đường từ sảnh ra cửa), dựng vỏ < 60 mesh và nằm trong nền lát · ảnh `docs/shots/v4-building.png`, `v4-entrance.png` |
+| N1–N5 | `tests/chibiRooms.test.ts` (9): softBox cache/kẹp bán kính/hai mức chi tiết, `mergeStatic` không mất mesh khi trộn hình có/không chỉ mục, `bakeGroup`, bàn làm việc (hằng số khớp màn hình hiển thị, ≤ 16 lệnh vẽ, ngân sách tam giác hai mức, món đồ riêng đa dạng giữa 17 người, ghế Giám đốc cao hơn), ghế, kệ sách có sách, ốp tường trong phòng · `tests/facilities.test.ts` (đường đi, vùng chặn) · `scripts/verify-ui.mjs` bước ngân sách I2 · ảnh chụp từng phòng `docs/shots/v4-*.png` bằng `scripts/shot-ui.mjs --room …` |
+| O1–O9 | `tests/economyBoard.test.ts` (5 test: bảng KPI vẽ đủ số liệu và cơ hội chờ duyệt, chỉ vẽ lại khi đổi) · `tests/economy.test.ts` (45 test: sổ cái, rail x402/Stripe/mock với `fetch` giả, sản phẩm/riêng tư, xuất bản, paywall, đề xuất, chu kỳ, chính sách tiếp tục/tái đầu tư, cổng công khai, REST, sự kiện) · `scripts/verify-ui.mjs` nhóm "Kinh tế" (21 bước: thẻ + bảng KPI 3D, hộp duyệt xuất bản, 402/200/phát lại, cổng riêng không lộ API chính, chu kỳ + hộp duyệt tái đầu tư, dừng khẩn cấp, nhật ký) · `tests/tools.test.ts` (đặc quyền tối thiểu) |
+| O10 | `docs/economy-backtest.md` (sinh bởi `scripts/economy-backtest.ts`) |
+| P1–P8 | `tests/studio.test.ts` (22 test: dữ liệu mẫu + schema, lưu/kiểm/bí mật, việc dựng với runner giả, hộp duyệt giọng, công cụ agent + chính sách, REST, i18n) · `scripts/verify-ui.mjs` nhóm "Studio" (10 bước: thẻ, tạo dự án, xem thử THẬT 10 ảnh, hộp duyệt trước khi gửi lời đọc, từ chối không tạo giọng, tên dự án thoát thư mục, dừng khẩn cấp, nhật ký) |
+| P9 | `scripts/studio-e2e.mts` (bộ chạy thật: xem thử 3 s; video đầy đủ H.264+AAC 74,6 s trong 47 s) |
+| P10 | `scripts/verify-desktop.mjs` (kit + three có trong bản cài; xem thử chạy thật trong app đóng gói) |
 
 ## Điều thước đo này KHÔNG nói
 
 Đạt 10/10 ở bảng trên nghĩa là mọi tiêu chí đã kiểm chứng — **không** có nghĩa hoàn hảo. Còn nằm ngoài bảng: thử SMTP/IMAP/GitHub/khoá AI **thật** của bạn, ký số + cập nhật tự động,
-pháp lý/thanh toán, kiểm thử trên máy người khác, đo hiệu năng trên GPU yếu, trình đọc màn hình. Xem `docs/06-san-sang-thi-truong.md`.
+pháp lý/thanh toán — kể cả **một giao dịch testnet/Stripe test THẬT của lớp kinh tế (EAL)** (cần ví/khoá của bạn, xem `docs/economy-layer.md`) —, kiểm thử trên máy người khác, đo hiệu năng trên GPU yếu, trình đọc màn hình. Xem `docs/06-san-sang-thi-truong.md`.

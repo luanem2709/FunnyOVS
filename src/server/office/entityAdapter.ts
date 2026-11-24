@@ -12,6 +12,9 @@ import type { MachineSample } from "./machine.js";
 import type { ActionRequest } from "../agent/gate.js";
 import { OfficeEntity, type EntityStatus, type OfficeEvent, type OrgNode } from "../../shared/officeEntity.js";
 
+/** Hành động có khoá dịch riêng `approval.action.<tên>.summary` (còn lại dùng câu chung). */
+const KNOWN_ACTIONS = ["email_send", "github_issue", "economy_publish", "economy_opportunity", "economy_reinvest", "studio_voice"];
+
 export const MACHINE_ID = "machine:local";
 
 /** Vị trí tủ server trong Phòng Đội AI (khớp `buildRoomDecor` phía client). */
@@ -168,8 +171,8 @@ export class OfficeBridge {
       entityId: `agent:${r.agentId}`,
       kind: "action",
       summary: `${r.agentName} muốn thực hiện: ${r.action}`,
-      key: ["email_send", "github_issue"].includes(r.action) ? `approval.action.${r.action}.summary` : "approval.action.generic.summary",
-      vars: ["email_send", "github_issue"].includes(r.action) ? r.vars : { agent: r.agentName, action: r.action },
+      key: KNOWN_ACTIONS.includes(r.action) ? `approval.action.${r.action}.summary` : "approval.action.generic.summary",
+      vars: KNOWN_ACTIONS.includes(r.action) ? r.vars : { agent: r.agentName, action: r.action },
       detail: r.detail,
       at: r.createdAt,
     };

@@ -12,6 +12,7 @@ import {
 import { preloadAssets, peekAsset } from "./assets/loader.js";
 import { setupLighting } from "./assets/lighting.js";
 import { buildEnvironment, buildRoomDecor, tickDecor } from "./assets/decor.js";
+import { buildBuilding } from "./assets/building.js";
 import { createDayNight } from "./assets/dayNight.js";
 import { Bubble, createEffects } from "./assets/effects.js";
 import { AgentBehavior } from "./assets/behavior.js";
@@ -228,6 +229,7 @@ floor.rotation.x = -Math.PI / 2;
 floor.receiveShadow = true;
 scene.add(floor);
 buildEnvironment(scene, floor);
+buildBuilding(scene, []);
 const dayNight = createDayNight(scene, lights);
 const effects = createEffects(scene);
 

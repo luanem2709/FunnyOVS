@@ -6,6 +6,8 @@
  */
 import { create } from "zustand";
 import type { EntityStatus, LogLevel, OfficeEntity, OfficeEvent, OrgNode } from "../../../shared/officeEntity.js";
+import type { EconomyState } from "../../../shared/economy.js";
+import type { StudioState } from "../../../shared/studio.js";
 
 export type ConnectionState = "connecting" | "open" | "reconnecting" | "closed";
 
@@ -74,6 +76,10 @@ export interface OfficeData {
   loaded: boolean;
   /** DỪNG KHẨN CẤP đang bật. */
   emergency: boolean;
+  /** Trạng thái Lớp kinh tế (EAL); null = chưa nhận. */
+  economy: EconomyState | null;
+  /** Trạng thái Studio dựng clip; null = chưa nhận. */
+  studio: StudioState | null;
   logSeq: number;
   changeSeq: number;
 }
@@ -86,6 +92,8 @@ export const emptyData = (): OfficeData => ({
   lastChange: null,
   loaded: false,
   emergency: false,
+  economy: null,
+  studio: null,
   logSeq: 0,
   changeSeq: 0,
 });
@@ -155,6 +163,12 @@ export function applyOfficeEvent(d: OfficeData, ev: OfficeEvent): OfficeData {
     }
     case "org.node":
       return { ...d, org: { ...d.org, [ev.node.id]: ev.node } };
+    case "economy.state":
+      return { ...d, economy: ev.state };
+    case "economy.event":
+      return d; // mỗi sự kiện đi kèm một `economy.state` mới nên không cần xử lý riêng
+    case "studio.state":
+      return { ...d, studio: ev.state };
   }
 }
 

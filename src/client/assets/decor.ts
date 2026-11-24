@@ -8,6 +8,8 @@
  */
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import { DEPT_COLORS } from "../../shared/personas.js";
+import { deepen, pastel, softBox } from "./chibiProps.js";
 
 // ---------------------------------------------------------------------------
 // Tiện ích dựng hình
@@ -139,7 +141,11 @@ export function mergeStatic(source: THREE.Object3D, target: THREE.Object3D, cast
     list.push(geo);
     buckets.set(m.material, list);
   });
-  for (const [mat, list] of buckets) {
+  for (const [mat, rawList] of buckets) {
+    // RoundedBoxGeometry (đồ đạc chibi) là hình học KHÔNG có chỉ mục còn hộp/trụ/cầu thì có — trộn lẫn trong một vật liệu thì mergeGeometries
+    // thất bại và âm thầm bỏ mất cả nhóm. Đưa các hình học có chỉ mục về dạng không chỉ mục khi nhóm có cả hai loại.
+    const mixed = rawList.some((g) => g.index) && rawList.some((g) => !g.index);
+    const list = mixed ? rawList.map((g) => (g.index ? g.toNonIndexed() : g)) : rawList;
     const merged = list.length === 1 ? list[0] : mergeGeometries(list, false);
     if (!merged) continue;
     const mesh = new THREE.Mesh(merged, mat);
@@ -154,9 +160,10 @@ export function mergeStatic(source: THREE.Object3D, target: THREE.Object3D, cast
 // ---------------------------------------------------------------------------
 
 /** Nền lát dưới toàn bộ toà nhà (tâm + kích thước). Mọi phòng phải nằm trong nền này (test `facilities.layout`). */
-export const SLAB = { cx: 5.25, cz: -4, w: 50, d: 46 };
+/** Nền lát = toà nhà (BUILDING) cộng một dải sân 1,8 m quanh tường ngoài. */
+export const SLAB = { cx: 4.25, cz: -2.875, w: 51.1, d: 51.35 };
 
-function makeTree(x: number, z: number, scale: number, variant: number): THREE.Group {
+export function makeTree(x: number, z: number, scale: number, variant: number): THREE.Group {
   const g = new THREE.Group();
   const trunk = cyl(0.14 * scale, 0.2 * scale, 1.4 * scale, std(0x7a5636), 0, 0.7 * scale, 0, 8);
   g.add(trunk);
@@ -352,7 +359,8 @@ export function buildEnvironment(scene: THREE.Object3D, ground: THREE.Mesh): voi
   }
 
   // --- Đèn đường ---
-  for (const x of [-18, 26.8]) for (const z of [-25, -14, -3, 8, 15]) envStatic.add(makeLampPost(x, z));
+  // (ngoài tường toà nhà: dọc hai bên sân lát)
+  for (const x of [-22.6, 31]) for (const z of [-25, -14, -3, 8, 17]) envStatic.add(makeLampPost(x, z));
 
   // --- Tiểu cảnh giữa toà nhà ---
   scene.add(makeFountain(0, 5.9));
@@ -360,15 +368,11 @@ export function buildEnvironment(scene: THREE.Object3D, ground: THREE.Mesh): voi
   envStatic.add(makeBench(2.6, 5.9, Math.PI));
   for (const x of [-7, 7]) {
     envStatic.add(makeBench(x, 0.2, x < 0 ? Math.PI / 2 : -Math.PI / 2));
-    envStatic.add(makeTree(x, -9.2, 0.75, 0));
     envStatic.add(makeTree(x, 6.2, 0.75, 1));
   }
   envStatic.add(makeBench(-13, 0.6, Math.PI));
   envStatic.add(makeBench(13, 0.6, Math.PI));
 
-  // Lối đi vào: vạch kẻ đường trước cổng chính (trục Z phía trước toà nhà).
-  const stripe = std(0xf1ead2, 0.8);
-  for (let z = 15; z > 12.8; z -= 0.9) envStatic.add(box(0.5, 0.01, 0.4, stripe, 0, 0.012, z, false));
   mergeStatic(envStatic, scene, false);
 }
 
@@ -494,7 +498,7 @@ export function buildChartProp(): THREE.Group {
 /** Tủ server có LED nhấp nháy (Phòng Đội AI). */
 export function buildServerRackProp(): THREE.Group {
   const g = new THREE.Group();
-  g.add(box(0.95, 2.0, 0.8, std(0x1c222b, 0.5, 0.4), 0, 1.0, 0));
+  g.add(softBox(0.95, 2.0, 0.8, 0.07, std(0x1c222b, 0.5, 0.4), 0, 1.0, 0));
   const leds: Array<{ mat: THREE.MeshBasicMaterial; phase: number; speed: number; on: THREE.Color; off: THREE.Color }> = [];
   for (let s = 0; s < 7; s++) {
     const y = 0.28 + s * 0.26;
@@ -600,14 +604,16 @@ export function makePlant(x: number, z: number, scale = 1): THREE.Group {
 
 export function makeSofa(x: number, z: number, rotY: number, color: number): THREE.Group {
   const g = new THREE.Group();
+  // sofa bo tròn kiểu chibi: thân + lưng + hai tay vịn đậm hơn một nấc, hai nệm ngồi màu phấn
   const m = std(color, 0.9);
-  const dark = std(color, 0.9);
-  g.add(box(1.9, 0.3, 0.85, m, 0, 0.25, 0));
-  g.add(box(1.9, 0.5, 0.2, dark, 0, 0.62, -0.33));
-  g.add(box(0.2, 0.42, 0.85, dark, -0.95, 0.4, 0));
-  g.add(box(0.2, 0.42, 0.85, dark, 0.95, 0.4, 0));
-  g.add(box(0.8, 0.1, 0.7, std(0xffffff, 0.95), -0.45, 0.45, 0.02, false));
-  g.add(box(0.8, 0.1, 0.7, std(0xffffff, 0.95), 0.45, 0.45, 0.02, false));
+  const dark = std(deepen(color, 0.14), 0.9);
+  const cushion = std(pastel(color, 0.55), 0.95);
+  g.add(softBox(1.9, 0.3, 0.85, 0.09, m, 0, 0.25, 0));
+  g.add(softBox(1.9, 0.5, 0.2, 0.09, dark, 0, 0.62, -0.33));
+  g.add(softBox(0.2, 0.42, 0.85, 0.09, dark, -0.95, 0.4, 0));
+  g.add(softBox(0.2, 0.42, 0.85, 0.09, dark, 0.95, 0.4, 0));
+  g.add(softBox(0.8, 0.1, 0.7, 0.045, cushion, -0.45, 0.45, 0.02, false));
+  g.add(softBox(0.8, 0.1, 0.7, 0.045, cushion, 0.45, 0.45, 0.02, false));
   g.position.set(x, 0, z);
   g.rotation.y = rotY;
   return g;
@@ -615,7 +621,7 @@ export function makeSofa(x: number, z: number, rotY: number, color: number): THR
 
 export function makeCoffeeTable(x: number, z: number): THREE.Group {
   const g = new THREE.Group();
-  g.add(box(0.9, 0.05, 0.6, std(0xa87f52, 0.6), 0, 0.4, 0));
+  g.add(softBox(0.9, 0.05, 0.6, 0.024, std(0xa87f52, 0.6), 0, 0.4, 0));
   for (const sx of [-0.38, 0.38]) for (const sz of [-0.24, 0.24]) g.add(box(0.05, 0.4, 0.05, std(0x30363d, 0.5, 0.6), sx, 0.2, sz, false));
   g.add(cyl(0.05, 0.04, 0.09, std(0xffffff, 0.4), 0.1, 0.47, 0.05, 10, false));
   g.position.set(x, 0, z);
@@ -624,7 +630,7 @@ export function makeCoffeeTable(x: number, z: number): THREE.Group {
 
 function makeFilingCabinet(x: number, z: number): THREE.Group {
   const g = new THREE.Group();
-  g.add(box(0.7, 1.35, 0.55, std(0x7b8794, 0.5, 0.4), 0, 0.675, 0));
+  g.add(softBox(0.7, 1.35, 0.55, 0.05, std(0x7b8794, 0.5, 0.4), 0, 0.675, 0));
   for (let i = 0; i < 3; i++) {
     g.add(box(0.6, 0.38, 0.02, std(0x93a0ad, 0.5, 0.4), 0, 0.25 + i * 0.42, 0.285, false));
     g.add(box(0.2, 0.03, 0.03, std(0x232a33, 0.4), 0, 0.3 + i * 0.42, 0.31, false));
@@ -635,7 +641,7 @@ function makeFilingCabinet(x: number, z: number): THREE.Group {
 
 function makeTrophy(x: number, z: number): THREE.Group {
   const g = new THREE.Group();
-  g.add(box(0.7, 0.55, 0.5, std(0xf3efe6, 0.5), 0, 0.275, 0));
+  g.add(softBox(0.7, 0.55, 0.5, 0.07, std(0xf3efe6, 0.5), 0, 0.275, 0));
   const gold = std(0xf2c230, 0.25, 0.7);
   g.add(cyl(0.22, 0.1, 0.3, gold, 0, 0.72, 0, 14));
   g.add(cyl(0.04, 0.04, 0.15, gold, 0, 0.5 + 0.07, 0, 8));
@@ -692,15 +698,15 @@ const DESK_TOP = 0.78;
 /** Băng ghế dài có màn hình cho phòng "Làm việc tự động" (đặt dưới 3 màn hình trôi nổi). */
 function makeTerminalBench(x: number, z: number): THREE.Group {
   const g = new THREE.Group();
-  g.add(box(6.8, 0.06, 0.9, std(0x2b3440, 0.5, 0.2), 0, DESK_TOP - 0.03, 0));
-  for (const sx of [-3.3, 0, 3.3]) g.add(box(0.08, DESK_TOP - 0.06, 0.8, std(0x4a5463, 0.5, 0.4), sx, (DESK_TOP - 0.06) / 2, 0, false));
+  g.add(softBox(6.8, 0.06, 0.9, 0.025, std(0x2b3440, 0.5, 0.2), 0, DESK_TOP - 0.03, 0));
+  for (const sx of [-3.3, 0, 3.3]) g.add(softBox(0.08, DESK_TOP - 0.06, 0.8, 0.03, std(0x4a5463, 0.5, 0.4), sx, (DESK_TOP - 0.06) / 2, 0, false));
   g.position.set(x, 0, z);
   return g;
 }
 
 function makeWaterCooler(x: number, z: number): THREE.Group {
   const g = new THREE.Group();
-  g.add(box(0.38, 0.9, 0.38, std(0xe7ecf1, 0.5), 0, 0.45, 0));
+  g.add(softBox(0.38, 0.9, 0.38, 0.07, std(0xe7ecf1, 0.5), 0, 0.45, 0));
   g.add(cyl(0.15, 0.15, 0.42, std(0x7cc4ee, 0.2, 0, 0x4aa3d8, 0.3), 0, 1.11, 0, 14, false));
   g.add(box(0.12, 0.05, 0.1, std(0x3b82c4, 0.4), 0, 0.72, 0.2, false));
   g.position.set(x, 0, z);
@@ -751,6 +757,32 @@ export function makeClock(): THREE.Group {
   return g;
 }
 
+/**
+ * Ốp tường thấp màu phấn của phòng (ba mặt tường) + gờ trên + hai bức tranh treo tường lưng — phòng nào cũng có "bản sắc" riêng theo màu nhấn,
+ * bo tròn mềm như nhân vật chibi. `st` là nhóm tĩnh (sẽ được gộp), toạ độ tương đối so với tâm phòng.
+ */
+export function addWainscot(st: THREE.Object3D, s: { w: number; d: number }, accent: number): void {
+  const inW = s.w / 2 - 0.08;
+  const inD = s.d / 2 - 0.08;
+  const band = std(pastel(accent, 0.55), 0.85);
+  const rail = std(deepen(accent, 0.15), 0.7);
+  const H = 0.95;
+  st.add(softBox(s.w - 0.22, H, 0.05, 0.02, band, 0, H / 2, -inD + 0.025, false));
+  st.add(softBox(s.w - 0.18, 0.05, 0.08, 0.02, rail, 0, H + 0.01, -inD + 0.04, false));
+  for (const sx of [-1, 1]) {
+    st.add(softBox(0.05, H, s.d - 0.22, 0.02, band, sx * (inW - 0.025), H / 2, 0, false));
+    st.add(softBox(0.08, 0.05, s.d - 0.18, 0.02, rail, sx * (inW - 0.04), H + 0.01, 0, false));
+  }
+  // hai bức tranh ở hai đầu tường lưng (tránh bảng/đồng hồ ở giữa)
+  const frameMat = std(0xf3efe6, 0.6);
+  [-1, 1].forEach((sx, i) => {
+    const x = sx * (inW - 1.05);
+    st.add(softBox(0.8, 0.6, 0.05, 0.02, frameMat, x, 2.0, -inD + 0.03, false));
+    st.add(box(0.66, 0.46, 0.01, std(pastel(accent, i ? 0.2 : 0.45), 0.9), x, 2.0, -inD + 0.062, false));
+    st.add(ball(0.08, std(pastel(accent, 0.8), 0.9), x - 0.12, 1.98, -inD + 0.075, false, 8)); // nét vẽ tròn trên tranh
+  });
+}
+
 export interface RoomLike {
   id: string;
   center: { x: number; z: number };
@@ -784,6 +816,8 @@ export function buildRoomDecor(scene: THREE.Object3D, room: RoomLike): void {
   for (const sx of [-1, 1]) st.add(box(0.26, 0.08, s.d + 0.1, cap, sx * (s.w / 2), wallH + 0.04, 0, false));
   // Ngưỡng cửa ở mép mở của phòng
   st.add(box(s.w - 0.2, 0.025, 0.14, std(0x1f6feb, 0.6), 0, 0.02, s.d / 2 - 0.1, false));
+  // Ốp tường + tranh theo màu nhấn của phòng (cùng bảng màu với huy hiệu nhân vật)
+  addWainscot(st, s, parseInt((DEPT_COLORS[room.id] ?? "#6b7280").slice(1), 16));
 
   // Thảm dưới khu bàn
   const rug = new THREE.Mesh(

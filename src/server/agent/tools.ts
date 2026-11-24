@@ -20,6 +20,7 @@ import type { MailService } from "./mail.js";
 import { UnsafeUrlError, htmlToText, safeGet, type Requester, type Resolver } from "./netSafe.js";
 import { redact } from "../security/redact.js";
 import { msg, type Lang } from "../../shared/messages.js";
+import type { StudioJob, StudioState } from "../../shared/studio.js";
 
 export interface ToolAgent {
   id: string;
@@ -37,6 +38,12 @@ export interface ToolContext {
 export interface ToolResult {
   ok: boolean;
   output: string;
+}
+
+export interface StudioApi {
+  save(project: string, kind: string, data: unknown, by: { id: string; name: string }): { project: string; kind: string; created: boolean };
+  start(project: string, opts: { voice?: boolean; preview?: boolean }, by: { id: string; name: string }): Promise<StudioJob>;
+  state(): StudioState;
 }
 
 export type ToolRisk = "read" | "write" | "external";
@@ -62,6 +69,10 @@ export interface ToolDeps {
   policy: () => BrowserPolicy;
   /** Đang dừng khẩn cấp? Công cụ ra bên ngoài từ chối chạy. */
   emergency: () => boolean;
+  /** Lớp kinh tế (EAL): Scout chỉ ĐỀ XUẤT cơ hội, người dùng duyệt. Không có = công cụ báo "tắt". */
+  economy?: { propose(raw: Record<string, unknown>, by: { id: string; name: string }): Promise<"approved" | "denied" | "expired"> };
+  /** Studio dựng clip khối từ dữ liệu: agent chỉ lưu lời đọc/shot list/nhân vật và yêu cầu dựng; gửi lời đọc ra dịch vụ giọng cần người dùng duyệt. */
+  studio?: StudioApi;
   fetchImpl?: typeof fetch;
   resolver?: Resolver;
   requester?: Requester;
@@ -432,6 +443,68 @@ export function buildTools(deps: ToolDeps): ToolDef[] {
         return ok(`Created issue #${created.number ?? "?"} ${created.html_url ?? ""}`);
       }),
     },
+    {
+      name: "economy_propose",
+      description:
+        "Propose ONE revenue opportunity to the user (Economic Autonomy Layer). You ONLY propose: never sign up for a service, never spend or move money, never use private data. Base it on public information; the user must approve.",
+      args: '{"title": string, "rationale": string, "estRevenueUsd": number, "estCostUsd": number, "risk": "low"|"medium"|"high", "source"?: "https://…"}',
+      risk: "external",
+      run: guarded(async (a, ctx) => {
+        const blocked = emergencyGuard();
+        if (blocked) return blocked;
+        if (!deps.economy) return fail("The economy layer is off (the user has not enabled ECONOMY_RAIL).");
+        const outcome = await deps.economy.propose(a, { id: ctx.agent.id, name: ctx.agent.name });
+        return ok(outcome === "approved" ? "The user APPROVED this opportunity. Nothing was done automatically — the user will act on it." : `The user did not approve (${outcome}). Do not retry the same proposal.`);
+      }),
+    },
+    {
+      name: "studio_save",
+      description:
+        "Save ONE data file of a Roblox-style block-animation clip project (Studio). kind=script: exactly 10 narration lines [{text}] (title, scenes 1-8, ending). kind=shots: the cinematic shot list {shots:[…]} (every scene s1..s8 must be covered from f=0 to f=1 with contiguous shots). kind=characters: the character bible. A new project is created from the sample data. You do not write scene code; data is validated and rejected if invalid.",
+      args: '{"project": "lowercase-name-with-dashes", "kind": "script"|"shots"|"characters", "data": array|object}',
+      risk: "write",
+      run: guarded(async (a, ctx) => {
+        const blocked = emergencyGuard();
+        if (blocked) return blocked;
+        if (!deps.studio) return fail("Studio is not available.");
+        let data: unknown = a.data;
+        if (typeof data === "string") {
+          try {
+            data = JSON.parse(data);
+          } catch {
+            throw new ArgError("data must be JSON (array or object)");
+          }
+        }
+        const r = deps.studio.save(str(a, "project", { max: 60, required: true }), str(a, "kind", { max: 20, required: true }), data, { id: ctx.agent.id, name: ctx.agent.name });
+        return ok(`Saved ${r.kind} for project ${r.project}${r.created ? " (new project created from the sample)" : ""}.`);
+      }),
+    },
+    {
+      name: "studio_render",
+      description:
+        "Start rendering a Studio clip project in the background (returns a job id immediately; check progress with studio_status). preview=true renders only one still per scene (fast, no video). voice=true synthesises the narration with an ONLINE voice service: this SENDS the narration text outside the machine, so the user is asked to approve first. Without voice the clip uses estimated timing and no speech.",
+      args: '{"project": string, "preview"?: boolean, "voice"?: boolean}',
+      risk: "external",
+      run: guarded(async (a, ctx) => {
+        const blocked = emergencyGuard();
+        if (blocked) return blocked;
+        if (!deps.studio) return fail("Studio is not available.");
+        const job = await deps.studio.start(str(a, "project", { max: 60, required: true }), { voice: a.voice === true, preview: a.preview === true }, { id: ctx.agent.id, name: ctx.agent.name });
+        return ok(`Started job ${job.id} for project ${job.project} (${job.preview ? "preview" : "full render"}${job.voice ? ", with voice pending the user's approval" : ""}). Use studio_status to follow it. Do not start another until it finishes.`);
+      }),
+    },
+    {
+      name: "studio_status",
+      description: "Show Studio projects and the latest render jobs (status, step, progress, errors) and whether the machine has the needed tools (ffmpeg, Chrome, voice).",
+      args: "{}",
+      risk: "read",
+      run: guarded(async () => {
+        if (!deps.studio) return fail("Studio is not available.");
+        const s = deps.studio.state();
+        const jobs = s.jobs.slice(0, 5).map((j) => `${j.id} ${j.project} ${j.status}/${j.step} ${Math.round(j.progress * 100)}%${j.error ? ` error=${j.error.key}${j.error.detail ? ` (${j.error.detail.slice(0, 120)})` : ""}` : ""}${j.output ? ` output=${j.output}` : ""}`);
+        return ok(["projects: " + (s.projects.join(", ") || "(none)"), "tools: " + (s.tools ? JSON.stringify(s.tools) : "unknown"), "jobs:", jobs.join("\n") || "(none)"].join("\n"));
+      }),
+    },
   ];
   return tools;
 }
@@ -459,11 +532,11 @@ export const TOOL_POLICY: Record<string, string[]> = {
   dispatch: ["fs_list", "fs_read", "fs_write", "kb_search", "kb_save", "github_issues", "github_issue_create", "calendar_add", "calendar_list", "web_fetch"],
   support: ["fs_read", "kb_search", "kb_save", "crm_search", "crm_upsert_contact", "crm_log", "email_inbox", "email_draft", "email_send", "calendar_add", "calendar_list"],
   sales: ["fs_read", "fs_write", "kb_search", "kb_save", "web_fetch", "crm_search", "crm_upsert_contact", "crm_add_deal", "crm_move_deal", "crm_log", "crm_summary", "email_draft", "email_send", "calendar_add", "calendar_list"],
-  marketing: ["fs_list", "fs_read", "fs_write", "kb_search", "kb_save", "web_fetch", "crm_search", "crm_summary", "email_draft", "calendar_add", "calendar_list"],
-  finance: ["fs_list", "fs_read", "fs_write", "kb_search", "kb_save", "crm_search", "crm_summary", "calendar_list"],
+  marketing: ["fs_list", "fs_read", "fs_write", "kb_search", "kb_save", "web_fetch", "crm_search", "crm_summary", "email_draft", "calendar_add", "calendar_list", "studio_save", "studio_render", "studio_status"],
+  finance: ["fs_list", "fs_read", "fs_write", "kb_search", "kb_save", "crm_search", "crm_summary", "calendar_list", "economy_propose"],
   "ai-team": ["fs_list", "fs_read", "fs_write", "kb_search", "kb_save", "web_fetch", "github_issues"],
-  automation: ["fs_list", "fs_read", "fs_write", "kb_search", "kb_save", "web_fetch"],
-  library: ["fs_list", "fs_read", "fs_write", "kb_search", "kb_save", "web_fetch"],
+  automation: ["fs_list", "fs_read", "fs_write", "kb_search", "kb_save", "web_fetch", "economy_propose", "studio_save", "studio_render", "studio_status"],
+  library: ["fs_list", "fs_read", "fs_write", "kb_search", "kb_save", "web_fetch", "economy_propose"],
 };
 
 export function toolsForAgent(all: ToolDef[], agent: Pick<ToolAgent, "department">): ToolDef[] {

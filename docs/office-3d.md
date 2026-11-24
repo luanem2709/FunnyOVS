@@ -79,11 +79,22 @@ Bạn ──► Giám đốc ──► Trưởng phòng (mỗi phòng liên quan
 
 `src/server/ai/*` — lớp OpenAI-compatible duy nhất cho mọi nơi cần LLM (lập kế hoạch, báo cáo, agent chạy việc thật).
 
-- **Tự dò (không cần cấu hình):** OmniRoute `:20128` (cổng gom nhiều nguồn miễn phí, model `auto`), Ollama `:11434`, LM Studio `:1234`. Đổi địa chỉ bằng `OFFICE_OMNIROUTE_URL`, `OLLAMA_HOST`.
-- **Khoá miễn phí:** tự nhận từ biến môi trường (`GROQ_API_KEY`, `GEMINI_API_KEY`, `CEREBRAS_API_KEY`, `MISTRAL_API_KEY`, `OPENROUTER_API_KEY` — chỉ model `:free`, `GITHUB_MODELS_TOKEN`) hoặc dán trong tab **AI**. Khoá lưu file quyền 0600, **không bao giờ trả về client** (chỉ bản che), và mọi thông điệp lỗi/nhật ký đi qua `redact()`.
-- **Router:** thử lần lượt theo ưu tiên; lỗi liên tiếp → ngắt mạch (15s → tối đa 5 phút); 429 tôn trọng `Retry-After`; 401/403 nghỉ 10 phút và báo "khoá bị từ chối"; 404 vì sai model → dò lại `/models` và thử một lần; 400 vì `response_format` → thử không JSON mode.
+- **Tự dò (không cần cấu hình):** OmniRoute / [9router](https://github.com/decolua/9router) `:20128` (cổng gom nhiều nguồn miễn phí, model `auto`; hai cổng dùng chung một mục vì cùng cổng và đường dẫn `/v1`), Ollama `:11434`, LM Studio `:1234`. Đổi địa chỉ bằng `OFFICE_OMNIROUTE_URL`, `OLLAMA_HOST`.
+  Nút *Khởi động* ở tab **AI** thử chạy `omniroute` rồi `9router` nếu đã cài (`npm i -g 9router`); khoá của cổng lấy ở Dashboard → Settings → API Keys rồi dán vào ô khoá.
+- **Khoá miễn phí:** tự nhận từ biến môi trường (`GROQ_API_KEY`, `GEMINI_API_KEY`, `CEREBRAS_API_KEY`, `MISTRAL_API_KEY`, `OPENROUTER_API_KEY` — chỉ model `:free`, `NVIDIA_API_KEY` (NVIDIA NIM), `SAMBANOVA_API_KEY`) hoặc dán trong tab **AI**; mỗi nguồn có liên kết tới trang lấy khoá (app **không tự đăng ký tài khoản/khoá** thay bạn — việc đó cần người thật và điều khoản của từng dịch vụ). GitHub Models đã bị GitHub ngừng từ 30/7/2026 nên không còn trong danh mục. Khoá lưu file quyền 0600, **không bao giờ trả về client** (chỉ bản che), và mọi thông điệp lỗi/nhật ký đi qua `redact()`.
+- **Nút "+ Thêm API" (gom như 9router)** (`ai/custom.ts`, `ai/hub.ts`, `ui/AiPanel.tsx`): thêm **bất kỳ điểm cuối tương thích OpenAI** (Together, DeepSeek, vLLM/LiteLLM trong mạng nội bộ, một khoá thứ hai của cùng nhà cung cấp để gộp hạn mức…) — tối đa 20 nguồn.
+  Có thể chọn **mẫu dựng sẵn** (điền sẵn tên + địa chỉ). Bấm *Kiểm tra* gọi thật `/models` trước khi lưu và báo rõ lý do nếu khoá bị từ chối, địa chỉ sai hoặc không có danh sách model; địa chỉ chỉ nhận `http/https`, không kèm tài khoản, bỏ query/hash.
+  Nguồn tuỳ chỉnh được **sửa/xoá**, **sắp thứ tự bằng mũi tên** (áp dụng cho cả nguồn dựng sẵn) và chọn **chiến lược**: *dự phòng theo thứ tự* (mặc định) hoặc *xoay vòng* (chia đều tải/hạn mức giữa các nguồn đang sẵn sàng). Khoá lưu ở kho khoá `0600` (`ai.<id>.key`), danh sách nguồn ở `ai.json` **không có khoá**.
+  REST (chỉ từ chính máy — `loopbackOnly`): `POST /api/ai/custom/check`, `POST /api/ai/custom`, `PATCH|DELETE /api/ai/custom/:id`, `PUT /api/ai/order`, `PUT /api/ai/strategy`; mỗi thay đổi ghi vào nhật ký bảo mật (`ai.provider.add|edit|remove`, `ai.order`, `ai.strategy`) **không kèm khoá**.
+- **Router:** thử lần lượt theo ưu tiên (hoặc xoay vòng nếu chọn); lỗi liên tiếp → ngắt mạch (15s → tối đa 5 phút); 429 tôn trọng `Retry-After`; 401/403 nghỉ 10 phút và báo "khoá bị từ chối"; 404 vì sai model → dò lại `/models` và thử một lần; 400 vì `response_format` → thử không JSON mode.
 - **Backend chạy việc** (cấu hình `llmBackend` qua `PUT /api/config`: `auto|router|cursor-agent|rule`): `auto` ưu tiên router, rồi Cursor nếu đã đăng nhập, rồi quy tắc. Mức dùng token của router được ghi vào sổ cái (nguồn `provider-usage`).
 - **Chạy thử không tốn token:** `node scripts/mock-llm.mjs` (giả Ollama trên `:11434`) + `npm run preview` (máy chủ cách ly, dữ liệu tạm) → giao việc cho Giám đốc và xem trọn luồng: kế hoạch → trưởng phòng → nhân viên dùng CRM/ghi file → nghiệm thu → báo cáo.
+
+## Kinh tế tự trị (EAL, tuỳ chọn)
+
+`src/server/economy/*` — bán báo cáo qua paywall, sổ cái băm nối, vòng lặp lãi/lỗ, Scout chỉ đề xuất. **Mặc định tắt** (`ECONOMY_RAIL`). Chi tiết kiến trúc, cấu hình, rủi ro và tiêu chí nghiệm thu: [`economy-layer.md`](economy-layer.md); mô phỏng 30 ngày: [`economy-backtest.md`](economy-backtest.md).
+Trong cảnh 3D: **bảng KPI** trên tường lưng Phòng Tài chính (`assets/economyBoard.ts`, vẽ lại chỉ khi số liệu đổi) và thẻ "Kinh tế tự trị" ở tab *Tổng quan*; hộp duyệt (xuất bản / cơ hội / tái đầu tư) hiện như mọi hành động ra ngoài. Sự kiện kinh tế đi qua schema chung (`economy.state`, `economy.event`; móc kiểm tra `window.__officeEconomy()`).
+Điểm khác thường cần biết: sản phẩm trả phí chạy ở **cổng công khai riêng** (`ECONOMY_PUBLIC_PORT`) chỉ có 3 đường dẫn — tuyệt đối không đưa tunnel vào cổng chính, vì API chính coi yêu cầu từ loopback là chính chủ.
 
 ## Công cụ thật cho nhân viên
 
@@ -148,6 +159,13 @@ Server **không gửi câu đã dịch**: nó gửi `key` + `vars` (kèm bản t
 ## Cơ sở vật chất và nhân vật
 
 - **Phòng tiện ích** (`src/shared/facilities.ts`, dữ liệu thuần — không nằm trong danh sách phòng ban nên bộ lập kế hoạch không bao giờ giao việc cho chúng): **Phòng họp** (bàn dài, 8 ghế, chỗ thuyết trình, màn hình hiện chủ đề đang họp), **Pantry** (quầy, máy cà phê, tủ lạnh, máy bán hàng, bàn tròn), **Sảnh lễ tân** (quầy, logo công ty theo tên bạn đặt, khu chờ, bảng tin số liệu thật). Một nguồn dữ liệu cho hình dựng, lưới đường đi A* và test.
+- **Bộ phòng kiểu chibi** (`assets/chibiProps.ts`, `assets/workstation.ts`): mọi phòng — phòng ban, Giám đốc, họp, pantry, sảnh, thư viện — dùng chung một ngôn ngữ đồ đạc mềm, bo tròn để hợp với nhân vật chibi (`softBox` = hộp bo tròn, cache theo kích thước, 2 mức chi tiết).
+  **Bàn làm việc** (`buildWorkstation`): mặt bàn bo tròn có mép màu phòng, hộc kéo, thảm bàn, bàn phím/chuột, cốc (màu theo người), chậu cây, **một món đồ riêng theo từng người** (đèn / tai nghe / mèo / chồng sách, chọn ổn định theo id), màn hình bo tròn có **huy hiệu phòng** ở lưng, ghế xoay màu phòng (Giám đốc: ghế lưng cao + gối tựa vàng).
+  **Mỗi phòng có bản sắc màu riêng**: ốp chân tường (wainscot) + viền màu phòng, khung tranh; thư viện có kệ sách rỗng với gáy sách màu; sofa, quầy lễ tân, bếp pantry, tủ lạnh, máy bán hàng, tủ server… đều bo tròn.
+  Toàn bộ được **gộp theo vật liệu** (≈ 10 lệnh vẽ/bàn) nên nhẹ hơn bản cũ dù chi tiết hơn; hình học có/không có chỉ mục (hộp bo tròn không có, hộp/trụ/cầu thì có) được thống nhất trước khi gộp. Ngân sách dựng hình vẫn nằm trong ngưỡng đã nêu ở trên (mức *Cao* ≈ 1.320 lệnh vẽ / 0,93 triệu tam giác).
+- **Toà nhà liền** (`BUILDING` trong `src/shared/facilities.ts`, dựng ở `assets/building.ts`): mọi phòng nằm trong **một công trình** có tường ngoài bao quanh (chân tường đặc + kính trong suốt + cột chia ô + dầm ở ba mặt bắc/tây/đông; tường nam chỉ là chân tường thấp để camera nhìn vào được),
+  **một cửa chính** ở tường nam ngay trước mặt sảnh lễ tân (lối lát + hai chậu cây), **hành lang** là sàn đá sáng phủ khắp toà nhà giữa các phòng với **thảm chỉ đường màu phòng** trước cửa từng phòng, và **hai sân trong** (vườn có cây, bụi, viền đá) ở phần trống phía bắc.
+  Phòng **không đổi chỗ** nên lưới đường đi A*, họp, pantry và hành vi cũ giữ nguyên; lưới chỉ thêm tường ngoài làm vật cản (chừa cửa chính). Cây, đèn đường nằm ngoài tường. Test: `tests/facilities.test.ts` › "toà nhà liền".
 - **Sàn riêng từng khu** (`assets/floors.ts`): gỗ / thảm / gạch bằng texture sinh sẵn. **Ban đêm** đèn phòng sáng hơn và cửa sổ, đèn cây, máy bán hàng, LED phát sáng (`setNight` trong `decor.ts`).
 - **Việc đang chạy hiện ngay trong cảnh** (`assets/workboard.ts`, hàm thuần kiểm thử được): **bảng việc sống** phủ lên bảng roadmap ở phòng *Giao việc* — tối đa 3 luồng (đang mở trước, rồi luồng vừa xong trong 30 phút), mỗi luồng có trạng thái
   (đang chạy / chờ duyệt / xong / lỗi), thanh tiến độ (việc thật đã xong / tổng), người đang cầm việc; ba số đếm ở đầu bảng; bảng trống có gợi ý. Chữ do client dịch nên đúng ngôn ngữ đang chọn và vẽ lại khi đổi ngôn ngữ. **Huy hiệu số việc mở** ở góc phải trên màn hình bàn của người phụ trách
@@ -167,6 +185,14 @@ Chụp bằng `scripts/shot-ui.mjs` trên máy chủ cách ly + LLM giả chậm
 | **Cùng bảng ở tiếng Việt** — chữ do client dịch nên đổi theo ngôn ngữ | ![bảng việc tiếng Việt](shots/v3-live-board-vi.png) |
 | **Huy hiệu số việc mở** ở góc màn hình bàn (xanh = đang mở) — xa nhân vật nên không che người | ![huy hiệu trên bàn](shots/v3-desk-badges.png) |
 | **Cài đặt:** chuyển động, chất lượng đồ hoạ, riêng tư, LAN, email… | ![cài đặt](shots/v3-settings.png) |
+| **Bộ phòng kiểu chibi — toàn cảnh:** mỗi phòng một màu riêng (ốp chân tường, viền, khung tranh), bàn bo tròn, ghế màu phòng | ![toàn cảnh chibi](shots/v4-wide.png) |
+| **Toà nhà liền nhìn từ trên cao:** tường ngoài bao mọi phòng, hai sân trong ở phía bắc, hành lang giữa các phòng | ![toà nhà](shots/v4-building.png) |
+| **Cửa chính** ngay trước sảnh lễ tân, lối lát và chậu cây | ![cửa chính](shots/v4-entrance.png) |
+| **Bảng KPI Lớp kinh tế** ở Phòng Tài chính (rail giả, dữ liệu thử): đã thu / chi phí / lãi lỗ, chu kỳ gần nhất, cơ hội chờ duyệt | ![bảng KPI kinh tế](shots/v5-economy-board.png) |
+| **Phòng Hỗ trợ khách hàng:** bàn chibi — mép màu phòng, thảm bàn, bàn phím, cốc, chậu cây, huy hiệu phòng ở lưng màn hình | ![phòng hỗ trợ](shots/v4-support.png) |
+| **Sảnh lễ tân:** quầy và sofa bo tròn, ốp tường vàng, thảm "WELCOME" | ![sảnh](shots/v4-lobby.png) |
+| **Pantry:** quầy bếp, tủ lạnh, máy bán hàng bo tròn, ghế đẩu | ![pantry](shots/v4-pantry.png) |
+| **Tab AI → "+ Thêm API":** mẫu dựng sẵn, kiểm tra thật, nguồn tuỳ chỉnh gom vào chung bộ định tuyến (mũi tên thứ tự, dự phòng/xoay vòng) | ![thêm API](shots/v4-ai-add-api.png) ![nguồn tuỳ chỉnh](shots/v4-ai-aggregate.png) |
 
 ## Công cụ phát triển
 
@@ -214,8 +240,8 @@ Renderer chỉ cần: đọc `useOfficeStore`, gọi `select(id)` / `focusOn(x, 
 
 ## Kiểm thử
 ```bash
-npm run typecheck && npm test && npm run build      # logic: hơn 350 test, không để rác thư mục tạm
-npm run verify:ui                                   # Chrome thật + máy chủ cách ly + LLM giả (~100 bước, vài phút)
+npm run typecheck && npm test && npm run build      # logic: ~477 test, không để rác thư mục tạm
+npm run verify:ui                                   # Chrome thật + máy chủ cách ly + LLM giả (~153 bước, vài phút)
 npm run desktop:dir && npm run verify:desktop       # chạy bản đóng gói FunnyOVS.exe thật
 npm run score                                       # bảng chấm điểm docs/07-diem-so.md
 ```
@@ -226,4 +252,10 @@ giảm chuyển động; bảng việc sống + huy hiệu; tải báo cáo. Cò
 - Cảnh 3D là canvas nên **trình đọc màn hình không đọc được nội dung trong cảnh** — mọi thông tin và thao tác đều có ở các bảng bên cạnh (danh sách, tab, hộp duyệt). Chưa thử với trình đọc màn hình thật (chỉ kiểm bằng DOM).
 - Thực thể `task` có trong store, KPI và bảng dự phòng nhưng **chưa vẽ** trong cảnh 3D.
 - Chưa có model Kenney (tải thủ công từ kenney.nl rồi `npm run scan:assets`); cảnh dùng hình dựng bằng code.
+- Toà nhà **không có mái và không có tầng** (kiểu "nhà búp bê" để nhìn được bên trong); tường nam chỉ là chân tường thấp để không che các phòng khi camera nhìn từ phía trước.
+- App **không tự đăng ký tài khoản/khoá miễn phí** của nhà cung cấp thay bạn (cần người thật, điều khoản và đôi khi xác minh); nó chỉ tự dò cổng cục bộ, tự nhận khoá bạn đã đặt, dẫn tới trang lấy khoá và gom mọi nguồn vào một bộ định tuyến.
 - Giao diện cổ điển còn sao chép một phần mã dựng phòng với `assets/officeParts.ts`; khi bỏ bản cổ điển nên gộp lại.
+
+## Studio dựng clip
+
+`src/server/studio/*` (dịch vụ + runner), `src/server/routes/studio.ts`, công cụ `studio_*` trong `agent/tools.ts`, thẻ `ui/StudioCard.tsx`, kit ở `studio/roblox-clip/`. Sự kiện `studio.state` đi qua schema chung. Gửi lời đọc ra dịch vụ giọng là hành động ra ngoài nên đi qua `ActionGate` (`studio_voice`). Chi tiết: [`studio.md`](studio.md).

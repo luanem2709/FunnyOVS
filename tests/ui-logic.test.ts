@@ -19,6 +19,7 @@ import { TABS, tabAfterKey } from "../src/client/office-3d/store/ui.js";
 import { Note, isSubmitCombo } from "../src/client/office-3d/ui/a11y.js";
 import { stepKey } from "../src/client/office-3d/lib/roving.js";
 import { acceptsKey } from "../src/client/office-3d/ui/AiPanel.js";
+import { AI_PRESETS, aiFormPayload, anotherKeyPresets, emptyAiForm, readyNames, suggestsV1, validateAiForm } from "../src/client/office-3d/ui/aiForm.js";
 import { previewBackupText } from "../src/client/office-3d/ui/backupLogic.js";
 import { describeSchedule } from "../src/client/office-3d/ui/SchedulePanel.js";
 import { FREQUENCIES, SCHEDULE_STATUSES } from "../src/shared/schedule.js";
@@ -346,5 +347,83 @@ describe("nhãn do server sinh được dịch theo ngôn ngữ đang chọn (E1
     expect(logLine(tEn, keyed)).toBe("Delegating: A");
     expect(logLine(tVi, keyed)).toBe("Phân việc: A");
     expect(logLine(tEn, { ...keyed, extra: "ghi chú", extraKey: "task.planning", extraVars: { title: "B" } })).toBe("Delegating: A — Planning: B");
+  });
+});
+
+describe("nút + Thêm API: mẫu dựng sẵn và kiểm tra biểu mẫu", () => {
+  it("mẫu: id không trùng, địa chỉ http(s) hợp lệ, liên kết lấy khoá là https, ghi chú có đủ bản dịch vi + en, không trùng danh mục dựng sẵn", () => {
+    const ids = AI_PRESETS.map((p) => p.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const p of AI_PRESETS) {
+      const u = new URL(p.baseUrl);
+      expect(["http:", "https:"], p.id).toContain(u.protocol);
+      expect(p.label.trim(), p.id).not.toBe("");
+      if (p.signupUrl) expect(new URL(p.signupUrl).protocol, p.id).toBe("https:");
+      if (p.noteKey) {
+        expect(p.noteKey in DICTIONARIES.vi && p.noteKey in DICTIONARIES.en, p.noteKey).toBe(true);
+      }
+      expect(validateAiForm({ ...emptyAiForm(), label: p.label, baseUrl: p.baseUrl }), p.id).toBeNull(); // mẫu nào cũng qua kiểm tra của chính biểu mẫu
+      expect(CATALOG.some((c) => c.baseUrl.replace(/\/$/, "") === p.baseUrl.replace(/\/$/, "")), `${p.id} trùng nguồn dựng sẵn`).toBe(false);
+    }
+  });
+
+  it("chỉ báo AI hiện NHÃN (không phải id kỹ thuật u-…), tối đa 2 nguồn, tên dài được cắt; bản máy chủ cũ không có nhãn thì dùng id", () => {
+    expect(readyNames({ providers: ["groq", "u-my-gateway-ab12"], names: ["Groq", "My gateway"] })).toBe("Groq, My gateway");
+    expect(readyNames({ providers: ["a", "b", "c"], names: ["A", "B", "C"] })).toBe("A, B"); // tối đa 2
+    const long = readyNames({ providers: ["u-x-1"], names: ["Một cái tên rất rất rất dài của nguồn tuỳ chỉnh"] });
+    expect(long.length).toBeLessThanOrEqual(18); // cắt gọn để không tràn thanh đầu
+    expect(long.endsWith("…")).toBe(true);
+    expect(long.startsWith("Một cái tên")).toBe(true);
+    expect(readyNames({ providers: ["groq", "ollama"] })).toBe("groq, ollama"); // máy chủ cũ
+    expect(readyNames({ providers: ["groq", "ollama"], names: ["Groq"] })).toBe("groq, ollama"); // lệch độ dài → không tin nhãn
+    expect(readyNames({ providers: [] })).toBe("");
+  });
+
+  it("mẫu 'khoá khác': chỉ cho nguồn đám mây dựng sẵn (không máy cục bộ, không nguồn tuỳ chỉnh)", () => {
+    const base = { baseUrl: "https://x.test/v1", free: true, label: "X" };
+    const got = anotherKeyPresets([
+      { ...base, id: "groq", kind: "cloud" },
+      { ...base, id: "ollama", kind: "local" },
+      { ...base, id: "omniroute", kind: "gateway" },
+      { ...base, id: "u-mine-aaaa", kind: "custom", custom: true },
+      { ...base, id: "nvidia", kind: "cloud", signupUrl: "https://build.nvidia.com" },
+    ]);
+    expect(got.map((g) => g.id)).toEqual(["another:groq", "another:nvidia"]);
+    expect(got[1]).toMatchObject({ baseUrl: "https://x.test/v1", free: true, signupUrl: "https://build.nvidia.com" });
+  });
+
+  it("kiểm tra biểu mẫu phản chiếu máy chủ: cùng khoá lỗi val.ai.*", () => {
+    const ok = { ...emptyAiForm(), label: "ACME", baseUrl: "https://api.acme.test/v1" };
+    expect(validateAiForm(ok)).toBeNull();
+    expect(validateAiForm({ ...ok, label: "  " })).toEqual({ key: "val.ai.labelRequired" });
+    expect(validateAiForm({ ...ok, label: "x".repeat(41) })).toEqual({ key: "val.ai.labelTooLong", vars: { max: 40 } });
+    expect(validateAiForm({ ...ok, baseUrl: "" })?.key).toBe("val.ai.baseUrlRequired");
+    expect(validateAiForm({ ...ok, baseUrl: "api.acme.test/v1" })?.key).toBe("val.ai.baseUrlInvalid");
+    expect(validateAiForm({ ...ok, baseUrl: "ftp://api.acme.test" })?.key).toBe("val.ai.baseUrlProtocol");
+    expect(validateAiForm({ ...ok, baseUrl: "https://u:p@api.acme.test/v1" })?.key).toBe("val.ai.baseUrlCredentials");
+    expect(validateAiForm({ ...ok, apiKey: "k".repeat(501) })?.key).toBe("val.ai.keyTooLong");
+    expect(validateAiForm({ ...ok, label: "" }, { needLabel: false })).toBeNull(); // nút "Kiểm tra kết nối" chưa cần tên
+    for (const k of ["val.ai.labelRequired", "val.ai.labelTooLong", "val.ai.baseUrlRequired", "val.ai.baseUrlInvalid", "val.ai.baseUrlProtocol", "val.ai.baseUrlCredentials", "val.ai.keyTooLong"]) {
+      expect(tEn(k, { max: 40 }), k).not.toBe(k);
+      expect(tVi(k, { max: 40 }), k).not.toBe(k);
+    }
+  });
+
+  it("gợi ý đuôi /v1 chỉ cho máy chủ từ xa chưa có đường dẫn; dữ liệu gửi đi gọn, không gửi khoá khi sửa", () => {
+    expect(suggestsV1("https://api.groq.com")).toBe(true);
+    expect(suggestsV1("https://api.groq.com/openai/v1")).toBe(false);
+    expect(suggestsV1("http://127.0.0.1:8000")).toBe(false);
+    expect(suggestsV1("http://192.168.1.5:1234")).toBe(false);
+    expect(suggestsV1("không phải url")).toBe(false);
+    const f = { label: " ACME ", baseUrl: " https://a.test/v1 ", apiKey: " khoa ", model: "", free: true };
+    expect(aiFormPayload(f)).toEqual({ label: "ACME", baseUrl: "https://a.test/v1", apiKey: "khoa", free: true });
+    expect(aiFormPayload({ ...f, model: "m1" })).toMatchObject({ model: "m1" });
+    expect(aiFormPayload(f, { edit: true })).toEqual({ label: "ACME", baseUrl: "https://a.test/v1", model: "", free: true }); // sửa: không có khoá, có model rỗng để xoá
+  });
+
+  it("ô dán khoá hiện cho nguồn đám mây VÀ nguồn do người dùng thêm; cổng gom chỉ khi cần khoá", () => {
+    expect(acceptsKey({ id: "u-x-1111", kind: "custom", state: "ready", hasKey: false, custom: true })).toBe(true);
+    expect(acceptsKey({ id: "custom", kind: "custom", state: "ready", hasKey: false })).toBe(false); // nguồn 'custom' cấu hình bằng biến môi trường
+    expect(acceptsKey({ id: "nvidia", kind: "cloud", state: "no-key", hasKey: false })).toBe(true);
   });
 });

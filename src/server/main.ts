@@ -21,7 +21,7 @@ import { KnowledgeBase } from "./knowledge/knowledgeBase.js";
 import { ResearchEngine } from "./learning/researchEngine.js";
 import { ProposalStore } from "./selfdev/proposalStore.js";
 import { AgentRegistry } from "./agents/agentRegistry.js";
-import { DEPARTMENTS } from "./agents/departments.js";
+import { DEPARTMENTS, departmentById } from "./agents/departments.js";
 import { TaskRunner } from "./tasks/taskRunner.js";
 import { ActivityLog } from "./activity/activityLog.js";
 import { policyForLevel, type AutomationLevel } from "./automation/automationPolicy.js";
@@ -38,6 +38,13 @@ import { createRunLlm } from "./agent/backend.js";
 import { makePlanner, makeSummarizer, type ChatFn } from "./org/planner.js";
 import { registerBusinessRoutes, apiError } from "./routes/business.js";
 import { AuditLog } from "./security/audit.js";
+import { EconomyService, configFromEnv, type ScoutControl } from "./economy/service.js";
+import { railFromEnv } from "./economy/payment.js";
+import { startPublicServer } from "./economy/publicServer.js";
+import { registerEconomyRoutes } from "./routes/economy.js";
+import { StudioService } from "./studio/service.js";
+import { createRunner, findKitDir } from "./studio/runner.js";
+import { registerStudioRoutes } from "./routes/studio.js";
 import { Scheduler } from "./schedule/scheduler.js";
 import { runCursorAgent } from "./budget/cursorAgent.js";
 import { getCursorAuth } from "./budget/cursorAuth.js";
@@ -148,7 +155,71 @@ const audit = new AuditLog(path.join(DATA_DIR, "audit.log"), () => hub.secrets.a
 const officeDb = new OfficeDb(DATA_DIR);
 const mail = new MailService(DATA_DIR, hub.secrets);
 const gate = new ActionGate();
+
+// ---- Lớp kinh tế tự trị (EAL): tắt trừ khi đặt ECONOMY_RAIL. Chỉ NHẬN tiền; mọi thứ ra ngoài/tốn tiền là đề xuất chờ duyệt.
+const SCOUT_TITLE = "EAL scouting";
+const SCOUT_PROMPT =
+  "Economic scouting round. Find ONE or TWO realistic ways this office could earn a small amount of money using ONLY public information and the skills it already has " +
+  "(for example: a short public research report to sell, a fitting GitHub bounty, an affiliate programme). Use web research (Automation Lab / Library), have Finance estimate " +
+  "revenue, cost and risk, then submit each viable idea with the economy_propose tool. NEVER sign up for anything, spend or move money, or use customer/CRM/email data. " +
+  "If nothing is worth proposing, say so.";
+const scouts: ScoutControl = {
+  active: () => scheduler.raw().some((x) => x.title === SCOUT_TITLE && x.enabled),
+  setActive: (on) => {
+    const cur = scheduler.raw().find((x) => x.title === SCOUT_TITLE);
+    if (on) {
+      if (cur) scheduler.setEnabled(cur.id, true);
+      else scheduler.create({ title: SCOUT_TITLE, prompt: SCOUT_PROMPT, frequency: "daily", at: "09:30", lang: "vi" });
+    } else if (cur) scheduler.setEnabled(cur.id, false);
+  },
+};
+const railCfg = railFromEnv(process.env);
+if (railCfg.error) console.warn(`[economy] disabled: ${railCfg.error}`);
+const ECONOMY_DEPTS = new Set(["finance", "automation", "library"]);
+const economy = new EconomyService({
+  dataDir: DATA_DIR,
+  workspace: () => configStore.get().workspace,
+  rail: railCfg.rail,
+  railError: railCfg.error,
+  gate,
+  audit,
+  emergency: () => emergencyStop,
+  desk: () => {
+    const lead = registry.get(departmentById("finance")?.leadId ?? "thu");
+    return { id: lead?.id ?? "thu", name: lead?.name ?? "Finance" };
+  },
+  contactTerms: () => officeDb.listContacts(500).flatMap((c) => [c.name, c.email ?? "", c.company ?? ""].filter(Boolean)),
+  secretValues: () => hub.secrets.allValues(),
+  // Chi phí suy luận quy ước: token của các phòng có công cụ economy_propose (xấp xỉ — xem docs/economy-layer.md).
+  tokensSince: (sinceMs) => ledger.list(1000).filter((e) => ECONOMY_DEPTS.has(e.department) && Date.parse(e.ts) >= sinceMs).reduce((n, e) => n + e.totalTokens, 0),
+  scouts,
+  onState: (state) => broadcastOffice([{ type: "economy.state", state, at: new Date().toISOString() }]),
+  onEvent: (event) => broadcastOffice([{ type: "economy.event", event }]),
+  config: configFromEnv(process.env),
+});
+
+// ---- Studio dựng clip khối: dự án nằm trong workspace; gửi lời đọc ra dịch vụ giọng online luôn qua hộp duyệt (ActionGate).
+const studioKit = findKitDir(path.dirname(fileURLToPath(import.meta.url)));
+const studio = studioKit
+  ? new StudioService({
+      workspace: () => configStore.get().workspace,
+      kitDir: studioKit,
+      gate,
+      audit,
+      emergency: () => emergencyStop,
+      runner: createRunner(studioKit),
+      secretValues: () => hub.secrets.allValues(),
+      desk: () => {
+        const lead = registry.get(departmentById("marketing")?.leadId ?? "giamdoc");
+        return { id: lead?.id ?? "giamdoc", name: lead?.name ?? "Studio" };
+      },
+      onState: (state) => broadcastOffice([{ type: "studio.state", state, at: new Date().toISOString() }]),
+    })
+  : null;
+
 const agentTools = buildTools({
+  studio: studio ? { save: (p, k, d, by) => studio.save(p, k, d, by), start: (p, o, by) => studio.start(p, o, by), state: () => studio.state() } : undefined,
+  economy: { propose: (raw, by) => economy.propose(raw, by) },
   onEmailSent: ({ to, agent }) => audit.append("email.sent", "agent", { to, agent }),
   fs: fsGuard,
   perms,
@@ -674,6 +745,7 @@ app.post("/api/emergency-stop", (_req, res) => {
       }
     }
     gate.denyAll(); // mọi yêu cầu duyệt hành động ra bên ngoài (email, issue...) bị từ chối
+    studio?.abortAll(); // huỷ việc dựng clip đang chạy (giết cả Chrome/ffmpeg con)
   } else {
     for (const a of registry.list()) {
       registry.setStatus(a.id, "idle");
@@ -681,6 +753,7 @@ app.post("/api/emergency-stop", (_req, res) => {
     }
   }
   broadcast("emergency", { emergencyStop });
+  broadcastOffice([{ type: "economy.state", state: economy.state(), at: new Date().toISOString() }]); // EAL ngừng phục vụ/chạy chu kỳ ngay
   activity.record({
     kind: "emergency",
     actor: "bạn",
@@ -895,6 +968,7 @@ const scheduler = new Scheduler({
   onEvent: (kind, detail) => audit.append(kind, kind === "schedule.run" ? "system" : "user", detail),
 });
 scheduler.start();
+economy.start();
 
 registerBusinessRoutes(app, {
   audit,
@@ -919,6 +993,8 @@ registerBusinessRoutes(app, {
   lan: NETWORK.lan,
   startedAt: STARTED_AT,
 });
+registerEconomyRoutes(app, { economy, isLoopback: (req) => auth.isLoopback(req) });
+if (studio) registerStudioRoutes(app, { studio, isLoopback: (req) => auth.isLoopback(req) });
 gate.on("request", (r) => broadcast("action:request", r));
 gate.on("decided", (r) => {
   broadcast("action:decided", r);
@@ -955,6 +1031,8 @@ wss.on("connection", (ws) => {
   ws.send(JSON.stringify({ event: OFFICE_WS_EVENT, data: { type: "org.snapshot", nodes: orgDispatcher!.list(), at: new Date().toISOString() } }));
   for (const ev of officeBridge!.pendingApprovals()) ws.send(JSON.stringify({ event: OFFICE_WS_EVENT, data: ev }));
   ws.send(JSON.stringify({ event: OFFICE_WS_EVENT, data: { type: "emergency", active: emergencyStop, at: new Date().toISOString() } }));
+  ws.send(JSON.stringify({ event: OFFICE_WS_EVENT, data: { type: "economy.state", state: economy.state(), at: new Date().toISOString() } }));
+  if (studio) ws.send(JSON.stringify({ event: OFFICE_WS_EVENT, data: { type: "studio.state", state: studio.state(), at: new Date().toISOString() } }));
   ws.send(
     JSON.stringify({
       event: "state",
@@ -981,6 +1059,15 @@ const onListening = () => {
 if (HOST) server.listen(PORT, HOST, onListening);
 else server.listen(PORT, onListening);
 
+// Cổng công khai RIÊNG cho sản phẩm trả phí (chỉ khi bật EAL và đặt ECONOMY_PUBLIC_PORT). Chỉ có /api/public/insights* — xem economy/publicServer.ts.
+let publicServer: http.Server | null = null;
+const publicPort = Number(process.env.ECONOMY_PUBLIC_PORT);
+if (economy.enabled && Number.isInteger(publicPort) && publicPort > 0 && publicPort < 65536) {
+  publicServer = startPublicServer(economy, { port: publicPort, host: process.env.ECONOMY_PUBLIC_HOST, baseUrl: process.env.ECONOMY_PUBLIC_BASE_URL, trustProxy: process.env.ECONOMY_TRUST_PROXY === "1" });
+  publicServer.on("error", (e) => console.error("[economy] public server:", e.message));
+  console.log(`[economy] public paywall server on port ${publicPort} (${process.env.ECONOMY_PUBLIC_HOST ?? "127.0.0.1"})`);
+}
+
 process.on("uncaughtException", (err) => console.error("[office3d] uncaughtException:", err));
 process.on("unhandledRejection", (err) => console.error("[office3d] unhandledRejection:", err));
 
@@ -992,6 +1079,9 @@ async function shutdown(): Promise<void> {
   }
   machineProbe.stop();
   scheduler.stop();
+  economy.stop();
+  studio?.abortAll();
+  publicServer?.close();
   officeDb.close();
   await browser.close();
   kb.close();

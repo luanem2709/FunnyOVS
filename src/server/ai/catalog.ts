@@ -24,7 +24,7 @@ export const CATALOG: ProviderDef[] = [
   },
   {
     id: "omniroute",
-    label: "OmniRoute",
+    label: "OmniRoute / 9router",
     kind: "gateway",
     baseUrl: OMNIROUTE_URL,
     keyEnv: ["OMNIROUTE_API_KEY"],
@@ -33,7 +33,8 @@ export const CATALOG: ProviderDef[] = [
     free: true,
     jsonMode: false,
     priority: 10,
-    signupUrl: "https://github.com/diegosouzapw/OmniRoute",
+    // 9router (decolua/9router) và OmniRoute cùng nghe cổng 20128 với đường dẫn /v1 nên dùng chung một mục.
+    signupUrl: "https://github.com/decolua/9router",
   },
   {
     id: "ollama",
@@ -132,19 +133,36 @@ export const CATALOG: ProviderDef[] = [
     signupUrl: "https://openrouter.ai/keys",
   },
   {
-    id: "github",
-    label: "GitHub Models",
+    // Gói miễn phí của NVIDIA Developer Program (khoảng 40 yêu cầu/phút, dành cho thử nghiệm).
+    id: "nvidia",
+    label: "NVIDIA NIM",
     kind: "cloud",
-    baseUrl: "https://models.github.ai/inference",
-    keyEnv: ["GITHUB_MODELS_TOKEN", "GITHUB_TOKEN"],
+    baseUrl: "https://integrate.api.nvidia.com/v1",
+    keyEnv: ["NVIDIA_API_KEY", "NVIDIA_NIM_API_KEY"],
     needsKey: true,
-    defaultModel: "openai/gpt-4o-mini",
-    modelHints: [/gpt-4o-mini/i, /llama/i],
+    defaultModel: "meta/llama-3.3-70b-instruct",
+    modelHints: [/llama-3\.3-70b/i, /llama-3\.1-70b/i, /llama-3\.1-8b/i],
     free: true,
     jsonMode: false,
-    priority: 45,
-    signupUrl: "https://github.com/settings/tokens",
+    priority: 41,
+    signupUrl: "https://build.nvidia.com/settings/api-keys",
   },
+  {
+    // Gói miễn phí có giới hạn theo ngày, không cần thẻ.
+    id: "sambanova",
+    label: "SambaNova",
+    kind: "cloud",
+    baseUrl: "https://api.sambanova.ai/v1",
+    keyEnv: ["SAMBANOVA_API_KEY"],
+    needsKey: true,
+    defaultModel: "Meta-Llama-3.3-70B-Instruct",
+    modelHints: [/llama-3\.3-70b/i, /llama-3\.1-70b/i, /llama-3\.1-8b/i],
+    free: true,
+    jsonMode: false,
+    priority: 42,
+    signupUrl: "https://cloud.sambanova.ai/apis",
+  },
+  // GitHub Models (models.github.ai) đã bị GitHub ngừng hoàn toàn từ 30/7/2026 nên không còn trong danh mục.
 ];
 
 export function providerDef(id: string): ProviderDef | undefined {

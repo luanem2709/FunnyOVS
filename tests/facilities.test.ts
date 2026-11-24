@@ -9,6 +9,7 @@ import { AgentRegistry } from "../src/server/agents/agentRegistry.js";
 import { DEPARTMENTS } from "../src/server/agents/departments.js";
 import { DEPARTMENT_BRIEF } from "../src/server/org/planner.js";
 import {
+  BUILDING,
   FACILITIES,
   coffeeSpots,
   doorSpot,
@@ -339,3 +340,73 @@ describe("đèn ban đêm và sàn riêng từng khu (G4, G5, night.lights)", ()
 function worldRoom(center: { x: number; z: number }, size: { w: number; d: number }): Rect {
   return { x: center.x, z: center.z, w: size.w, d: size.d };
 }
+
+describe("toà nhà liền: tường ngoài, cửa chính, sân trong (N6, building.shell)", () => {
+  const rooms: Array<[string, Rect]> = [
+    ...DEPARTMENTS.map((d) => [d.id, worldRoom(d.center, d.size)] as [string, Rect]),
+    ...FACILITIES.map((f) => [f.id, worldRoom(f.center, f.size)] as [string, Rect]),
+  ];
+  const B = BUILDING;
+
+  it("mọi phòng nằm trọn trong toà nhà, cách tường ngoài ≥ 2 m (đủ lối đi quanh phòng)", () => {
+    for (const [id, r] of rooms) {
+      expect(r.x - r.w / 2 - B.x0, `${id} trái`).toBeGreaterThanOrEqual(2);
+      expect(B.x1 - (r.x + r.w / 2), `${id} phải`).toBeGreaterThanOrEqual(2);
+      expect(r.z - r.d / 2 - B.z0, `${id} bắc`).toBeGreaterThanOrEqual(2);
+      expect(B.z1 - (r.z + r.d / 2), `${id} nam`).toBeGreaterThanOrEqual(2);
+    }
+  });
+
+  it("cửa chính ở tường nam, nằm thẳng trước mặt trước của sảnh lễ tân", () => {
+    const lobby = FACILITIES.find((f) => f.id === "lobby")!;
+    expect(B.door.x - B.door.w / 2).toBeGreaterThanOrEqual(lobby.center.x - lobby.size.w / 2);
+    expect(B.door.x + B.door.w / 2).toBeLessThanOrEqual(lobby.center.x + lobby.size.w / 2);
+    expect(B.door.w).toBeGreaterThanOrEqual(3);
+  });
+
+  it("sân trong nằm trong toà nhà và không đè lên phòng nào", () => {
+    expect(B.courtyards.length).toBeGreaterThanOrEqual(2);
+    for (const c of B.courtyards) {
+      expect(c.x0).toBeGreaterThan(B.x0);
+      expect(c.x1).toBeLessThan(B.x1);
+      expect(c.z0).toBeGreaterThan(B.z0);
+      expect(c.z1).toBeLessThan(B.z1);
+      const rect = { x: (c.x0 + c.x1) / 2, z: (c.z0 + c.z1) / 2, w: c.x1 - c.x0, d: c.z1 - c.z0 };
+      for (const [id, r] of rooms) expect(rectsOverlap(rect, r, 0.4), `sân trong đè ${id}`).toBe(false);
+    }
+  });
+
+  it("lưới đường đi: tường ngoài chặn, cửa chính thông; từ sảnh đi ra tới sân trước cửa được, ra ngoài xuyên tường thì không", () => {
+    const grid = buildOfficeNavGrid(DEPARTMENTS, seats);
+    const free = (x: number, z: number): boolean => {
+      const [gx, gz] = grid.toCell(x, z);
+      return grid.free(gx, gz);
+    };
+    expect(free((B.x0 + B.x1) / 2, B.z0)).toBe(false); // tường bắc
+    expect(free(B.x0, 0)).toBe(false); // tường tây
+    expect(free(B.x1, 0)).toBe(false); // tường đông
+    expect(free(B.x1 - 3, B.z1)).toBe(false); // tường nam, ngoài cửa
+    expect(free(B.door.x, B.z1)).toBe(true); // cửa chính
+    const path = grid.findPath([lobbyWatchSpot().x, lobbyWatchSpot().z], [B.door.x, B.z1 + 1.5]);
+    const last = path[path.length - 1];
+    expect(Math.hypot(last[0] - B.door.x, last[1] - (B.z1 + 1.5))).toBeLessThan(0.6);
+    expect(path.every(([x, z]) => free(x, z))).toBe(true);
+  });
+
+  it("dựng vỏ toà nhà: ít lệnh vẽ, nằm trong nền lát (SLAB), có sàn hành lang và thảm chỉ đường cho mọi phòng", async () => {
+    const { buildBuilding, wallSegments } = await import("../src/client/assets/building.js");
+    const { SLAB } = await import("../src/client/assets/decor.js");
+    expect(wallSegments()).toHaveLength(5); // bắc, nam×2 (chừa cửa), tây, đông
+    const scene = new THREE.Group();
+    buildBuilding(scene, DEPARTMENTS);
+    const meshes: THREE.Mesh[] = [];
+    scene.traverse((o) => (o as THREE.Mesh).isMesh && meshes.push(o as THREE.Mesh));
+    expect(meshes.length).toBeLessThan(60); // gộp theo vật liệu
+    expect(scene.getObjectByName("building-floor")).toBeTruthy();
+    const box = new THREE.Box3().setFromObject(scene);
+    expect(box.min.x).toBeGreaterThanOrEqual(SLAB.cx - SLAB.w / 2);
+    expect(box.max.x).toBeLessThanOrEqual(SLAB.cx + SLAB.w / 2);
+    expect(box.min.z).toBeGreaterThanOrEqual(SLAB.cz - SLAB.d / 2);
+    expect(box.max.z).toBeLessThanOrEqual(SLAB.cz + SLAB.d / 2);
+  });
+});

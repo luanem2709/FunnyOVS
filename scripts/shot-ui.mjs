@@ -13,6 +13,7 @@
  *   --collapse       thu gọn bảng bên trái để thấy rõ cảnh
  *   --cam yaw,pitch,dist,x,z   đặt camera trực tiếp (vd. 0.3,0.25,3.2,0,0.4 để cận cảnh một nhân vật)
  *   --hour N         giả lập giờ trong ngày (0-24) để xem cảnh ban đêm
+ *   --quality <low|high>  chất lượng đồ hoạ (mặc định low; high cho ảnh tài liệu)
  *   --dist N         khoảng cách camera (cuộn chuột) sau khi bay tới phòng; --lang <vi|en> --width N --height N --wait ms
  * Biến môi trường: CHROME_PATH để đổi đường dẫn Chrome.
  */
@@ -34,6 +35,7 @@ const lang = arg("lang", "en");
 const width = Number(arg("width", 1440));
 const height = Number(arg("height", 900));
 const tab = arg("tab", "");
+const quality = String(arg("quality", "low")); // low (nhanh, mặc định) | high (đồ đạc bo mịn hơn — dùng cho ảnh trong tài liệu)
 const wait = Number(arg("wait", 2500));
 const executablePath = process.env.CHROME_PATH ?? "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
 
@@ -42,10 +44,10 @@ const browser = await chromium.launch({ executablePath, args: ["--use-gl=angle",
 const context = await browser.newContext({ viewport: { width, height }, deviceScaleFactor: 1 });
 // Bỏ qua hướng dẫn lần đầu và đặt ngôn ngữ trước khi trang chạy.
 await context.addInitScript(
-  ([l]) => {
-    localStorage.setItem("funnyovs.office3d.settings.v1", JSON.stringify({ lang: l, companyName: "FunnyOVS Corp", onboarded: true, idleLife: true, labels: "auto", quality: "low" }));
+  ([l, q]) => {
+    localStorage.setItem("funnyovs.office3d.settings.v1", JSON.stringify({ lang: l, companyName: "FunnyOVS Corp", onboarded: true, idleLife: true, labels: "auto", quality: q }));
   },
-  [lang],
+  [lang, quality],
 );
 const page = await context.newPage();
 const problems = [];

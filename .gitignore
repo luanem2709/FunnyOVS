@@ -9,3 +9,13 @@ references/
 *.log
 build/
 release/
+
+# Studio kit: chỉ theo dõi mã nguồn/dữ liệu; sản phẩm kết xuất, giọng đọc, khung hình tạm thì không
+studio/**/frames/
+studio/**/frames-test/
+studio/**/check/
+studio/**/voice/
+studio/**/timing.json
+studio/**/*.mp4
+studio/**/*.wav
+studio/**/*.jpg

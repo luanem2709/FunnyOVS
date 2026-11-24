@@ -9,6 +9,7 @@
  * ngồi trên ghế 0.49 và gõ bàn phím ở cao độ 0.82.
  */
 import * as THREE from "three";
+import { bakeGroup, softBox } from "./chibiProps.js";
 import { cloneAsset, peekAsset, placeOnFloor, centerXZ } from "./loader.js";
 import type { Manifest } from "./manifest.js";
 import {
@@ -73,6 +74,7 @@ const M = {
     roughness: 0.4,
   }),
   wood: new THREE.MeshStandardMaterial({ color: 0xa87f52, roughness: 0.7 }),
+  woodDark: new THREE.MeshStandardMaterial({ color: 0x7d5c3b, roughness: 0.8 }),
   prop: new THREE.MeshStandardMaterial({ color: 0xb0a08c, roughness: 0.8 }),
   panel: new THREE.MeshStandardMaterial({ color: 0xf6f4ee, roughness: 0.8 }),
   accent: new THREE.MeshStandardMaterial({ color: 0x1f6feb, roughness: 0.5 }),
@@ -295,12 +297,12 @@ function buildDesk(): THREE.Group {
   return g;
 }
 
-/** Ghế văn phòng: chân sao + mặt ghế + lưng. */
+/** Ghế văn phòng chibi: chân sao + mặt ghế và lưng bo tròn mềm + tay vịn (gộp theo vật liệu). */
 export function buildChair(): THREE.Group {
   const g = new THREE.Group();
   for (let k = 0; k < 5; k++) {
     const a = (k / 5) * Math.PI * 2;
-    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.04, 0.3), M.metal);
+    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.04, 0.3), M.metal); // hộp thường: nhỏ và nằm sát sàn nên bo tròn không nhìn ra
     leg.position.set(Math.sin(a) * 0.13, 0.06, Math.cos(a) * 0.13);
     leg.rotation.y = a;
     g.add(leg);
@@ -312,19 +314,13 @@ export function buildChair(): THREE.Group {
   stem.position.y = 0.25;
   g.add(stem);
 
-  const seat = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.1, 0.54), M.seat);
   // Mặt ghế phải nằm đúng cao độ SEAT_Y (0.49) — chibi ngồi dựa vào đây.
-  seat.position.y = SEAT_Y - 0.05;
-  seat.castShadow = true;
-  seat.receiveShadow = true;
-  g.add(seat);
-
-  const back = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.58, 0.1), M.seat);
-  back.position.set(0, SEAT_Y + 0.32, -0.27);
+  g.add(softBox(0.58, 0.1, 0.54, 0.04, M.seat, 0, SEAT_Y - 0.05, 0));
+  const back = softBox(0.52, 0.58, 0.1, 0.045, M.seat, 0, SEAT_Y + 0.32, -0.27);
   back.rotation.x = -0.12;
-  back.castShadow = true;
   g.add(back);
-  return g;
+  for (const sx of [-1, 1]) g.add(softBox(0.055, 0.05, 0.3, 0.02, M.metal, sx * 0.31, SEAT_Y + 0.14, -0.04, false));
+  return bakeGroup(g);
 }
 
 /** Màn hình máy tính trên bàn. */
@@ -366,32 +362,49 @@ function buildBoard(w: number, h: number, art?: "roadmap" | "content"): THREE.Gr
   return g;
 }
 
-/** Kệ sách. */
+/** Màu gáy sách (vật liệu dùng chung nên mọi kệ cùng một nhóm shader). */
+const BOOK_MATS = [0x4f9cf9, 0x43c59e, 0xf7b32b, 0xef6f8e, 0x8f7bf0, 0xff8c42, 0xe9e2d0].map((c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.85 }));
+
+/**
+ * Kệ sách chibi: khung RỖNG (lưng + hai hông + nóc + đáy + các ngăn) có sách thật xếp trong từng ngăn (trước đây là một khối đặc nên sách chìm hết).
+ * Sách đứng thẳng, cao thấp xen kẽ, thỉnh thoảng một cuốn nghiêng; toàn bộ gộp theo vật liệu nên chỉ vài lệnh vẽ.
+ */
 function buildShelf(w: number, h: number): THREE.Group {
   const g = new THREE.Group();
-  const frame = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.4), M.wood);
-  frame.position.y = h / 2;
-  frame.castShadow = true;
-  g.add(frame);
-  const colors = [0x4f9cf9, 0x43c59e, 0xf7b32b, 0xef6f8e, 0x8f7bf0];
-  const rows = 3;
+  const D = 0.4;
+  const side = 0.06;
+  g.add(softBox(w, h, 0.04, 0.012, M.woodDark, 0, h / 2, -D / 2 + 0.02)); // lưng
+  for (const sx of [-1, 1]) g.add(softBox(side, h, D, 0.02, M.wood, sx * (w / 2 - side / 2), h / 2, 0));
+  g.add(softBox(w, 0.07, D, 0.02, M.wood, 0, h - 0.035, 0)); // nóc
+  g.add(softBox(w, 0.12, D, 0.02, M.wood, 0, 0.06, 0)); // đáy
+  const rows = 4;
+  const inner = w - side * 2;
+  const top = h - 0.07;
+  const bottom = 0.12;
+  const gap = (top - bottom) / rows;
+  let seed = 7;
+  const rnd = (): number => {
+    seed = (seed * 16807) % 2147483647;
+    return seed / 2147483647;
+  };
   for (let r = 0; r < rows; r++) {
-    const y = 0.28 + r * (h / rows);
-    const shelf = new THREE.Mesh(new THREE.BoxGeometry(w - 0.1, 0.04, 0.44), M.wood);
-    shelf.position.y = y;
-    g.add(shelf);
-    const n = Math.floor((w - 0.3) / 0.16);
-    for (let i = 0; i < n; i++) {
-      const b = new THREE.Mesh(
-        new THREE.BoxGeometry(0.12, 0.24 + (i % 3) * 0.03, 0.28),
-        new THREE.MeshStandardMaterial({ color: colors[(i + r) % colors.length], roughness: 0.85 }),
-      );
-      b.position.set(-w / 2 + 0.2 + i * 0.16, y + 0.16, 0.04);
-      b.castShadow = true;
-      g.add(b);
+    const y0 = bottom + r * gap;
+    if (r > 0) g.add(softBox(inner, 0.035, D - 0.04, 0.012, M.wood, 0, y0, 0.0)); // ván ngăn
+    let x = -inner / 2 + 0.05;
+    let i = 0;
+    while (x < inner / 2 - 0.12) {
+      const bw = 0.05 + rnd() * 0.05;
+      const bh = gap * (0.62 + rnd() * 0.3);
+      const mat = BOOK_MATS[(i + r * 3 + Math.floor(rnd() * 3)) % BOOK_MATS.length];
+      const book = new THREE.Mesh(new THREE.BoxGeometry(bw, bh, 0.26), mat); // gáy sách nhỏ: hộp thường (12 tam giác thay vì ~100)
+      book.position.set(x + bw / 2, y0 + 0.0175 + bh / 2, 0.02);
+      if (rnd() < 0.08) book.rotation.z = 0.25; // một cuốn nghiêng
+      g.add(book);
+      x += bw + 0.004;
+      i++;
     }
   }
-  return g;
+  return bakeGroup(g);
 }
 
 /** Vật thể dự phòng dạng hộp đơn giản. */

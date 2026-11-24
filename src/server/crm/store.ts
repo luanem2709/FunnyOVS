@@ -4,7 +4,7 @@
  */
 import Database from "better-sqlite3";
 import type { BackupData } from "../../shared/backup.js";
-import { msg } from "../../shared/messages.js";
+import { ValidationError } from "../../shared/validation.js";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -13,19 +13,8 @@ import { DEAL_STAGES, OPEN_STAGES, type Activity, type CalendarEvent, type Conta
 export { DEAL_STAGES };
 export type { Activity, CalendarEvent, Contact, CrmSummary, Deal, DealStage, DraftStatus, EmailDraft };
 
-/**
- * Lỗi dữ liệu đầu vào. `key` + `vars` là khoá i18n (`val.*`) để REST/tool dịch theo ngôn ngữ người dùng;
- * `message` là bản tiếng Việt dự phòng.
- */
-export class ValidationError extends Error {
-  constructor(
-    readonly key: string,
-    readonly vars?: Record<string, string | number>,
-  ) {
-    super(msg("vi", key, vars));
-    this.name = "ValidationError";
-  }
-}
+/** Lỗi dữ liệu đầu vào (khoá i18n `val.*`): định nghĩa ở shared/validation.ts, xuất lại ở đây cho mã cũ. */
+export { ValidationError };
 
 const EMAIL_RE = /^[^\s@<>()[\]\\,;:"]+@[^\s@<>()[\]\\,;:"]+\.[^\s@<>()[\]\\,;:"]+$/;
 

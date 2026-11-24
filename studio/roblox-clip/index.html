@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8" />
+<title>Roblox-style clip</title>
+<style>
+  html, body { margin: 0; background: #000; overflow: hidden; }
+  #stage { position: relative; width: 1280px; height: 720px; background: #000; font-family: "Segoe UI", "Be Vietnam Pro", Arial, sans-serif; }
+  canvas { display: block; }
+  #sub { position: absolute; left: 80px; right: 80px; bottom: 12px; height: 68px; display: flex; align-items: center; justify-content: center; text-align: center; color: #fff; font-size: 30px; font-weight: 700; line-height: 1.25; text-shadow: 0 2px 0 #000, 2px 0 0 #000, -2px 0 0 #000, 0 -2px 0 #000, 0 4px 10px rgba(0,0,0,.6); }
+  #sub b { color: #ffd84a; }
+  #title { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; flex-direction: column; text-align: center; color: #fff; background: #0b0f1d; }
+  #title h1 { margin: 0 80px; font-size: 62px; line-height: 1.15; letter-spacing: 1px; }
+  #title p { margin: 18px 0 0; font-size: 28px; color: #9fb0d8; }
+  #fade { position: absolute; inset: 0; background: #000; opacity: 0; pointer-events: none; }
+  #hud { position: absolute; top: 112px; right: 30px; color: #fff; font-size: 30px; font-weight: 800; text-shadow: 0 2px 6px rgba(0,0,0,.7); text-align: right; display: none; }
+  #hud small { display: block; font-size: 18px; font-weight: 600; opacity: .85; }
+  #chip { position: absolute; top: 112px; left: 30px; color: #fff; font-size: 22px; font-weight: 800; padding: 6px 14px; border-radius: 10px; background: rgba(0,0,0,.45); display: none; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="chip"></div>
+  <div id="hud"></div>
+  <div id="sub"></div>
+  <div id="title"><h1></h1><p></p></div>
+  <div id="fade"></div>
+</div>
+<script type="importmap">{ "imports": { "three": "/three/build/three.module.js", "three/addons/": "/three/examples/jsm/" } }</script>
+<script type="module" src="/scene.js"></script>
+</body>
+</html>

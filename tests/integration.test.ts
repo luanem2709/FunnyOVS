@@ -331,8 +331,12 @@ describe("REST nghiệp vụ: mã lỗi, che bí mật, sức khoẻ (E4, H7, D4
   let orgReplaced = 0;
   const orgStub = { list: () => orgNodes, replaceAll: (raw: unknown) => ((orgNodes = Array.isArray(raw) ? raw : []), orgNodes.length), busy: () => orgBusy, onReplaced: () => void orgReplaced++ };
 
-  function start(isLoopback: () => boolean): Promise<void> {
-    hub = new AiHub({ dataDir: dir, env: { GROQ_API_KEY: "gsk_abcdefghijklmnop123456" }, fetchImpl: (async () => { throw new TypeError("fetch failed"); }) as typeof fetch });
+  const downFetch = (async () => {
+    throw new TypeError("fetch failed");
+  }) as typeof fetch;
+
+  function start(isLoopback: () => boolean, fetchImpl: typeof fetch = downFetch): Promise<void> {
+    hub = new AiHub({ dataDir: dir, env: { GROQ_API_KEY: "gsk_abcdefghijklmnop123456" }, fetchImpl });
     db = new OfficeDb(dir);
     gate = new ActionGate();
     audit = new AuditLog(path.join(dir, "audit.log"), () => hub.secrets.allValues());
@@ -436,6 +440,90 @@ describe("REST nghiệp vụ: mã lỗi, che bí mật, sức khoẻ (E4, H7, D4
       expect(await r.json()).toMatchObject({ code: "unknownProvider", vars: { id: "khong-co" } });
     }
     expect(hub.secrets.names().some((n) => n.includes("khong-co"))).toBe(false);
+  });
+
+  it("nút + Thêm API qua REST: kiểm tra, thêm, sắp xếp, xoay vòng, sửa, xoá — chỉ từ chính máy, khoá không lộ ở phản hồi lẫn nhật ký", async () => {
+    const REST = "https://llm.rest.test/v1";
+    const KEY = "khoa-rest-bi-mat-123456";
+    const fake = (async (input: string | URL | Request) => {
+      const u = String(input);
+      if (u === `${REST}/models`) return new Response(JSON.stringify({ data: [{ id: "rest-70b" }, { id: "rest-mini" }] }), { status: 200, headers: { "content-type": "application/json" } });
+      throw new TypeError("fetch failed");
+    }) as typeof fetch;
+    const send = (method: string, url: string, body?: unknown) => j(url, { method, body: body === undefined ? undefined : JSON.stringify(body) });
+
+    await start(() => false, fake);
+    for (const [method, url, body] of [
+      ["POST", "/api/ai/custom/check", { baseUrl: REST }],
+      ["POST", "/api/ai/custom", { label: "REST", baseUrl: REST }],
+      ["PATCH", "/api/ai/custom/u-rest-0000", { label: "x" }],
+      ["DELETE", "/api/ai/custom/u-rest-0000", undefined],
+      ["PUT", "/api/ai/order", { order: ["groq"] }],
+      ["PUT", "/api/ai/strategy", { strategy: "roundrobin" }],
+    ] as const) {
+      const r = await send(method, url, body);
+      expect(r.status, `${method} ${url}`).toBe(403);
+      expect(await r.json()).toMatchObject({ code: "loopbackOnly" });
+    }
+    await new Promise<void>((r) => server.close(() => r()));
+    db.close();
+    await start(() => true, fake);
+
+    // kiểm tra trước khi lưu
+    expect(await (await send("POST", "/api/ai/custom/check", { baseUrl: REST })).json()).toMatchObject({ ok: true, key: "ai.check.ok", vars: { n: 2 }, models: ["rest-70b", "rest-mini"] });
+    expect(await (await send("POST", "/api/ai/custom/check", { baseUrl: "ftp://x" })).json()).toMatchObject({ ok: false, key: "val.ai.baseUrlProtocol" });
+
+    // lỗi đầu vào: 400 + khoá i18n đầy đủ (client dịch)
+    for (const [body, code] of [
+      [{ baseUrl: REST }, "val.ai.labelRequired"],
+      [{ label: "x", baseUrl: "không phải url" }, "val.ai.baseUrlInvalid"],
+      [{ label: "x", baseUrl: "https://u:p@h.test/v1" }, "val.ai.baseUrlCredentials"],
+    ] as const) {
+      const r = await send("POST", "/api/ai/custom", body);
+      expect(r.status).toBe(400);
+      expect(((await r.json()) as { code: string }).code).toBe(code);
+    }
+
+    // thêm
+    const addRes = await send("POST", "/api/ai/custom", { label: "REST API", baseUrl: `${REST}/`, apiKey: KEY, free: true });
+    expect(addRes.status).toBe(200);
+    const added = (await addRes.json()) as { id: string; custom: boolean; state: string; baseUrl: string; hasKey: boolean };
+    expect(added).toMatchObject({ custom: true, state: "ready", baseUrl: REST, hasKey: true });
+    expect(JSON.stringify(added)).not.toContain(KEY);
+
+    // sắp xếp + xoay vòng được lưu và hiện ở /api/ai/status
+    expect((await send("PUT", "/api/ai/order", { order: [added.id, "groq"] })).status).toBe(200);
+    expect((await send("PUT", "/api/ai/order", { order: "không-phải-mảng" })).status).toBe(400);
+    expect((await send("PUT", "/api/ai/strategy", { strategy: "roundrobin" })).status).toBe(200);
+    const bad = await send("PUT", "/api/ai/strategy", { strategy: "lung-tung" });
+    expect(bad.status).toBe(400);
+    expect(((await bad.json()) as { code: string }).code).toBe("val.ai.badStrategy");
+    const status = (await (await send("GET", "/api/ai/status")).json()) as { providers: Array<{ id: string }>; strategy: string };
+    expect(status.strategy).toBe("roundrobin");
+    expect(status.providers[0].id).toBe(added.id);
+
+    // sửa: nguồn của mình được, nguồn dựng sẵn bị từ chối
+    const edited = (await (await send("PATCH", `/api/ai/custom/${added.id}`, { label: "REST đổi tên", model: "rest-mini" })).json()) as { label: string; modelOverride?: string; activeModel?: string };
+    expect(edited.label).toBe("REST đổi tên");
+    expect(edited.activeModel).toBe("rest-mini");
+    const builtIn = await send("PATCH", "/api/ai/custom/groq", { label: "x" });
+    expect(builtIn.status).toBe(400);
+    expect(((await builtIn.json()) as { code: string }).code).toBe("val.ai.notCustom");
+    // khoá của nguồn tuỳ chỉnh dùng chung các route khoá/bật tắt/model sẵn có
+    expect((await send("POST", `/api/ai/${added.id}/enabled`, { enabled: false })).status).toBe(200);
+    expect((await send("DELETE", `/api/ai/${added.id}/key`)).status).toBe(200);
+
+    // xoá
+    expect((await send("DELETE", `/api/ai/custom/${added.id}`)).status).toBe(200);
+    expect(((await (await send("GET", "/api/ai/status")).json()) as { providers: Array<{ id: string }> }).providers.some((p) => p.id === added.id)).toBe(false);
+    expect((await send("DELETE", `/api/ai/custom/${added.id}`)).status).toBe(400);
+
+    // nhật ký có dấu vết nhưng KHÔNG chứa khoá; địa chỉ chỉ ghi máy chủ (host), không ghi đường dẫn
+    const entries = (await (await send("GET", "/api/audit?limit=50")).json()) as Array<{ kind: string; detail: Record<string, unknown> }>;
+    const kinds = entries.map((e) => e.kind);
+    for (const k of ["ai.provider.add", "ai.provider.edit", "ai.provider.remove", "ai.order", "ai.strategy"]) expect(kinds, k).toContain(k);
+    expect(entries.find((e) => e.kind === "ai.provider.add")!.detail).toMatchObject({ label: "REST API", host: "llm.rest.test", hasKey: true });
+    expect(JSON.stringify(entries) + fs.readFileSync(path.join(dir, "audit.log"), "utf8")).not.toContain(KEY);
   });
 
   it("nhật ký bảo mật (K1): mọi thay đổi nhạy cảm để lại dấu vết nhưng KHÔNG chứa bí mật; chỉ đọc được từ chính máy", async () => {
@@ -596,6 +684,8 @@ describe("REST nghiệp vụ: mã lỗi, che bí mật, sức khoẻ (E4, H7, D4
     expect(h.memoryMb).toBeGreaterThan(0);
     expect(h.ai.total).toBeGreaterThan(5);
     expect(h.ai.providers).toContain("groq"); // khoá từ môi trường → sẵn sàng
+    expect(h.ai.names).toHaveLength(h.ai.providers.length); // nhãn hiển thị song song với id
+    expect(h.ai.names).toContain("Groq");
   });
 });
 

@@ -26,8 +26,11 @@ Chỉ tham khảo **ý tưởng**, không sao chép mã (`src/server/org/*`, `sr
 Ba dự án không ghi giấy phép được coi là "bảo lưu mọi quyền": FunnyOVS **không** copy mã hay nội dung của chúng.
 
 ## Dịch vụ AI bên ngoài (không đi kèm mã)
-FunnyOVS **kết nối** (qua giao diện OpenAI-compatible) tới các dịch vụ do người dùng tự cài hoặc tự đăng ký: [OmniRoute](https://github.com/diegosouzapw/OmniRoute) (cổng gom nhiều nguồn AI, chạy cục bộ),
-Ollama, LM Studio, Groq, Google Gemini, Cerebras, Mistral, OpenRouter, GitHub Models. **Không copy mã hay asset** của các dịch vụ này; điều khoản sử dụng của từng dịch vụ do người dùng chấp nhận khi tạo khoá.
+FunnyOVS **kết nối** (qua giao diện OpenAI-compatible) tới các dịch vụ do người dùng tự cài hoặc tự đăng ký: [OmniRoute](https://github.com/diegosouzapw/OmniRoute) và [9router](https://github.com/decolua/9router) (cổng gom nhiều nguồn AI, chạy cục bộ),
+Ollama, LM Studio, Groq, Google Gemini, Cerebras, Mistral, OpenRouter, NVIDIA NIM, SambaNova và mọi điểm cuối tương thích OpenAI do bạn tự thêm. **Không copy mã hay asset** của các dịch vụ này; điều khoản sử dụng của từng dịch vụ do người dùng chấp nhận khi tạo khoá.
+
+## Thanh toán (lớp kinh tế, tuỳ chọn)
+Lớp kinh tế (`src/server/economy/`) **kết nối** tới giao thức [x402](https://www.x402.org) (qua facilitator do bạn chọn) và API [Stripe](https://stripe.com) bằng `fetch`, không đi kèm SDK hay mã của họ; chỉ NHẬN tiền ở giai đoạn 1. Điều khoản của từng dịch vụ do bạn chấp nhận khi tạo tài khoản/khoá.
 
 ## Sửa đổi trên mã port
 `src/client/assets/chibiRig.js` (port từ my-office, MIT): thêm **cà vạt** cho áo sơ mi (`cfg.tie`), **huy hiệu** ngực màu phòng ban (`cfg.badge`), và đặt các chi tiết (cà vạt, ve áo, huy hiệu) **lên đúng bề mặt thân** (`torsoSurf`) để thấy được từ xa. Phần còn lại giữ nguyên.

@@ -17,11 +17,13 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const PORT = process.env.VERIFY_PORT ?? "8811";
 const MOCK_PORT = process.env.VERIFY_MOCK_PORT ?? "11435";
 const base = `http://127.0.0.1:${PORT}`;
+const ECO_PORT = process.env.VERIFY_ECO_PORT ?? "8813";
+const ecoPublic = `http://127.0.0.1:${ECO_PORT}`;
 
 const mock = spawn(process.execPath, [path.join(root, "scripts", "mock-llm.mjs")], { env: { ...process.env, MOCK_PORT }, stdio: "ignore" });
 // stdin dạng pipe: đóng stdin = báo cho máy chủ cách ly tự dọn thư mục tạm rồi thoát.
 const server = spawn(process.execPath, [path.join(root, "scripts", "preview-server.mjs")], {
-  env: { ...process.env, PREVIEW_PORT: PORT, PREVIEW_STDIN_CLOSE: "1", OLLAMA_HOST: `127.0.0.1:${MOCK_PORT}` },
+  env: { ...process.env, PREVIEW_PORT: PORT, PREVIEW_STDIN_CLOSE: "1", OLLAMA_HOST: `127.0.0.1:${MOCK_PORT}`, ECONOMY_RAIL: "mock", ECONOMY_PUBLIC_PORT: ECO_PORT, ECONOMY_REINVEST_MIN_USD: "0.01" },
   stdio: ["pipe", "ignore", "ignore"],
 });
 /** Đóng stdin để máy chủ tự dọn thư mục tạm, và ĐỢI nó thoát (nếu cha thoát trước, Windows có thể giết con giữa chừng → rò thư mục tạm). */
@@ -112,7 +114,7 @@ if (ollamaReady) {
   await ollama.locator("button", { hasText: /^Test$/ }).click();
   await page.waitForTimeout(2500);
   ok("AI: Kiểm thử Ollama báo 'Working'", /Working — \d+ms/.test(await ollama.innerText()), (await ollama.innerText()).match(/Working[^\n]*/)?.[0] ?? "");
-  ok("AI: chấm sức khoẻ trên thanh đầu đổi sang 'AI: ollama'", /AI: ollama/.test(await text(".healthpill")), await text(".healthpill"));
+  ok("AI: chấm sức khoẻ trên thanh đầu đổi sang 'AI: Ollama' (nhãn, không phải id)", /AI: Ollama/.test(await text(".healthpill")), await text(".healthpill"));
 }
 
 // dán khoá giả (chỉ lưu trên máy chủ cách ly), thấy bản che, rồi xoá
@@ -125,6 +127,67 @@ ok("AI: Groq chuyển sang 'Ready' sau khi có khoá", /Ready/.test(groqText));
 await groq.locator("button", { hasText: "Remove key" }).click();
 await page.waitForTimeout(1500);
 ok("AI: xoá khoá → quay lại 'Needs key'", /Needs key/.test(await groq.innerText()));
+
+// ---- Nút "+ Thêm API": gom API tuỳ chỉnh vào bộ router (kiểm tra, thêm, dùng thử, sắp xếp, xoay vòng, sửa, xoá) — trỏ vào LLM giả
+await page.locator(".aitop button", { hasText: "+ Add API" }).click();
+const addForm = page.locator('form[data-form="add"]');
+ok("Thêm API: biểu mẫu hiện ra (mẫu, tên, địa chỉ, khoá, model) và ô đầu tiên được focus", (await addForm.count()) === 1 && (await addForm.locator("input, select").count()) >= 6 && (await page.evaluate(() => document.activeElement?.closest('form[data-form="add"]') !== null)));
+await addForm.getByRole("button", { name: "Add API", exact: true }).click();
+ok("Thêm API: gửi trống → báo lỗi 'Give this AI source a name' (role=alert), chưa thêm gì", /Give this AI source a name/.test(await addForm.locator('[role="alert"]').innerText().catch(() => "")));
+await addForm.locator("select").first().selectOption({ label: "OpenAI" });
+ok("Thêm API: chọn mẫu OpenAI điền sẵn tên + địa chỉ (không điền khoá)", (await addForm.getByLabel("API address", { exact: true }).inputValue()) === "https://api.openai.com/v1" && (await addForm.getByLabel("Name", { exact: true }).inputValue()) === "OpenAI" && (await addForm.getByLabel("API key (can be empty)").inputValue()) === "");
+{
+  const aaIssues = await auditPage(page, { expectLang: "en" });
+  ok("Thêm API: biểu mẫu đạt quét tiếp cận (nhãn ô nhập, tên truy cập)", aaIssues.length === 0, aaIssues.slice(0, 3).join(" | "));
+  const aaLow = await auditContrast(page);
+  ok("Thêm API: biểu mẫu đạt tương phản WCAG AA", aaLow.length === 0, aaLow.slice(0, 3).join(" | "));
+}
+await addForm.locator("select").first().selectOption("");
+await addForm.getByLabel("Name", { exact: true }).fill("Mock Gateway");
+await addForm.getByLabel("API address", { exact: true }).fill(`http://127.0.0.1:${MOCK_PORT}/v1`);
+await addForm.getByRole("button", { name: "Check connection" }).click();
+await page.waitForTimeout(1500);
+ok("Thêm API: 'Kiểm tra kết nối' tới LLM giả báo thấy model", /Connected — found \d+ model/.test(await text('form[data-form="add"] [role="status"]')), await text('form[data-form="add"] [role="status"]'));
+await addForm.getByLabel("API address", { exact: true }).fill("ftp://x.test");
+await addForm.getByRole("button", { name: "Check connection" }).click();
+ok("Thêm API: địa chỉ sai giao thức bị báo ngay ở trình duyệt", /must start with http/.test(await addForm.locator('[role="alert"]').innerText().catch(() => "")));
+await addForm.getByLabel("API address", { exact: true }).fill(`http://127.0.0.1:${MOCK_PORT}/v1`);
+await addForm.getByLabel("Mark as a free source").check();
+await addForm.getByRole("button", { name: "Add API", exact: true }).click();
+await page.waitForTimeout(1800);
+const mockCard = page.locator('[data-provider^="u-mock-gateway-"]');
+ok("Thêm API: nguồn mới hiện thành thẻ 'Custom' + 'Free' và 'Ready', biểu mẫu tự đóng", (await mockCard.count()) === 1 && (await addForm.count()) === 0 && /Custom/.test(await mockCard.innerText()) && /Free/.test(await mockCard.innerText()) && /Ready/.test(await mockCard.innerText()), (await mockCard.innerText().catch(() => "")).replace(/\s+/g, " ").slice(0, 140));
+await mockCard.locator("button", { hasText: /^Test$/ }).click();
+await page.waitForTimeout(2500);
+ok("Thêm API: 'Test' chạy thật qua nguồn mới → 'Working'", /Working — \d+ms/.test(await mockCard.innerText()), (await mockCard.innerText()).match(/Working[^\n]*/)?.[0] ?? "");
+ok("Thêm API: chỉ báo AI trên thanh đầu hiện TÊN nguồn tuỳ chỉnh, không phải id kỹ thuật 'u-…'", /Mock Gateway/.test(await text(".healthpill")) && !/u-mock-gateway/.test(await text(".healthpill")), await text(".healthpill"));
+
+const order = () => page.locator(".aicard").evaluateAll((els) => els.map((e) => e.getAttribute("data-provider")));
+const before = await order();
+const at = before.findIndex((id) => id?.startsWith("u-mock-gateway-"));
+await mockCard.getByRole("button", { name: "Move Mock Gateway up" }).click();
+await page.waitForTimeout(1200);
+const after = await order();
+ok("Thêm API: nút ↑ đổi thứ tự ưu tiên (nguồn lên một bậc) và được lưu ở máy chủ", after.findIndex((id) => id?.startsWith("u-mock-gateway-")) === at - 1 && (await page.evaluate(async () => (await (await fetch("/api/ai/status")).json()).providers.findIndex((p) => p.custom))) === at - 1, `${at} → ${after.findIndex((id) => id?.startsWith("u-mock-gateway-"))}`);
+
+await page.locator(".aistrategy select").selectOption("roundrobin");
+await page.waitForTimeout(1000);
+ok("Thêm API: chọn 'Xoay vòng' được lưu và hiện ghi chú xoay vòng", (await page.evaluate(async () => (await (await fetch("/api/ai/status")).json()).strategy)) === "roundrobin" && /Round-robin is on/.test(await text(".aipanel")));
+await page.locator(".aistrategy select").selectOption("priority");
+await page.waitForTimeout(600);
+
+await mockCard.getByRole("button", { name: "Edit", exact: true }).click();
+const editForm = page.locator('form[data-form="edit"]');
+await editForm.getByLabel("Name", { exact: true }).fill("Mock Gateway 2");
+await editForm.getByRole("button", { name: "Save changes" }).click();
+await page.waitForTimeout(1500);
+ok("Thêm API: sửa tên nguồn tuỳ chỉnh được lưu", /Mock Gateway 2/.test(await mockCard.locator(".aihead b").innerText()) && (await editForm.count()) === 0);
+
+await mockCard.getByRole("button", { name: "Remove", exact: true }).click();
+ok("Thêm API: xoá phải xác nhận (hộp 'Remove this source?')", /Remove this source\?/.test(await mockCard.locator('[role="alertdialog"]').innerText()));
+await mockCard.getByRole("button", { name: "Remove source" }).click();
+await page.waitForTimeout(1500);
+ok("Thêm API: xoá xong thẻ biến mất và máy chủ không còn nguồn tuỳ chỉnh", (await page.locator('[data-provider^="u-mock-gateway-"]').count()) === 0 && (await page.evaluate(async () => (await (await fetch("/api/ai/status")).json()).providers.some((p) => p.custom))) === false);
 
 // ---- C3: tab CRM
 await tab(2).click();
@@ -333,6 +396,115 @@ const reread = await page.evaluate(
   { id: staff.id, name: staff.name, target: path.join(root, "package.json") },
 );
 ok("Duyệt: quyết định có hiệu lực thật — đọc lại tệp được phép (200)", reread === 200, `HTTP ${reread}`);
+
+// ---- EAL: lớp kinh tế — thẻ Tổng quan, bảng KPI 3D, xuất bản có duyệt, paywall ở cổng riêng, riêng tư, dừng khẩn cấp
+await page.getByRole("tab", { name: /Overview/ }).click();
+await page.waitForTimeout(900);
+const ecoText = await text(".ecocard");
+ok("Kinh tế: thẻ ở tab Tổng quan hiện 'Economic autonomy', trạng thái 'Running' và chế độ 'Test'", (await page.locator(".ecocard").count()) === 1 && /economic autonomy/i.test(ecoText) && /running/i.test(ecoText) && /test/i.test(ecoText), ecoText.replace(/\s+/g, " ").slice(0, 120));
+await page.waitForTimeout(800);
+const ecoHook = await page.evaluate(() => window.__officeEconomy?.());
+ok("Kinh tế: bảng KPI ở Phòng Tài chính đã vẽ và trạng thái EAL (rail giả) đã tới client", Boolean(ecoHook?.painted) && ecoHook.state?.enabled === true && ecoHook.state.rail === "mock", String(ecoHook?.painted).slice(0, 60));
+const ecoCfg = await page.evaluate(async () => await (await fetch("/api/config")).json());
+const insightsDir = path.join(ecoCfg.workspace, "public", "insights");
+fs.mkdirSync(insightsDir, { recursive: true });
+fs.writeFileSync(path.join(insightsDir, "verify-report.md"), "# Verify report\n\nPublic aggregate numbers only.\n");
+fs.writeFileSync(path.join(insightsDir, "leaky.md"), "# Leaky\n\nWrite to bob@example.com\n");
+const ecoPost = async (route, body) => { const r = await fetch(`${base}${route}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body ?? {}) }); return { status: r.status, body: await r.json().catch(() => ({})) }; }; // phía Node: các yêu cầu cố ý sai không sinh lỗi console trong trình duyệt
+const leak = await ecoPost("/api/economy/publish", { topic: "leaky", priceUsd: 0.5 });
+ok("Kinh tế: báo cáo chứa email bị chặn ngay (400, mã val.economy.privacy), không tạo hộp duyệt", leak.status === 400 && leak.body.code === "val.economy.privacy" && (await page.locator(".approval-dock .approval").count()) === 0, JSON.stringify(leak.body).slice(0, 100));
+const pub = await ecoPost("/api/economy/publish", { topic: "verify-report", priceUsd: 0.5 });
+ok("Kinh tế: xin xuất bản trả 202 và chờ duyệt", pub.status === 202 && pub.body.awaiting === "approval", JSON.stringify(pub.body).slice(0, 100));
+ok("Kinh tế: chưa duyệt thì chưa bán (cổng công khai trả 404)", (await fetch(`${ecoPublic}/api/public/insights/verify-report`)).status === 404);
+await page.waitForTimeout(1000);
+const ecoApproval = await text(".approval-dock .approval");
+ok("Kinh tế: hộp duyệt trong cảnh hiện 'xuất bản báo cáo' kèm tên chủ đề và giá", (await page.locator(".approval-dock .approval").count()) === 1 && /verify-report/.test(ecoApproval) && /publish/i.test(ecoApproval) && /\$0\.5/.test(ecoApproval), ecoApproval.replace(/\s+/g, " ").slice(0, 120));
+await page.locator(".approval-dock .approval button.primary").click();
+await page.waitForTimeout(1000);
+const ecoState1 = await page.evaluate(async () => await (await fetch("/api/economy/state")).json());
+ok("Kinh tế: sau khi duyệt, báo cáo vào gian hàng", ecoState1.products.length === 1 && ecoState1.products[0].topic === "verify-report" && ecoState1.products[0].priceMicro === 500000);
+const pay402 = await fetch(`${ecoPublic}/api/public/insights/verify-report`);
+const pay402Body = await pay402.json();
+ok("Kinh tế: chưa trả tiền → HTTP 402 kèm yêu cầu thanh toán", pay402.status === 402 && pay402Body.error === "payment_required" && pay402Body.priceMicro === 500000);
+const proof = { "x-mock-payment": "mock:500000:verifyabc123" };
+const pay200 = await fetch(`${ecoPublic}/api/public/insights/verify-report`, { headers: proof });
+const pay200Body = await pay200.json();
+ok("Kinh tế: trả đủ tiền → HTTP 200 kèm nội dung báo cáo", pay200.status === 200 && /Public aggregate numbers/.test(pay200Body.content ?? ""));
+ok("Kinh tế: dùng lại cùng bằng chứng thanh toán bị từ chối (402), chỉ thu một lần", (await fetch(`${ecoPublic}/api/public/insights/verify-report`, { headers: proof })).status === 402);
+ok("Kinh tế: cổng công khai KHÔNG lộ API chính (state/cài đặt/dừng khẩn cấp đều 404)", (await Promise.all(["/api/economy/state", "/api/config", "/api/emergency-stop", "/api/ai/status"].map((r) => fetch(`${ecoPublic}${r}`).then((x) => x.status)))).every((c) => c === 404));
+await page.waitForTimeout(900);
+const ecoHook2 = await page.evaluate(() => window.__officeEconomy?.());
+ok("Kinh tế: bảng KPI 3D vẽ lại với số liệu mới (đã thu $0.5, sổ cái nguyên vẹn)", ecoHook2.painted !== ecoHook.painted && ecoHook2.state.receivedMicro === 500000 && ecoHook2.state.ledgerOk === true, `${ecoHook2.state.receivedMicro}`);
+ok("Kinh tế: thẻ Tổng quan hiện số tiền đã thu", /\$0\.5/.test(await text(".ecocard")));
+const ledgerRes = await page.evaluate(async () => await (await fetch("/api/economy/ledger")).json());
+ok("Kinh tế: sổ cái băm nối nguyên vẹn và có dòng 'settled'", ledgerRes.verify.ok === true && ledgerRes.rows.some((r) => r.kind === "settled" && r.amount === 500000));
+const cycle = await ecoPost("/api/economy/cycle");
+ok("Kinh tế: chốt chu kỳ thủ công ghi doanh thu − chi phí vào sổ cái", cycle.status === 200 && cycle.body.cycle && cycle.body.cycle.revenue === 500000 && cycle.body.cycle.cost >= 0, JSON.stringify(cycle.body).slice(0, 100));
+await page.waitForTimeout(900);
+// chu kỳ lãi → đề xuất tái đầu tư hiện hộp duyệt: từ chối để không để lại hộp chờ
+const reinvestBox = await text(".approval-dock .approval");
+ok("Kinh tế: chu kỳ lãi → hộp duyệt ĐỀ XUẤT tái đầu tư (không tự chi tiền)", /reinvest/i.test(reinvestBox), reinvestBox.replace(/\s+/g, " ").slice(0, 100));
+await page.locator(".approval-dock .approval button.danger").click();
+await page.waitForTimeout(700);
+// dừng khẩn cấp dừng cả EAL
+await ecoPost("/api/emergency-stop");
+await page.waitForTimeout(900);
+const emerPay = await fetch(`${ecoPublic}/api/public/insights/verify-report`, { headers: { "x-mock-payment": "mock:500000:afteremergency1" } });
+const emerState = await page.evaluate(async () => await (await fetch("/api/economy/state")).json());
+ok("Kinh tế: DỪNG KHẨN CẤP → cổng công khai trả 503 và KHÔNG thu tiền", emerPay.status === 503 && emerState.emergency === true && emerState.receivedMicro === 500000, `HTTP ${emerPay.status}`);
+ok("Kinh tế: thẻ Tổng quan hiện 'EMERGENCY STOP'", /emergency stop/i.test(await text(".ecocard")));
+const emerPropose = await ecoPost("/api/economy/publish", { topic: "verify-report", priceUsd: 1 });
+ok("Kinh tế: đang dừng khẩn cấp không xin xuất bản được (400 val.economy.emergency)", emerPropose.status === 400 && emerPropose.body.code === "val.economy.emergency");
+await ecoPost("/api/emergency-stop");
+await page.waitForTimeout(700);
+ok("Kinh tế: hết dừng khẩn cấp → bán lại được", (await fetch(`${ecoPublic}/api/public/insights/verify-report`, { headers: { "x-mock-payment": "mock:500000:afteremergency2" } })).status === 200);
+const ecoAudit = await page.evaluate(async () => (await (await fetch("/api/audit?limit=60")).json()));
+const ecoKinds = new Set((Array.isArray(ecoAudit) ? ecoAudit : (ecoAudit.entries ?? [])).map((e) => e.kind));
+ok("Kinh tế: nhật ký bảo mật có xuất bản, bán hàng, chu kỳ, tái đầu tư", ["economy.publish", "economy.sale", "economy.cycle", "economy.reinvest"].every((k) => ecoKinds.has(k)), [...ecoKinds].filter((k) => k.startsWith("economy")).join(","));
+// ---- Studio dựng clip: thẻ Tổng quan, tạo dự án từ mẫu, xem thử THẬT (Chrome), hộp duyệt trước khi gửi lời đọc ra ngoài, dừng khẩn cấp
+await page.getByRole("tab", { name: /Overview/ }).click();
+await page.waitForTimeout(600);
+const studioCard = await text(".studiocard");
+ok("Studio: thẻ ở tab Tổng quan hiện 'Clip studio' và lời nhắc lời đọc chỉ gửi sau khi duyệt", (await page.locator(".studiocard").count()) === 1 && /clip studio/i.test(studioCard) && /approve/i.test(studioCard), studioCard.slice(0, 100));
+await page.locator(".studiocard input").fill("verify-clip");
+await page.locator(".studiocard button", { hasText: "Create from sample" }).click();
+await page.waitForFunction(() => document.querySelector(".studiocard select")?.value === "verify-clip", null, { timeout: 8000 }).catch(() => undefined);
+const studioDir = path.join(ecoCfg.workspace, "studio", "verify-clip");
+ok("Studio: tạo dự án từ mẫu → đủ 3 file dữ liệu trong workspace và dự án hiện trong danh sách", ["loi-doc.json", "shots.json", "characters.json"].every((f) => fs.existsSync(path.join(studioDir, f))) && (await page.locator(".studiocard select option").allInnerTexts()).includes("verify-clip"));
+const studioPost = async (route, body) => { const r = await fetch(`${base}${route}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body ?? {}) }); return { status: r.status, body: await r.json().catch(() => ({})) }; };
+const studioTools = await page.evaluate(async () => (await (await fetch("/api/studio/state")).json()).tools);
+if (studioTools?.chrome) {
+  await page.locator(".studiocard button", { hasText: "Preview" }).click();
+  await page.waitForFunction(() => document.querySelectorAll(".studiostills img").length === 10, null, { timeout: 90000 }).catch(() => undefined);
+  await page.waitForTimeout(800);
+  const loaded = await page.evaluate(() => [...document.querySelectorAll(".studiostills img")].filter((i) => i.naturalWidth > 0).length);
+  ok("Studio: 'Xem thử' chạy Chrome thật → 10 ảnh (mỗi cảnh một ảnh) hiện trong thẻ", loaded === 10, `${loaded}/10 ảnh`);
+  ok("Studio: việc dựng báo 'Done' và không gửi gì ra ngoài (không có hộp duyệt)", /done/i.test(await text(".studiojobs")) && (await page.locator(".approval-dock .approval").count()) === 0);
+  if (studioTools.voice) {
+    await page.locator(".studiocard button", { hasText: "Render video + voice-over" }).click();
+    await page.waitForTimeout(1200);
+    const voiceBox = await text(".approval-dock .approval");
+    ok("Studio: dựng có giọng → hộp duyệt trong cảnh nêu tên dự án và 'online voice service'", /verify-clip/.test(voiceBox) && /online voice service/i.test(voiceBox), voiceBox.slice(0, 140));
+    ok("Studio: trong lúc chờ duyệt chưa tạo giọng nào (chưa gửi gì ra ngoài)", !fs.existsSync(path.join(studioDir, "voice")) && /waiting for you to approve/i.test(await text(".studiojobs")));
+    await page.locator(".approval-dock .approval button.danger").click();
+    await page.waitForTimeout(1200);
+    ok("Studio: từ chối → việc 'Cancelled', vẫn chưa có giọng nào", /cancelled/i.test(await text(".studiojobs")) && !fs.existsSync(path.join(studioDir, "voice")));
+  }
+} else {
+  console.log("  (bỏ qua xem thử: máy không có Chrome/Edge)");
+}
+const badStudio = await studioPost("/api/studio/projects", { project: "../evil" });
+ok("Studio: tên dự án thoát thư mục bị từ chối (400, val.studio.projectInvalid), không tạo gì", badStudio.status === 400 && badStudio.body.code === "val.studio.projectInvalid" && !fs.existsSync(path.join(ecoCfg.workspace, "evil")));
+await studioPost("/api/emergency-stop");
+const emerStudio = await studioPost("/api/studio/render", { project: "verify-clip", preview: true });
+ok("Studio: DỪNG KHẨN CẤP → không nhận việc dựng (400, val.studio.emergency)", emerStudio.status === 400 && emerStudio.body.code === "val.studio.emergency", JSON.stringify(emerStudio.body).slice(0, 90));
+await studioPost("/api/emergency-stop");
+const studioAudit = await page.evaluate(async () => (await (await fetch("/api/audit?limit=100")).json()));
+const studioKinds = new Set((Array.isArray(studioAudit) ? studioAudit : (studioAudit.entries ?? [])).map((e) => e.kind));
+ok("Studio: nhật ký bảo mật có lưu dữ liệu và dựng clip", ["studio.save", ...(studioTools?.chrome ? ["studio.render"] : [])].every((k) => studioKinds.has(k)), [...studioKinds].filter((k) => k.startsWith("studio")).join(","));
+
+await page.getByRole("tab", { name: /Company/ }).click();
+await page.waitForTimeout(300);
 
 // ---- E: dịch giao diện sang tiếng Việt, kể cả chuỗi do server sinh
 await page.locator('button[aria-label][title]', { hasText: /^EN$/ }).first().click();

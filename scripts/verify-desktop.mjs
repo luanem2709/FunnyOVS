@@ -81,7 +81,7 @@ try {
   ok("GET /api/health: DB ổn, có phiên bản", health.ok === true && /^\d+\.\d+\.\d+$/.test(health.version), `v${health.version}, ${health.memoryMb} MB`);
   ok("Server chỉ nghe loopback (không bật LAN)", health.lan === false);
   const ai = await get("/api/ai/status");
-  ok("GET /api/ai/status: 9 nhà cung cấp, không lộ khoá", ai.providers.length >= 9 && !JSON.stringify(ai).match(/gsk_|sk-[A-Za-z0-9]{10}/));
+  ok("GET /api/ai/status: đủ 10 nguồn dựng sẵn, không lộ khoá", ai.providers.length >= 10 && !JSON.stringify(ai).match(/gsk_|sk-[A-Za-z0-9]{10}/));
   const mail = await get("/api/mail/config");
   ok("GET /api/mail/config: không có mật khẩu", mail.smtpPassSet === false && !("smtpPass" in mail));
   const crm = await get("/api/crm/summary");
@@ -100,6 +100,8 @@ try {
   await page.waitForTimeout(3500);
   ok("/office-3d/ tải được, có tiêu đề công ty", /Desktop Verify/.test(await page.locator(".brand .company").innerText()));
   ok("Có canvas 3D (WebGL chạy trong Electron)", (await page.locator("canvas").count()) > 0);
+  // đợi React gắn xong (lang đặt trong effect, vùng aria-live dựng sau khi tải cài đặt): cố định 3,5 s đôi khi chưa đủ lúc máy bận → đo trước khi kết luận, không đổi điều kiện đạt
+  await page.waitForFunction(() => document.documentElement.lang === "en" && document.querySelector('[data-announcer="approvals"]') && document.querySelector('[data-announcer="flows"]'), null, { timeout: 15000 }).catch(() => {});
   ok("Trang khai báo lang theo ngôn ngữ đang chọn và có vùng aria-live cho yêu cầu duyệt + luồng việc", (await page.evaluate(() => document.documentElement.lang)) === "en" && (await page.locator('[data-announcer="approvals"][aria-live="assertive"]').count()) === 1 && (await page.locator('[data-announcer="flows"][aria-live="polite"]').count()) === 1);
   const board = await page.evaluate(() => window.__officeBoard?.());
   ok("Bảng việc sống và huy hiệu trên bàn có mặt trong cảnh (17 người, chưa có việc nào mở)", Boolean(board) && board.badges.length >= 17 && board.badges.every((b) => !b.visible) && board.info.flows.length === 0, board ? `${board.badges.length} bàn` : "không có móc");
@@ -131,6 +133,24 @@ try {
     ok("nodemailer và imapflow nạp được trong bản cài (email thật chạy được)", out === "function:function", out);
   } catch (e) {
     ok("nodemailer và imapflow nạp được trong bản cài (email thật chạy được)", false, e instanceof Error ? e.message.slice(0, 160) : String(e));
+  }
+  // Studio: kit + three đi kèm bản cài và kết xuất THẬT chạy được (Chrome + playwright-core, tiến trình con bằng ELECTRON_RUN_AS_NODE).
+  const studioRoot = path.join(path.dirname(exe), "resources", "app", "studio");
+  ok("Bản cài có Studio kit (mã dựng + dữ liệu mẫu) và three tối thiểu", ["roblox-clip/render.mjs", "roblox-clip/scene.js", "roblox-clip/shots.json", "roblox-clip/synth.py", "vendor/three/build/three.module.js", "vendor/three/build/three.core.js", "vendor/three/examples/jsm/geometries/RoundedBoxGeometry.js"].every((f) => fs.existsSync(path.join(studioRoot, f))));
+  const studioState0 = await get("/api/studio/state");
+  ok("GET /api/studio/state: Studio chạy trong bản đóng gói và dò được công cụ ngoài", Array.isArray(studioState0.jobs) && studioState0.tools && typeof studioState0.tools.chrome === "boolean", JSON.stringify(studioState0.tools));
+  if (studioState0.tools?.chrome) {
+    const post = (p, body) => page.evaluate(async ([u, b]) => (await fetch(u, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(b) })).json(), [`${origin}${p}`, body]);
+    await post("/api/studio/projects", { project: "desktop-verify" });
+    const started = await post("/api/studio/render", { project: "desktop-verify", preview: true });
+    let job = started.job;
+    for (let i = 0; i < 180 && job && !["done", "failed", "cancelled"].includes(job.status); i++) {
+      await new Promise((r) => setTimeout(r, 500));
+      job = (await get("/api/studio/state")).jobs.find((j) => j.id === started.job.id);
+    }
+    ok("Studio: 'xem thử' chạy thật trong bản đóng gói → xong, 10 ảnh", job?.status === "done" && job.previewCount === 10, job ? `${job.status}${job.error ? ` ${job.error.key} ${job.error.detail ?? ""}`.slice(0, 160) : ""}` : "không có việc");
+    const still = await page.evaluate(async (u) => { const r = await fetch(u); return { status: r.status, type: r.headers.get("content-type"), size: (await r.arrayBuffer()).byteLength }; }, `${origin}/api/studio/projects/desktop-verify/preview/4`);
+    ok("Studio: ảnh xem thử tải được qua REST (JPEG có nội dung)", still.status === 200 && /jpeg/.test(still.type ?? "") && still.size > 5000, `${still.size} byte`);
   }
   ok("Không có lỗi console", errors.length === 0, errors.slice(0, 2).join(" | "));
   await browser.close();

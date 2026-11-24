@@ -8,6 +8,8 @@ import { simplifyStatus, type OfficeEntity } from "../../../shared/officeEntity.
 import { agentRole, approvalReasonLabel, deptName, logLine, messageText, taskLabel, useT } from "../i18n/index.js";
 import { assignWork, decideAction, decidePermission, decideTask, errorText } from "../lib/api.js";
 import { finishedFlows, rootStatuses } from "../../assets/workboard.js";
+import { EconomyCard } from "./EconomyCard.js";
+import { StudioCard } from "./StudioCard.js";
 import { Note, onCtrlEnter } from "./a11y.js";
 import { entitiesOfKind, useOfficeStore, type ApprovalItem, type LogItem } from "../store/officeStore.js";
 
@@ -100,6 +102,8 @@ export function OverviewTab() {
           {budget.locked && <div className="warn" role="status">{t("overview.locked")}</div>}
         </>
       )}
+      <EconomyCard />
+      <StudioCard />
       {m && (
         <>
           <Meter label={t("overview.cpu")} pct={m.cpuPercent ?? 0} />

@@ -23,7 +23,8 @@
     "preview": "node scripts/preview-server.mjs",
     "demo": "node scripts/demo-server.mjs",
     "verify:ui": "node scripts/verify-ui.mjs",
-    "verify:desktop": "node scripts/verify-desktop.mjs"
+    "verify:desktop": "node scripts/verify-desktop.mjs",
+    "economy:backtest": "tsx scripts/economy-backtest.ts --write"
   },
   "dependencies": {
     "@react-three/fiber": "^9.8.2",

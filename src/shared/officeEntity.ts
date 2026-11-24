@@ -7,6 +7,8 @@
  * Ý tưởng "backend là nguồn sự thật, giao diện chỉ phản chiếu" lấy từ Hermes3D (MIT), xem NOTICE.md.
  */
 import { z } from "zod";
+import type { EconomyEvent, EconomyState } from "./economy.js";
+import type { StudioState } from "./studio.js";
 
 export const ENTITY_KINDS = ["agent", "session", "machine", "task"] as const;
 export const EntityKind = z.enum(ENTITY_KINDS);
@@ -183,7 +185,13 @@ export type OfficeEvent =
   /** Toàn bộ cây giao việc (gửi khi kết nối). */
   | { type: "org.snapshot"; nodes: OrgNode[]; at: string }
   /** Một nút giao việc mới/đã đổi. */
-  | { type: "org.node"; node: OrgNode };
+  | { type: "org.node"; node: OrgNode }
+  /** Trạng thái Lớp kinh tế (EAL) — hiện ở bảng KPI Phòng Tài chính. */
+  | { type: "economy.state"; state: EconomyState; at: string }
+  /** Một sự kiện kinh tế: `quote` (báo giá), `settled` (đã thu), `failed`, và các sự kiện vận hành. */
+  | { type: "economy.event"; event: EconomyEvent }
+  /** Trạng thái Studio dựng clip: danh sách việc dựng + tiến độ. */
+  | { type: "studio.state"; state: StudioState; at: string };
 
 export type OfficeEventType = OfficeEvent["type"];
 
@@ -199,6 +207,9 @@ const EVENT_TYPES: ReadonlySet<string> = new Set<OfficeEventType>([
   "emergency",
   "org.snapshot",
   "org.node",
+  "economy.state",
+  "economy.event",
+  "studio.state",
 ]);
 
 /** Kiểm tra một giá trị nhận từ mạng có đúng hình dạng `OfficeEvent` (thực thể được kiểm bằng zod). */
@@ -229,6 +240,18 @@ export function isOfficeEvent(v: unknown): v is OfficeEvent {
       return Array.isArray(e.nodes) && e.nodes.every((x) => OrgNode.safeParse(x).success);
     case "org.node":
       return OrgNode.safeParse(e.node).success;
+    case "economy.state": {
+      const st = e.state as Record<string, unknown> | null;
+      return typeof st === "object" && st !== null && typeof st.enabled === "boolean" && typeof st.receivedMicro === "number" && Array.isArray(st.pending) && Array.isArray(st.recent);
+    }
+    case "economy.event": {
+      const ev = e.event as Record<string, unknown> | null;
+      return typeof ev === "object" && ev !== null && typeof ev.id === "string" && typeof ev.kind === "string" && typeof ev.at === "string";
+    }
+    case "studio.state": {
+      const st = e.state as Record<string, unknown> | null;
+      return typeof st === "object" && st !== null && Array.isArray(st.jobs) && Array.isArray(st.projects);
+    }
   }
   return false;
 }

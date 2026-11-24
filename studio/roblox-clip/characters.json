@@ -1,0 +1,22 @@
+{
+  "_ghi_chu": "Character bible — nguồn DUY NHẤT cho ngoại hình nhân vật. scene.js đọc file này, nên sửa ở đây là mọi cảnh đồng bộ. Màu viết dạng #RRGGBB.",
+  "hero": {
+    "ten": "Bạn (nhân vật chính, theo avatar chibi-plush của người dùng)",
+    "kieu": "plush",
+    "skin": "#f3f6fa",
+    "shirt": "#17171c",
+    "pants": "#17171c",
+    "co_dinh": ["đầu to tròn, thân nhỏ", "tóc đen rối nhiều chùm nhọn", "vương miện xanh nghiêng trái", "cánh xám nhạt nhỏ sau lưng", "tim xanh bay quanh", "má ửng xanh, mắt đen có điểm sáng xanh", "áo thun đen, quần ngắn đen, giày trắng"],
+    "bien_the": { "vest": { "shirt": "#2b2f3a", "sleeve": "#2b2f3a", "pants": "#20232b", "tie": "#c0392b", "collar": "#ffffff", "ghi_chu": "cảnh 8: cùng một người, đổi vai" } },
+    "cam_xuc": { "mong_doi": "smile", "binh_thuong": "flat", "that_vong": "sad", "kiet_suc": "tired", "soc": "shock", "nhech_mep": "smirk" }
+  },
+  "mom": { "ten": "Mẹ", "kieu": "blocky", "skin": "#e0ae86", "shirt": "#e58aa6", "sleeve": "#e58aa6", "pants": "#5a4a6e", "hair": "bun", "hairColor": "#2a2020" },
+  "student": { "ten": "Cậu sinh viên", "kieu": "blocky", "skin": "#e8bd96", "shirt": "#3fa563", "sleeve": "#3fa563", "pants": "#3b3f4a", "hair": "short", "hairColor": "#201814", "backpack": "#e8a33b" },
+  "clients": {
+    "ten": "12 khách",
+    "kieu": "blocky",
+    "mau_ao": ["#3a3a46", "#8a3b3b", "#2f4f7a", "#5a3f7a", "#1f6b5b", "#7a5a2f", "#444444", "#9a4a2f", "#2f6a8a", "#6a2f5a", "#3f5f2f", "#7a2f3f"],
+    "mau_da": ["#e7b98f", "#f1c9a5", "#d5a077"],
+    "nguoi_cam_bien": "từ người thứ 4 trở đi (9 người)"
+  }
+}

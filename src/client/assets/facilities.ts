@@ -17,11 +17,13 @@ import {
   makeCoffeeTable,
   makePlant,
   makeSofa,
+  addWainscot,
   mergeStatic,
   registerGlow,
   registerNightLight,
   std,
 } from "./decor.js";
+import { softBox } from "./chibiProps.js";
 import { floorMaterial } from "./floors.js";
 import { makeSign } from "./officeParts.js";
 import { ROADMAP_BOARD, buildChair } from "./roomBuilder.js";
@@ -159,7 +161,7 @@ function rugOf(st: THREE.Group, it: FacilityItem, base: string, edge: string): v
 }
 
 function tvFrame(st: THREE.Group, it: FacilityItem): void {
-  st.add(box(it.w, it.w * 0.5625 + 0.1, 0.06, std(0x14181f, 0.4, 0.3), it.x, it.y ?? 1.75, it.z, false));
+  st.add(softBox(it.w, it.w * 0.5625 + 0.1, 0.06, 0.025, std(0x14181f, 0.4, 0.3), it.x, it.y ?? 1.75, it.z, false));
 }
 
 /** Gắn một màn hình canvas lên tường tại vị trí của `it` (nhô ra khỏi khung 3 cm). */
@@ -189,7 +191,7 @@ function buildMeeting(def: FacilityDef, st: THREE.Group, g: THREE.Group, ctx: Fa
   const woodDark = std(0x7a5636, 0.5);
   const table = itemsOf(def, "table")[0];
   const topLen = table.w - table.d;
-  st.add(box(topLen, 0.06, table.d, wood, table.x, 0.76, table.z));
+  st.add(softBox(topLen, 0.06, table.d, 0.025, wood, table.x, 0.76, table.z));
   for (const sx of [-1, 1]) st.add(cyl(table.d / 2, table.d / 2, 0.06, wood, table.x + (sx * topLen) / 2, 0.76, table.z, 28));
   // tấm chân giữa bàn mỏng: người ngồi hai bên vẫn có chỗ để chân
   st.add(box(3.0, 0.62, 0.12, woodDark, table.x, 0.43, table.z));
@@ -218,8 +220,8 @@ function buildMeeting(def: FacilityDef, st: THREE.Group, g: THREE.Group, ctx: Fa
 
   for (const it of itemsOf(def, "rug")) rugOf(st, it, "#3f5f73", "rgba(245,235,205,0.75)");
   for (const it of itemsOf(def, "credenza")) {
-    st.add(box(it.w, 0.8, it.d, woodDark, it.x, 0.4, it.z));
-    st.add(box(it.w + 0.04, 0.04, it.d + 0.04, wood, it.x, 0.82, it.z));
+    st.add(softBox(it.w, 0.8, it.d, 0.05, woodDark, it.x, 0.4, it.z));
+    st.add(softBox(it.w + 0.04, 0.04, it.d + 0.04, 0.018, wood, it.x, 0.82, it.z));
     st.add(cyl(0.1, 0.1, 0.3, std(0xbfe6ff, 0.15, 0, 0x7ec4f2, 0.2), it.x - 0.4, 1.0, it.z, 14, false));
     for (let i = 0; i < 3; i++) st.add(cyl(0.035, 0.03, 0.09, std(0xf3efe6, 0.5), it.x + 0.1 + i * 0.14, 0.89, it.z, 10, false));
   }
@@ -245,11 +247,11 @@ function buildPantry(def: FacilityDef, st: THREE.Group, g: THREE.Group, ctx: Fac
 
   const counter = itemsOf(def, "counter")[0];
   const back = counter.z - counter.d / 2;
-  st.add(box(counter.w, 0.88, counter.d, white, counter.x, 0.44, counter.z));
+  st.add(softBox(counter.w, 0.88, counter.d, 0.05, white, counter.x, 0.44, counter.z));
   for (let i = 0; i < 6; i++) st.add(box(0.015, 0.78, 0.01, std(0xc9c6bb, 0.8), counter.x - counter.w / 2 + 0.4 + i * (counter.w / 5.5), 0.45, counter.z + counter.d / 2 + 0.003, false));
-  st.add(box(counter.w + 0.04, 0.05, counter.d + 0.06, top, counter.x, 0.905, counter.z));
+  st.add(softBox(counter.w + 0.04, 0.05, counter.d + 0.06, 0.02, top, counter.x, 0.905, counter.z));
   st.add(box(counter.w, 0.5, 0.04, std(0xe6e9e4, 0.4), counter.x, 1.18, back + 0.02, false));
-  for (const cx of [-2.0, -0.5, 1.0, 2.2]) st.add(box(1.25, 0.7, 0.36, white, counter.x + cx + 0.2, 1.95, back + 0.2));
+  for (const cx of [-2.0, -0.5, 1.0, 2.2]) st.add(softBox(1.25, 0.7, 0.36, 0.05, white, counter.x + cx + 0.2, 1.95, back + 0.2));
 
   // máy pha cà phê (đứng trước nó là điểm "cà phê" ở giữa)
   const machineX = -0.8;
@@ -271,7 +273,7 @@ function buildPantry(def: FacilityDef, st: THREE.Group, g: THREE.Group, ctx: Fac
   st.add(cyl(0.025, 0.025, 0.3, steel, machineX - 1.5, topY + 0.17, counter.z - 0.12, 8, false));
   st.add(cyl(0.02, 0.02, 0.18, steel, machineX - 1.5, topY + 0.31, counter.z - 0.03, 8, false).rotateX(Math.PI / 2));
   // lò vi sóng
-  st.add(box(0.52, 0.3, 0.38, white, machineX + 1.8, topY + 0.15, counter.z));
+  st.add(softBox(0.52, 0.3, 0.38, 0.05, white, machineX + 1.8, topY + 0.15, counter.z));
   st.add(box(0.34, 0.22, 0.01, dark, machineX + 1.74, topY + 0.15, counter.z + 0.195, false));
   st.add(box(0.09, 0.2, 0.01, registerGlow(std(0x203020, 0.4, 0, 0x4dff7a, 0.6), 0.6, 1.4), machineX + 1.96, topY + 0.15, counter.z + 0.195, false));
   // bát trái cây
@@ -279,7 +281,7 @@ function buildPantry(def: FacilityDef, st: THREE.Group, g: THREE.Group, ctx: Fac
   for (const [dx, c] of [[-0.06, 0xe5622e], [0.05, 0xd6372f], [0, 0xf2c230]] as const) st.add(ball(0.06, std(c, 0.6), machineX + 2.7 + dx, topY + 0.12, counter.z + dx * 0.4, false, 8));
 
   const fr = itemsOf(def, "fridge")[0];
-  st.add(box(fr.w, 1.9, fr.d, std(0xe9edf0, 0.35, 0.2), fr.x, 0.95, fr.z));
+  st.add(softBox(fr.w, 1.9, fr.d, 0.09, std(0xe9edf0, 0.35, 0.2), fr.x, 0.95, fr.z));
   st.add(box(fr.w - 0.06, 0.012, 0.01, std(0x8d949e, 0.5), fr.x, 1.32, fr.z + fr.d / 2 + 0.004, false));
   for (const y of [1.55, 0.95]) st.add(box(0.03, 0.4, 0.04, steel, fr.x + 0.32, y, fr.z + fr.d / 2 + 0.03, false));
   for (const [dx, c] of [[-0.2, 0xef6f8e], [0, 0xf7b32b], [0.18, 0x43c59e]] as const) st.add(box(0.07, 0.07, 0.01, std(c, 0.6), fr.x + dx, 1.62, fr.z + fr.d / 2 + 0.008, false));
@@ -288,7 +290,7 @@ function buildPantry(def: FacilityDef, st: THREE.Group, g: THREE.Group, ctx: Fac
   const vg = new THREE.Group();
   vg.position.set(vend.x, 0, vend.z);
   vg.rotation.y = vend.face ?? 0;
-  vg.add(box(0.8, 1.9, 0.9, std(0x30415d, 0.4, 0.3), 0, 0.95, 0));
+  vg.add(softBox(0.8, 1.9, 0.9, 0.08, std(0x30415d, 0.4, 0.3), 0, 0.95, 0));
   vg.add(box(0.62, 1.2, 0.02, registerGlow(std(0x9fd6ff, 0.2, 0, 0x6ab6ee, 0.4), 0.4, 1.8), -0.03, 1.12, 0.46, false));
   const goods = [0xe5622e, 0x43c59e, 0xf7b32b, 0xef6f8e, 0x4f9cf9];
   for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) vg.add(box(0.11, 0.17, 0.05, std(goods[(r + c) % goods.length], 0.6), -0.22 + c * 0.14, 1.55 - r * 0.27, 0.43, false));
@@ -397,9 +399,9 @@ function buildLobby(def: FacilityDef, st: THREE.Group, g: THREE.Group, ctx: Faci
   const dark = std(0x22262b, 0.4, 0.3);
 
   const desk = itemsOf(def, "desk")[0];
-  st.add(box(desk.w, 1.05, desk.d, brand, desk.x, 0.525, desk.z));
-  st.add(box(desk.w + 0.1, 0.06, desk.d + 0.12, ledge, desk.x, 1.08, desk.z + 0.04));
-  st.add(box(desk.w - 0.2, 0.04, desk.d * 0.5, std(0x6b4f33, 0.6), desk.x, 0.8, desk.z - 0.1, false));
+  st.add(softBox(desk.w, 1.05, desk.d, 0.1, brand, desk.x, 0.525, desk.z));
+  st.add(softBox(desk.w + 0.1, 0.06, desk.d + 0.12, 0.028, ledge, desk.x, 1.08, desk.z + 0.04));
+  st.add(softBox(desk.w - 0.2, 0.04, desk.d * 0.5, 0.018, std(0x6b4f33, 0.6), desk.x, 0.8, desk.z - 0.1, false));
   // màn hình + bàn phím + chuông phía sau quầy
   st.add(box(0.5, 0.3, 0.03, dark, desk.x + 0.7, 1.28, desk.z - 0.12, false));
   st.add(box(0.1, 0.12, 0.08, steel, desk.x + 0.7, 1.15, desk.z - 0.12, false));
@@ -434,7 +436,7 @@ function buildLobby(def: FacilityDef, st: THREE.Group, g: THREE.Group, ctx: Faci
   }
   // kệ tờ rơi
   for (const it of itemsOf(def, "brochures")) {
-    st.add(box(it.w, 1.1, it.d, std(0x7a5636, 0.6), it.x, 0.55, it.z));
+    st.add(softBox(it.w, 1.1, it.d, 0.05, std(0x7a5636, 0.6), it.x, 0.55, it.z));
     for (let r = 0; r < 3; r++) for (let c = 0; c < 4; c++) st.add(box(0.12, 0.2, 0.02, std([0xef6f8e, 0x4f9cf9, 0xf7b32b, 0x43c59e][(r + c) % 4], 0.7), it.x - 0.24 + c * 0.16, 0.35 + r * 0.28, it.z + it.d / 2 + 0.01, false));
   }
   // thảm chùi chân "WELCOME"
@@ -514,6 +516,7 @@ export function buildFacility(parent: THREE.Object3D, def: FacilityDef, ctx: Fac
   const st = new THREE.Group();
   st.position.set(center.x, 0, center.z);
   trim(st, def);
+  addWainscot(st, def.size, parseInt((ACCENT[def.id] ?? "#6b7280").slice(1), 16));
   windows(st, def);
 
   const parts: Partial<FacilityHandles> =

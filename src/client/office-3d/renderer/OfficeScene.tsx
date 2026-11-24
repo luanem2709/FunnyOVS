@@ -12,10 +12,14 @@ import { findCharacter, loadManifest, type Manifest, type ManifestAsset } from "
 import { preloadAssets } from "../../assets/loader.js";
 import { setupLighting } from "../../assets/lighting.js";
 import { buildEnvironment, resetDecor, setDecorTranslator, tickDecor } from "../../assets/decor.js";
+import { buildBuilding } from "../../assets/building.js";
+import { buildEconomyBoard, paintEconomyBoard } from "../../assets/economyBoard.js";
 import { createDayNight, type DayNight } from "../../assets/dayNight.js";
 import { Bubble, createEffects, type Effects } from "../../assets/effects.js";
 import { AgentBehavior, resetAwayCounter, setIdleLife, type IdleWhere, type Spot } from "../../assets/behavior.js";
 import { setChibiDetail } from "../../assets/chibiRig.js";
+import { resetPropCache, setPropDetail } from "../../assets/chibiProps.js";
+import { MONITOR_AT } from "../../assets/workstation.js";
 import { buildOfficeNavGrid, type NavGrid } from "../../assets/navgrid.js";
 import {
   AGENT_TINTS,
@@ -27,11 +31,12 @@ import {
 import type { AgentStatus as RigStatus } from "../../assets/characterRig.js";
 import { AgentScreen, WorkBadge, buildAgentDesk, buildRoomShell, makeNameTag, statusHex, type RoomDef } from "../../assets/officeParts.js";
 import { FACILITIES, coffeeSpots, lobbyWatchSpot, meetingSeatSpots, presenterSpot } from "../../../shared/facilities.js";
-import { personaFor } from "../../../shared/personas.js";
+import { hashId, personaFor } from "../../../shared/personas.js";
 import { simplifyStatus, type OfficeEntity, type OrgNode } from "../../../shared/officeEntity.js";
 import { buildFacility, buildWorkBoard, paintLobbyBoard, paintMeetingBoard, repaintLogo, type FacilityHandles, type LiveScreen, type MeetingInfo } from "../../assets/facilities.js";
 import { badgeFor, paintWorkBoard, summarizeBoard } from "../../assets/workboard.js";
 import { useHealth } from "../store/health.js";
+import { readyNames } from "../ui/aiForm.js";
 import { AutoQualityMonitor, effectiveQuality } from "../lib/autoQuality.js";
 import { useReducedMotion } from "../lib/motion.js";
 import { usePerf } from "../store/perf.js";
@@ -130,6 +135,8 @@ interface World {
   facilities: Map<string, FacilityHandles>;
   /** Bảng việc sống trên tường phòng Giao việc (luồng việc đang chạy). */
   workBoard: LiveScreen | null;
+  /** Bảng KPI Lớp kinh tế ở Phòng Tài chính. */
+  economyBoard: LiveScreen | null;
   /** Biển tên phòng (sprite) — thu nhỏ khi camera ở gần. */
   signs: THREE.Sprite[];
 }
@@ -142,6 +149,7 @@ function useWorld(assets: Assets | null, departments: DepartmentLite[]): World |
   useEffect(() => {
     if (!assets || departments.length === 0) return;
     resetDecor();
+    resetPropCache();
     resetAwayCounter();
     setDecorTranslator(tr);
     const root = new THREE.Group();
@@ -157,6 +165,7 @@ function useWorld(assets: Assets | null, departments: DepartmentLite[]): World |
     ground.receiveShadow = true;
     root.add(ground);
     buildEnvironment(root, ground);
+    buildBuilding(root, departments);
     const dayNight: DayNight = createDayNight(scene, lights);
     const effects = createEffects(scene);
 
@@ -171,16 +180,19 @@ function useWorld(assets: Assets | null, departments: DepartmentLite[]): World |
     for (const f of FACILITIES) facilities.set(f.id, buildFacility(root, f, { t: tr, company }));
     const dispatch = rooms.get("dispatch");
     const workBoard = dispatch ? buildWorkBoard(root, dispatch) : null;
+    const finance = rooms.get("finance");
+    const economyBoard = finance ? buildEconomyBoard(root, finance) : null;
     const signs: THREE.Sprite[] = [];
     root.traverse((o) => {
       if (o.userData.roomSign) signs.push(o as THREE.Sprite);
     });
-    setWorld({ root, effects, rooms, facilities, workBoard, signs });
+    setWorld({ root, effects, rooms, facilities, workBoard, economyBoard, signs });
 
     return () => {
       dayNight.dispose();
       for (const f of facilities.values()) f.dispose();
       workBoard?.dispose();
+      economyBoard?.dispose();
       scene.remove(root, lights.ambient, lights.hemisphere, lights.sun, lights.sun.target, lights.fill);
       root.traverse((o) => {
         const m = o as THREE.Mesh;
@@ -236,6 +248,8 @@ function EntitiesLayer({ world, assets }: { world: World; assets: Assets }) {
     (window as unknown as { __officeMotion?: unknown }).__officeMotion = () => ({ reduced: reducedRef.current });
     const fx = (): Effects => (reducedRef.current ? NO_EFFECTS : world.effects);
     // Móc kiểm tra (scripts/verify-ui.mjs): bảng việc đang hiện gì và huy hiệu nào đang bật trên bàn.
+    // Móc kiểm tra: bảng KPI kinh tế đang hiện khoá nội dung nào và trạng thái đã nhận.
+    (window as unknown as { __officeEconomy?: unknown }).__officeEconomy = () => ({ painted: world.economyBoard?.key ?? null, state: useOfficeStore.getState().economy });
     (window as unknown as { __officeBoard?: unknown }).__officeBoard = () => ({
       info: summarizeBoard(useOfficeStore.getState().org),
       painted: world.workBoard?.key ?? null,
@@ -262,12 +276,13 @@ function EntitiesLayer({ world, assets }: { world: World; assets: Assets }) {
       if (visual.chibi) visual.chibi.sit = true;
       world.root.add(visual.root);
 
-      buildAgentDesk(world.root, pos, assets.manifest);
-      const screen = new AgentScreen(pos.x + 0.52, pos.z + 0.72);
+      // Bàn chibi: màu nhấn = màu phòng (cùng màu huy hiệu), món đồ riêng theo id nên ổn định giữa các lần mở.
+      buildAgentDesk(world.root, pos, assets.manifest, { accent: parseInt(persona.badge.slice(1), 16), tier, seed: hashId(String(md.agentId ?? e.id)) });
+      const screen = new AgentScreen(pos.x + MONITOR_AT.x, pos.z + MONITOR_AT.z);
       screen.tt = tr;
       world.root.add(screen.mesh);
       // Huy hiệu số việc mở: góc phải trên màn hình bàn, xa nhân vật nên không che người.
-      const badge = new WorkBadge(pos.x + 0.86, pos.z + 0.72);
+      const badge = new WorkBadge(pos.x + MONITOR_AT.x + 0.34, pos.z + MONITOR_AT.z);
       badge.set(badgeFor(useOfficeStore.getState().org, String(md.agentId ?? e.id.replace(/^agent:/, ''))));
       world.root.add(badge.sprite);
 
@@ -521,6 +536,7 @@ function EntitiesLayer({ world, assets }: { world: World; assets: Assets }) {
       lastWork.current = t;
       const org = useOfficeStore.getState().org;
       paintWorkBoard(world.workBoard, tr, summarizeBoard(org));
+      if (world.economyBoard) paintEconomyBoard(world.economyBoard, tr, useOfficeStore.getState().economy);
       // Lỗi cũ tự hết hạn trên huy hiệu dù không có dữ liệu mới.
       for (const [id, rec] of agents.current) rec.badge.set(badgeFor(org, id.replace(/^agent:/, "")));
     }
@@ -543,7 +559,7 @@ function EntitiesLayer({ world, assets }: { world: World; assets: Assets }) {
         idle,
         errors,
         pending: Object.keys(useOfficeStore.getState().approvals).length,
-        ai: h ? (h.ai.ready ? `AI: ${h.ai.providers.slice(0, 2).join(", ")}` : tr("health.noAi")) : "",
+        ai: h ? (h.ai.ready ? `AI: ${readyNames(h.ai)}` : tr("health.noAi")) : "",
         time: `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`,
       });
     }
@@ -717,6 +733,7 @@ export default function OfficeScene() {
   const quality = effectiveQuality(setting, downgraded);
   // Canvas dựng lại theo `quality` (key) nên nhân vật được dựng mới ở đúng mức chi tiết.
   setChibiDetail(quality === "low");
+  setPropDetail(quality === "low");
   const departments = useOfficeStore((s) => s.departments);
   const loaded = useOfficeStore((s) => s.loaded);
   return (

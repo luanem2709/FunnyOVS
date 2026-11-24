@@ -1,0 +1,637 @@
+{
+  "_ghi_chu": "Shot list điện ảnh. Mỗi shot: scene, f=[từ,đến] theo phần của cảnh (0–1), size (cỡ cảnh), angle (góc máy), move (chuyển động), why (ý đồ kể chuyện), from/to = vị trí máy, lookFrom/lookTo = điểm nhìn, fov=[đầu,cuối]. Toạ độ cảnh 8 đã cộng độ lệch z=-200; cảnh 6 cộng z=+200.",
+  "aspect": "2.39:1 (letterbox trên khung 16:9)",
+  "axis": "Máy luôn ở nửa mặt phẳng z>0 (phía trước nhân vật) trong phòng trọ/văn phòng: không bao giờ vượt trục 180°.",
+  "shots": [
+    {
+      "id": "1A",
+      "scene": "s1",
+      "f": [
+        0,
+        0.5
+      ],
+      "size": "WS",
+      "angle": "high",
+      "move": "dolly in",
+      "why": "giới thiệu bối cảnh: căn phòng nhỏ, người nhỏ",
+      "from": [
+        12,
+        11,
+        19
+      ],
+      "to": [
+        9,
+        9.5,
+        16.5
+      ],
+      "lookFrom": [
+        -3,
+        3.6,
+        0.5
+      ],
+      "lookTo": [
+        -3,
+        4,
+        0.5
+      ],
+      "fov": [
+        42,
+        42
+      ]
+    },
+    {
+      "id": "1B",
+      "scene": "s1",
+      "f": [
+        0.5,
+        1
+      ],
+      "size": "MS",
+      "angle": "eye-level 3/4",
+      "move": "slow push-in",
+      "why": "đồng cảm, hy vọng",
+      "from": [
+        3.2,
+        5.4,
+        8.5
+      ],
+      "to": [
+        2.2,
+        5.3,
+        7
+      ],
+      "lookFrom": [
+        -3,
+        5.3,
+        0.3
+      ],
+      "lookTo": [
+        -3,
+        5.4,
+        0.3
+      ],
+      "fov": [
+        40,
+        38
+      ]
+    },
+    {
+      "id": "2A",
+      "scene": "s2",
+      "f": [
+        0,
+        0.3
+      ],
+      "size": "WS",
+      "angle": "high",
+      "move": "static",
+      "why": "đêm khuya, cô đơn, người nhỏ trong phòng",
+      "from": [
+        7,
+        9.5,
+        13
+      ],
+      "lookFrom": [
+        -3,
+        4,
+        0.5
+      ],
+      "fov": [
+        42,
+        42
+      ]
+    },
+    {
+      "id": "2B",
+      "scene": "s2",
+      "f": [
+        0.3,
+        0.66
+      ],
+      "size": "MCU",
+      "angle": "eye-level 3/4",
+      "move": "push-in",
+      "why": "căng thẳng tăng khi tin nhắn tới",
+      "from": [
+        2.6,
+        5.4,
+        6.3
+      ],
+      "to": [
+        1.2,
+        5.2,
+        5
+      ],
+      "lookFrom": [
+        -3,
+        4.9,
+        0.3
+      ],
+      "lookTo": [
+        -3,
+        4.9,
+        0.3
+      ],
+      "fov": [
+        36,
+        34
+      ]
+    },
+    {
+      "id": "2C",
+      "scene": "s2",
+      "f": [
+        0.66,
+        1
+      ],
+      "size": "CU",
+      "angle": "reaction, eye-level",
+      "move": "static",
+      "why": "twist: nghe 'tuần sau anh trả' — phản ứng",
+      "from": [
+        -1.2,
+        6.8,
+        7.2
+      ],
+      "lookFrom": [
+        -3,
+        4.9,
+        0.3
+      ],
+      "fov": [
+        30,
+        30
+      ]
+    },
+    {
+      "id": "3A",
+      "scene": "s3",
+      "f": [
+        0,
+        0.72
+      ],
+      "size": "WS",
+      "angle": "eye-level slightly high",
+      "move": "static (time-lapse)",
+      "why": "khung cố định để thấy ngày–đêm lặp lại",
+      "from": [
+        10,
+        9,
+        15
+      ],
+      "lookFrom": [
+        -3,
+        3.9,
+        0.5
+      ],
+      "fov": [
+        42,
+        42
+      ]
+    },
+    {
+      "id": "3B",
+      "scene": "s3",
+      "f": [
+        0.72,
+        1
+      ],
+      "size": "CU",
+      "angle": "high",
+      "move": "static",
+      "why": "yếu thế, kiệt sức lúc bình minh",
+      "from": [
+        -1.4,
+        6.4,
+        6.2
+      ],
+      "lookFrom": [
+        -3,
+        4.4,
+        0.3
+      ],
+      "fov": [
+        32,
+        32
+      ]
+    },
+    {
+      "id": "4A",
+      "scene": "s4",
+      "f": [
+        0,
+        0.5
+      ],
+      "size": "MS",
+      "angle": "eye-level 3/4",
+      "move": "static",
+      "why": "chờ đợi, im lặng",
+      "from": [
+        3.5,
+        5.6,
+        7.4
+      ],
+      "lookFrom": [
+        -3,
+        4.7,
+        0.3
+      ],
+      "fov": [
+        40,
+        40
+      ]
+    },
+    {
+      "id": "4B",
+      "scene": "s4",
+      "f": [
+        0.5,
+        1
+      ],
+      "size": "WS",
+      "angle": "high",
+      "move": "dolly out",
+      "why": "bị bỏ rơi: nhỏ dần trong căn phòng",
+      "from": [
+        3,
+        8,
+        10
+      ],
+      "to": [
+        8,
+        12.5,
+        16
+      ],
+      "lookFrom": [
+        -3,
+        3.8,
+        0.5
+      ],
+      "lookTo": [
+        -3,
+        3.8,
+        0.5
+      ],
+      "fov": [
+        42,
+        44
+      ]
+    },
+    {
+      "id": "5A",
+      "scene": "s5",
+      "f": [
+        0,
+        0.35
+      ],
+      "size": "WS",
+      "angle": "eye-level side",
+      "move": "truck right (theo mẹ đi vào)",
+      "why": "đồng hành với người mẹ; hướng đi trái→phải",
+      "from": [
+        -8,
+        6,
+        15
+      ],
+      "to": [
+        -2,
+        6.2,
+        15
+      ],
+      "lookFrom": [
+        -6,
+        3.8,
+        3
+      ],
+      "lookTo": [
+        -4,
+        3.8,
+        3
+      ],
+      "fov": [
+        42,
+        42
+      ]
+    },
+    {
+      "id": "5B",
+      "scene": "s5",
+      "f": [
+        0.35,
+        0.55
+      ],
+      "size": "Insert",
+      "angle": "high tabletop",
+      "move": "static",
+      "why": "đồ vật làm motif: hộp cơm còn ấm",
+      "from": [
+        -1.8,
+        5.2,
+        5.2
+      ],
+      "lookFrom": [
+        -5.4,
+        3.6,
+        3
+      ],
+      "fov": [
+        34,
+        34
+      ]
+    },
+    {
+      "id": "5C",
+      "scene": "s5",
+      "f": [
+        0.55,
+        1
+      ],
+      "size": "CU",
+      "angle": "eye-level 3/4",
+      "move": "static",
+      "why": "phản ứng: nụ cười nhỏ",
+      "from": [
+        -0.6,
+        6.8,
+        7
+      ],
+      "lookFrom": [
+        -3,
+        4.9,
+        0.3
+      ],
+      "fov": [
+        30,
+        30
+      ]
+    },
+    {
+      "id": "6A",
+      "scene": "s6",
+      "f": [
+        0,
+        0.55
+      ],
+      "size": "WS group",
+      "angle": "eye-level frontal",
+      "move": "truck right",
+      "why": "tập thể: hàng người xếp ra từng người một",
+      "from": [
+        -8,
+        8,
+        232
+      ],
+      "to": [
+        3,
+        7.5,
+        232
+      ],
+      "lookFrom": [
+        -5,
+        4,
+        200
+      ],
+      "lookTo": [
+        3,
+        4.2,
+        200
+      ],
+      "fov": [
+        42,
+        42
+      ]
+    },
+    {
+      "id": "6B",
+      "scene": "s6",
+      "f": [
+        0.55,
+        1
+      ],
+      "size": "MS",
+      "angle": "low",
+      "move": "slow truck",
+      "why": "choáng ngợp: biển 'tuần sau anh trả' đè lên bạn",
+      "from": [
+        -4,
+        1.6,
+        218
+      ],
+      "to": [
+        3,
+        1.8,
+        218
+      ],
+      "lookFrom": [
+        -2,
+        5.4,
+        200
+      ],
+      "lookTo": [
+        4,
+        5.4,
+        200
+      ],
+      "fov": [
+        40,
+        40
+      ]
+    },
+    {
+      "id": "7A",
+      "scene": "s7",
+      "f": [
+        0,
+        0.35
+      ],
+      "size": "WS",
+      "angle": "high 3/4",
+      "move": "dolly in",
+      "why": "người lạ bước vào không gian của bạn",
+      "from": [
+        0,
+        9.5,
+        19
+      ],
+      "to": [
+        3,
+        9.2,
+        17
+      ],
+      "lookFrom": [
+        -6,
+        4.6,
+        3
+      ],
+      "lookTo": [
+        -5,
+        4.8,
+        3
+      ],
+      "fov": [
+        42,
+        42
+      ]
+    },
+    {
+      "id": "7B",
+      "scene": "s7",
+      "f": [
+        0.35,
+        0.68
+      ],
+      "size": "CU",
+      "angle": "eye-level 3/4 (nhìn sang phải)",
+      "move": "static",
+      "why": "lời xin: mắt cậu ấy nhìn sang phải",
+      "from": [
+        -3.4,
+        5.6,
+        12.5
+      ],
+      "lookFrom": [
+        -9.2,
+        5.4,
+        6.3
+      ],
+      "fov": [
+        46,
+        46
+      ]
+    },
+    {
+      "id": "7C",
+      "scene": "s7",
+      "f": [
+        0.68,
+        1
+      ],
+      "size": "CU",
+      "angle": "reverse, eye-level (nhìn sang trái)",
+      "move": "static",
+      "why": "shot ngược: bạn nhìn sang trái — khớp hướng nhìn",
+      "from": [
+        1.6,
+        6.8,
+        7
+      ],
+      "lookFrom": [
+        -3,
+        4.9,
+        0.3
+      ],
+      "fov": [
+        30,
+        30
+      ]
+    },
+    {
+      "id": "8A",
+      "scene": "s8",
+      "f": [
+        0,
+        0.4
+      ],
+      "size": "WS",
+      "angle": "eye-level 3/4",
+      "move": "slow push-in",
+      "why": "thiết lập: người cũ ngồi làm, bạn đứng sau",
+      "from": [
+        5,
+        7.5,
+        -185
+      ],
+      "to": [
+        3,
+        7.2,
+        -186.5
+      ],
+      "lookFrom": [
+        -3,
+        4.2,
+        -202
+      ],
+      "lookTo": [
+        -3,
+        4.2,
+        -202
+      ],
+      "fov": [
+        42,
+        42
+      ]
+    },
+    {
+      "id": "8B",
+      "scene": "s8",
+      "f": [
+        0.4,
+        0.72
+      ],
+      "size": "MS",
+      "angle": "low",
+      "move": "push-in",
+      "why": "quyền lực: bạn nói câu quen thuộc",
+      "from": [
+        3,
+        3.1,
+        -192
+      ],
+      "to": [
+        1.2,
+        3.4,
+        -194.5
+      ],
+      "lookFrom": [
+        -1.5,
+        4,
+        -202.2
+      ],
+      "lookTo": [
+        -1.5,
+        4,
+        -202.2
+      ],
+      "fov": [
+        36,
+        34
+      ]
+    },
+    {
+      "id": "8C",
+      "scene": "s8",
+      "f": [
+        0.72,
+        1
+      ],
+      "size": "ECU",
+      "angle": "reaction, frontal",
+      "move": "slow push-in",
+      "why": "twist: nhận ra mình vừa nói gì",
+      "from": [
+        -0.8,
+        4.2,
+        -196.2
+      ],
+      "to": [
+        -1.2,
+        4.1,
+        -197.4
+      ],
+      "lookFrom": [
+        -1.5,
+        3.9,
+        -202.2
+      ],
+      "lookTo": [
+        -1.5,
+        3.9,
+        -202.2
+      ],
+      "fov": [
+        26,
+        24
+      ]
+    }
+  ]
+}

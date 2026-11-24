@@ -4,12 +4,13 @@
  * Lỗi luôn là `ApiError` mang `status`, `code` và `vars` do server trả ({ error, code, vars }); dùng `errorText(t, e)` để hiện
  * thông báo đúng ngôn ngữ người dùng — client không bao giờ hiện thẳng chuỗi tiếng Việt cố định của server.
  */
-import type { ProviderStatus } from "../../../shared/ai.js";
+import type { ProviderStatus, RoutingStrategy } from "../../../shared/ai.js";
 import type { Contact, CrmSummary, Deal, DealStage, EmailDraft, CalendarEvent } from "../../../shared/crm.js";
 import type { AuditEntry } from "../../../shared/audit.js";
 import type { BackupCounts } from "../../../shared/backup.js";
 import type { MailPublicConfig } from "../../../shared/mail.js";
 import type { Frequency, ScheduleView } from "../../../shared/schedule.js";
+import type { StudioState } from "../../../shared/studio.js";
 import { useSettings } from "../store/settings.js";
 
 export type Vars = Record<string, string | number>;
@@ -125,11 +126,26 @@ export const putConfig = (patch: Record<string, unknown>): Promise<unknown> => c
 
 export const emergencyStop = (): Promise<unknown> => call("/api/emergency-stop", { method: "POST" });
 
+// ---------------------------------------------------------------- Lớp kinh tế (EAL)
+
+export const economyPause = (): Promise<unknown> => call("/api/economy/pause", { method: "POST" });
+export const economyResume = (): Promise<unknown> => call("/api/economy/resume", { method: "POST" });
+export const economyScouts = (enabled: boolean): Promise<unknown> => call("/api/economy/scouts", { method: "POST", body: JSON.stringify({ enabled }) });
+
+// ---------------------------------------------------------------- Studio dựng clip
+
+export const studioCreate = (project: string): Promise<unknown> => call("/api/studio/projects", { method: "POST", ...json({ project }) });
+export const studioRender = (project: string, opts: { voice?: boolean; preview?: boolean }): Promise<unknown> => call("/api/studio/render", { method: "POST", ...json({ project, ...opts }) });
+export const studioCancel = (id: string): Promise<unknown> => call("/api/studio/cancel", { method: "POST", ...json({ id }) });
+export const studioState = (): Promise<StudioState> => call("/api/studio/state");
+
 // ---------------------------------------------------------------- kết nối AI
 
 export interface AiStatusResponse {
   providers: ProviderStatus[];
   anyReady: boolean;
+  /** Cách chọn nguồn: theo ưu tiên (mặc định) hoặc xoay vòng. */
+  strategy?: RoutingStrategy;
 }
 
 /** Kết quả thao tác: `key` + `vars` để dịch; `message` chỉ là bản dự phòng. */
@@ -150,6 +166,24 @@ export const clearAiKey = (id: string): Promise<unknown> => call(`/api/ai/${enc(
 export const setAiEnabled = (id: string, enabled: boolean): Promise<unknown> => call(`/api/ai/${enc(id)}/enabled`, { method: "POST", ...json({ enabled }) });
 export const setAiModel = (id: string, model: string): Promise<unknown> => call(`/api/ai/${enc(id)}/model`, { method: "PUT", ...json({ model }) });
 export const startOmniRoute = (): Promise<ActionResult> => call("/api/ai/omniroute/start", { method: "POST" });
+
+/** Nút "+ Thêm API": nguồn AI tuỳ chỉnh (mọi điểm cuối tương thích OpenAI). */
+export interface AiCustomPayload {
+  label?: string;
+  baseUrl?: string;
+  apiKey?: string;
+  model?: string;
+  free?: boolean;
+}
+export interface AiCheckResult extends ActionResult {
+  models?: string[];
+}
+export const checkAiCustom = (body: AiCustomPayload & { id?: string }): Promise<AiCheckResult> => call("/api/ai/custom/check", { method: "POST", ...json(body) });
+export const addAiCustom = (body: AiCustomPayload): Promise<ProviderStatus> => call("/api/ai/custom", { method: "POST", ...json(body) });
+export const updateAiCustom = (id: string, body: AiCustomPayload): Promise<ProviderStatus> => call(`/api/ai/custom/${enc(id)}`, { method: "PATCH", ...json(body) });
+export const removeAiCustom = (id: string): Promise<unknown> => call(`/api/ai/custom/${enc(id)}`, { method: "DELETE" });
+export const setAiOrder = (order: string[]): Promise<unknown> => call("/api/ai/order", { method: "PUT", ...json({ order }) });
+export const setAiStrategy = (strategy: RoutingStrategy): Promise<unknown> => call("/api/ai/strategy", { method: "PUT", ...json({ strategy }) });
 
 // ---------------------------------------------------------------- CRM, email, lịch
 
@@ -185,7 +219,8 @@ export interface Health {
   emergency: boolean;
   lan: boolean;
   db: { ok: boolean };
-  ai: { ready: boolean; providers: string[]; total: number };
+  /** `names` (nhãn hiển thị) song song với `providers` (id); máy chủ bản cũ không có. */
+  ai: { ready: boolean; providers: string[]; names?: string[]; total: number };
   pendingActions: number;
 }
 

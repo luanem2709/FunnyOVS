@@ -24,24 +24,43 @@ web, GitHub), tự học và đề xuất cải tiến — nhưng **không đư�
 
 Bố cục 3D gồm **9 phòng ban** với **17 nhân viên** theo 3 tầng (Giám đốc, 8 Trưởng phòng, 8 Nhân viên — mỗi người một ngoại hình riêng, trang phục theo tầng)
 và 3 **phòng tiện ích**: **Phòng họp** (Giám đốc họp với các trưởng phòng khi chia việc cho ≥ 2 phòng), **Pantry**, **Sảnh lễ tân** (logo công ty, bảng tin số liệu thật).
+Tất cả nằm trong **một toà nhà liền** (tường ngoài kính, cửa chính trước sảnh lễ tân, hành lang, hai sân trong có cây). Mọi phòng cùng một phong cách **chibi** hợp với nhân vật: đồ đạc bo tròn mềm, mỗi phòng một màu riêng (ốp chân tường, viền, khung tranh), mỗi bàn có món đồ riêng của người ngồi (đèn, tai nghe, mèo, sách).
 Thanh điều hướng dưới bên trái nhảy nhanh tới từng phòng; click vào sàn phòng để bay tới đó.
 Luồng việc đã xong **tải được thành báo cáo Markdown** (tóm tắt của Giám đốc + kết quả từng người).
 **Việc đang chạy hiện ngay trong cảnh**: bảng việc sống trên tường Phòng Giao việc (luồng nào đang chạy / chờ duyệt / xong / lỗi, tiến độ, ai đang làm) và huy hiệu số việc mở trên bàn từng người.
 
 ![Toàn cảnh khi đang giao việc](docs/shots/v3-overview.png)
 
-*Giám đốc họp với các trưởng phòng; luồng việc chạy xuống từng cấp; bảng việc sống ở Phòng Giao việc.* Thêm ảnh ở [`docs/office-3d.md`](docs/office-3d.md#ảnh-chụp).
+*Giám đốc họp với các trưởng phòng; luồng việc chạy xuống từng cấp; bảng việc sống ở Phòng Giao việc.*
+
+![Bộ phòng kiểu chibi](docs/shots/v4-wide.png)
+
+*Mọi phòng cùng phong cách chibi: bàn/ghế bo tròn màu theo phòng, món đồ riêng trên bàn từng người; tab AI có nút **+ Thêm API** để gom thêm nguồn.* Thêm ảnh ở [`docs/office-3d.md`](docs/office-3d.md#ảnh-chụp).
 
 ### Giao diện hợp nhất (`/office-3d/`)
 
 Tiếng Việt / English (kể cả thông báo do server sinh), 5 tab: **Tổ chức** (giao việc, cây giao việc, nghiệm thu, báo cáo của Giám đốc),
 **AI** (kết nối), **CRM** (pipeline, liên hệ, email, lịch), **Nhật ký**, **Tổng quan**. Chi tiết: [`docs/office-3d.md`](docs/office-3d.md).
 
-### Kết nối AI tự động
+### Kết nối AI tự động + nút "Thêm API" (gom nhiều nguồn như 9router)
 
-Mở app là nó **tự dò** OmniRoute (`:20128`), Ollama (`:11434`), LM Studio (`:1234`) và nhận khoá miễn phí từ biến môi trường
-(`GROQ_API_KEY`, `GEMINI_API_KEY`, `CEREBRAS_API_KEY`, `MISTRAL_API_KEY`, `OPENROUTER_API_KEY`, `GITHUB_MODELS_TOKEN`) hoặc ô dán khoá trong tab **AI**.
-Nhiều nguồn cùng sẵn sàng thì tự dự phòng khi lỗi/hết hạn mức. Không cần Cursor. Khoá chỉ lưu trên máy bạn (quyền 0600) và không bao giờ hiện lại.
+Mở app là nó **tự dò** cổng gom **OmniRoute / 9router** (`:20128`), Ollama (`:11434`), LM Studio (`:1234`) và nhận khoá miễn phí từ biến môi trường
+(`GROQ_API_KEY`, `GEMINI_API_KEY`, `CEREBRAS_API_KEY`, `MISTRAL_API_KEY`, `OPENROUTER_API_KEY`, `NVIDIA_API_KEY`, `SAMBANOVA_API_KEY`) hoặc ô dán khoá trong tab **AI**
+(mỗi nguồn miễn phí có sẵn đường dẫn tới trang lấy khoá — app không thể tự đăng ký tài khoản thay bạn). Muốn thêm nguồn khác: bấm **+ Thêm API** → chọn mẫu dựng sẵn hoặc tự điền tên,
+địa chỉ `…/v1` của **bất kỳ dịch vụ tương thích OpenAI** và khoá → app **kiểm tra thật** (gọi `/models`) rồi mới lưu. Mọi nguồn được gom vào **một bộ định tuyến chung**:
+sắp thứ tự ưu tiên bằng mũi tên, chọn **dự phòng theo thứ tự** hoặc **xoay vòng**, nguồn lỗi/hết hạn mức tự bị bỏ qua tạm thời — agent nào cũng dùng chung.
+Không cần Cursor. Khoá chỉ lưu trên máy bạn (quyền 0600) và không bao giờ hiện lại.
+
+### Kinh tế tự trị (tuỳ chọn, mặc định TẮT)
+
+Lớp **EAL** cho văn phòng bán báo cáo công khai qua một endpoint trả phí (`HTTP 402` → thanh toán → nội dung), ghi mọi dòng tiền vào **sổ cái băm nối**, mỗi 6 giờ tự tính lãi/lỗ,
+tự tạm dừng Scout khi lỗ liên tiếp và **đề xuất** tái đầu tư. Giai đoạn 1 **chỉ nhận tiền** (không giữ khoá ví, không chi ra ngoài); xuất bản, đề xuất của Scout và tái đầu tư đều qua hộp duyệt trong cảnh 3D;
+nút dừng khẩn cấp dừng cả lớp này. Bảng KPI treo ở Phòng Tài chính. Bật bằng `ECONOMY_RAIL` (`x402` testnet / `stripe` test / `mock`) — xem [`docs/economy-layer.md`](docs/economy-layer.md) (cấu hình, rủi ro đã biết) và [mô phỏng 30 ngày](docs/economy-backtest.md) (dữ liệu giả, **không** phải dự báo doanh thu).
+
+### Studio dựng clip (hoạt hình khối)
+
+Agent Marketing / Automation Lab lưu **lời đọc, shot list, nhân vật** (dữ liệu nhỏ, kiểm chặt) rồi yêu cầu dựng; kết xuất là bộ máy xác định (three.js + ffmpeg) nên không tốn token lúc dựng và nhân vật được lưu lại để dùng ở mọi clip.
+Tiến độ, huỷ và xem clip ở thẻ *Studio dựng clip* (tab Tổng quan). **Lời đọc chỉ được gửi tới dịch vụ giọng online sau khi bạn duyệt** ở hộp duyệt trong cảnh 3D. Giới hạn và cách dùng: [`docs/studio.md`](docs/studio.md).
 
 ### Vận hành
 

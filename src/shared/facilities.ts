@@ -176,6 +176,35 @@ export const FACILITIES: FacilityDef[] = [
   },
 ];
 
+// ---------------------------------------------------------------- toà nhà liền
+/**
+ * Vỏ toà nhà bao trọn mọi phòng thành MỘT công trình: tường ngoài (chân tường đặc + kính + cột), một cửa chính ở tường nam ngay trước sảnh lễ tân,
+ * hành lang là phần sàn còn lại giữa các phòng, và hai sân trong (vườn) ở phần trống phía bắc. Dữ liệu thuần để hình dựng, lưới đường đi và test
+ * dùng chung — phòng KHÔNG đổi chỗ nên đường đi, họp và hành vi cũ giữ nguyên.
+ * Toạ độ thế giới; `x0..x1` theo x, `z0..z1` theo z (z1 là tường nam, phía trước).
+ */
+export interface Courtyard {
+  x0: number;
+  x1: number;
+  z0: number;
+  z1: number;
+}
+
+export const BUILDING = {
+  x0: -19.5,
+  x1: 28,
+  z0: -26.75,
+  z1: 21,
+  /** Độ dày tường ngoài. */
+  wall: 0.35,
+  /** Cửa chính ở tường nam: tâm x và bề rộng khoảng trống. */
+  door: { x: -13, w: 4.4 },
+  courtyards: [
+    { x0: -18.5, x1: -5.6, z0: -25.6, z1: -9.8 },
+    { x0: 5.6, x1: 15.6, z0: -25.6, z1: -9.8 },
+  ] as Courtyard[],
+};
+
 export function facilityById(id: string): FacilityDef | undefined {
   return FACILITIES.find((f) => f.id === id);
 }

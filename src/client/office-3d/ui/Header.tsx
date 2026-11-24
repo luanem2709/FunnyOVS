@@ -8,6 +8,7 @@ import { useSettings } from "../store/settings.js";
 import { useHealth } from "../store/health.js";
 import { useOfficeStore } from "../store/officeStore.js";
 import { useUi } from "../store/ui.js";
+import { readyNames } from "./aiForm.js";
 import { useCounts } from "./panels.js";
 
 const HEALTH_POLL_MS = 20_000;
@@ -38,7 +39,7 @@ function HealthPill() {
       onClick={() => setTab("ai")}
       title={data.ai.ready ? detail : t("health.noAi.hint")}
     >
-      <i /> <span className="pill-text">{data.ai.ready ? t("health.ai", { names: data.ai.providers.slice(0, 2).join(", ") }) : t("health.noAi")}</span>
+      <i /> <span className="pill-text">{data.ai.ready ? t("health.ai", { names: readyNames(data.ai) }) : t("health.noAi")}</span>
     </button>
   );
 }

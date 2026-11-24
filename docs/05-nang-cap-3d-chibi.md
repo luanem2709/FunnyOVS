@@ -93,3 +93,9 @@ phòng 7–9 đơn vị thay vì 9–12.
   dựng thủ công cho đồ đạc, nhân vật dùng chibi.
 - Chưa nhân đồ đạc ra 8 phòng còn lại theo bảng 2.3 trong `docs/ASSETS.md`
   (hiện đã dựng đồ đạc cho cả 9 phòng, nhưng mới ở mức cơ bản).
+
+## Cập nhật v4 — đồ đạc chibi cho mọi phòng
+
+Mục "Chưa làm" thứ hai ở trên (đồ đạc cho các phòng còn lại mới ở mức cơ bản) đã xong ở v4 — mục thứ nhất vẫn đúng: chưa dùng model Kenney, đồ đạc là hình dựng thủ công và đó giờ là phong cách chủ đích. **Mọi phòng** (9 phòng ban, Giám đốc, thư viện, phòng họp, pantry, sảnh) giờ dùng chung một bộ đồ đạc bo tròn mềm kiểu chibi
+(`src/client/assets/chibiProps.ts`, `workstation.ts`): bàn làm việc có mép màu phòng + món đồ riêng theo người, ghế màu phòng (Giám đốc ghế lưng cao), ốp chân tường + viền + khung tranh theo màu phòng,
+kệ sách có sách thật, sofa/quầy/tủ lạnh/máy bán hàng/tủ server bo tròn. Chi tiết và số đo ngân sách dựng hình: `docs/office-3d.md` › "Cơ sở vật chất và nhân vật"; kiểm thử: `tests/chibiRooms.test.ts`.

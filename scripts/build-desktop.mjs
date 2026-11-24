@@ -48,6 +48,23 @@ fs.copyFileSync(path.join(root, "electron", "main.cjs"), path.join(out, "main.cj
 fs.copyFileSync(path.join(root, "electron", "preload.cjs"), path.join(out, "preload.cjs"));
 fs.cpSync(path.join(root, "assets"), path.join(out, "assets"), { recursive: true });
 
+// Studio dựng clip: mã + dữ liệu mẫu của kit và phần tối thiểu của three (kết xuất chạy offline, không CDN).
+console.log("[desktop] chép studio kit + three...");
+const kitSrc = path.join(root, "studio", "roblox-clip");
+const kitOut = path.join(out, "studio", "roblox-clip");
+fs.mkdirSync(kitOut, { recursive: true });
+const GENERATED = new Set(["timing.json"]);
+for (const f of fs.readdirSync(kitSrc)) {
+  if (GENERATED.has(f) || !/\.(mjs|js|json|html|py)$/.test(f) || !fs.statSync(path.join(kitSrc, f)).isFile()) continue;
+  fs.copyFileSync(path.join(kitSrc, f), path.join(kitOut, f));
+}
+const threeSrc = path.join(root, "node_modules", "three");
+const threeOut = path.join(out, "studio", "vendor", "three");
+for (const rel of ["build/three.module.js", "build/three.core.js", "examples/jsm/geometries/RoundedBoxGeometry.js", "LICENSE"]) {
+  fs.mkdirSync(path.dirname(path.join(threeOut, rel)), { recursive: true });
+  fs.copyFileSync(path.join(threeSrc, rel), path.join(threeOut, rel));
+}
+
 const pkg = {
   name: "funnyovs",
   productName: "FunnyOVS",

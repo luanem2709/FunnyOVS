@@ -5,6 +5,17 @@
 
 export type ProviderKind = "gateway" | "local" | "cloud" | "custom";
 
+/**
+ * Cách chọn nguồn khi có nhiều nguồn sẵn sàng:
+ *  - priority: luôn thử nguồn trên cùng trước, lỗi/hết hạn mức mới xuống nguồn kế tiếp (mặc định);
+ *  - roundrobin: xoay vòng điểm bắt đầu để dàn đều tải — dùng được nhiều gói miễn phí cùng lúc mà không dồn vào một nguồn (vẫn tự dự phòng khi lỗi).
+ */
+export type RoutingStrategy = "priority" | "roundrobin";
+export const ROUTING_STRATEGIES: readonly RoutingStrategy[] = ["priority", "roundrobin"];
+
+/** Số nguồn tuỳ chỉnh tối đa người dùng thêm được. */
+export const MAX_CUSTOM_PROVIDERS = 20;
+
 export type ProviderState = "ready" | "no-key" | "offline" | "cooling" | "disabled" | "auth-failed";
 
 export interface ProviderStats {
@@ -43,4 +54,6 @@ export interface ProviderStatus {
   stats: ProviderStats;
   enabled: boolean;
   priority: number;
+  /** Nguồn do người dùng thêm (sửa/xoá được). */
+  custom?: boolean;
 }

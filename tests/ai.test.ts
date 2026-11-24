@@ -114,7 +114,7 @@ describe("tự dò dịch vụ cục bộ (B1)", () => {
 });
 
 describe("tự nhận khoá miễn phí từ môi trường (B2)", () => {
-  it("Groq, OpenRouter, Gemini, Cerebras, Mistral, GitHub Models", async () => {
+  it("Groq, OpenRouter, Gemini, Cerebras, Mistral, NVIDIA NIM, SambaNova", async () => {
     const hub = new AiHub({
       dataDir: dir,
       env: {
@@ -123,12 +123,13 @@ describe("tự nhận khoá miễn phí từ môi trường (B2)", () => {
         GOOGLE_API_KEY: "AIzaSyABCDEFGHIJKLMNOPQRSTUVWXYZ123456",
         CEREBRAS_API_KEY: "csk-abcdefghijklmnopqrstuv",
         MISTRAL_API_KEY: "mistralkeyabcdefghijk",
-        GITHUB_TOKEN: "ghp_abcdefghijklmnopqrstuvwxyz123456",
+        NVIDIA_API_KEY: "nvapi-abcdefghijklmnopqrstuvwxyz123456",
+        SAMBANOVA_API_KEY: "samba-abcdefghijklmnopqrstuvwxyz123456",
       },
       fetchImpl: fakeFetch({}),
     });
     const st = await hub.status(true);
-    for (const id of ["groq", "openrouter", "gemini", "cerebras", "mistral", "github"]) {
+    for (const id of ["groq", "openrouter", "gemini", "cerebras", "mistral", "nvidia", "sambanova"]) {
       const s = st.find((x) => x.id === id)!;
       expect(s.state, id).toBe("ready");
       expect(s.keySource, id).toBe("env");
@@ -136,7 +137,7 @@ describe("tự nhận khoá miễn phí từ môi trường (B2)", () => {
     }
     // Khoá không bao giờ nằm trong trạng thái trả cho giao diện.
     const dump = JSON.stringify(st);
-    for (const secret of ["gsk_abcdefghijklmnop123456", "sk-or-v1-abcdefghijklmnop123456", "AIzaSyABCDEFGHIJKLMNOPQRSTUVWXYZ123456", "ghp_abcdefghijklmnopqrstuvwxyz123456"]) {
+    for (const secret of ["gsk_abcdefghijklmnop123456", "sk-or-v1-abcdefghijklmnop123456", "AIzaSyABCDEFGHIJKLMNOPQRSTUVWXYZ123456", "nvapi-abcdefghijklmnopqrstuvwxyz123456", "samba-abcdefghijklmnopqrstuvwxyz123456"]) {
       expect(dump).not.toContain(secret);
     }
   });

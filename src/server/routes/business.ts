@@ -9,13 +9,13 @@ import express, { type Express, type Request, type Response } from "express";
 import type { AiHub } from "../ai/hub.js";
 import type { ActionGate } from "../agent/gate.js";
 import type { MailService } from "../agent/mail.js";
-import { providerDef } from "../ai/catalog.js";
 import type { AuditLog } from "../security/audit.js";
 import type { Scheduler } from "../schedule/scheduler.js";
 import { viewOf } from "../../shared/schedule.js";
 import { backupFileName, buildBackup, parseBackup, writePreRestoreCopy } from "../backup/backup.js";
 import { countsOf } from "../../shared/backup.js";
-import { DEAL_STAGES, ValidationError, toIcs, type OfficeDb } from "../crm/store.js";
+import { DEAL_STAGES, toIcs, type OfficeDb } from "../crm/store.js";
+import { ValidationError } from "../../shared/validation.js";
 import { msg } from "../../shared/messages.js";
 
 export interface BusinessDeps {
@@ -56,7 +56,7 @@ export function registerBusinessRoutes(app: Express, d: BusinessDeps): void {
   /** Id nhà cung cấp trong URL phải có trong danh mục; sai → 404 có mã `unknownProvider` (client tự dịch). */
   const providerId = (req: Request, res: Response): string | null => {
     const id = String(req.params.id);
-    if (providerDef(id)) return id;
+    if (d.hub.knows(id)) return id;
     apiError(res, 404, "unknownProvider", { id: id.slice(0, 40) });
     return null;
   };
@@ -68,14 +68,68 @@ export function registerBusinessRoutes(app: Express, d: BusinessDeps): void {
   // ---- Kết nối AI ----
   app.get("/api/ai/status", async (req, res) => {
     try {
-      res.json({ providers: await d.hub.status(req.query.refresh === "1"), anyReady: d.hub.hasProvider() });
+      res.json({ providers: await d.hub.status(req.query.refresh === "1"), anyReady: d.hub.hasProvider(), strategy: d.hub.strategy() });
     } catch (e) {
       fail(res, e);
     }
   });
   app.post("/api/ai/refresh", async (_req, res) => {
     try {
-      res.json({ providers: await d.hub.status(true), anyReady: d.hub.hasProvider() });
+      res.json({ providers: await d.hub.status(true), anyReady: d.hub.hasProvider(), strategy: d.hub.strategy() });
+    } catch (e) {
+      fail(res, e);
+    }
+  });
+  // Nút "+ Thêm API": nguồn tuỳ chỉnh (mọi điểm cuối tương thích OpenAI) được gom vào cùng bộ router. Khoá chỉ lưu ở kho khoá 0600.
+  app.post("/api/ai/custom/check", async (req, res) => {
+    if (!loopbackOnly(req, res)) return;
+    res.json(await d.hub.check(req.body));
+  });
+  app.post("/api/ai/custom", async (req, res) => {
+    if (!loopbackOnly(req, res)) return;
+    try {
+      const added = await d.hub.addCustom(req.body);
+      d.audit.append("ai.provider.add", "user", { provider: added.id, label: added.label, host: new URL(added.baseUrl).host, hasKey: added.hasKey });
+      res.json(added);
+    } catch (e) {
+      fail(res, e);
+    }
+  });
+  app.patch("/api/ai/custom/:id", async (req, res) => {
+    if (!loopbackOnly(req, res)) return;
+    try {
+      const updated = await d.hub.updateCustom(String(req.params.id), req.body);
+      d.audit.append("ai.provider.edit", "user", { provider: updated.id, label: updated.label, host: new URL(updated.baseUrl).host });
+      res.json(updated);
+    } catch (e) {
+      fail(res, e);
+    }
+  });
+  app.delete("/api/ai/custom/:id", async (req, res) => {
+    if (!loopbackOnly(req, res)) return;
+    try {
+      await d.hub.removeCustom(String(req.params.id));
+      d.audit.append("ai.provider.remove", "user", { provider: String(req.params.id).slice(0, 60) });
+      res.json({ ok: true });
+    } catch (e) {
+      fail(res, e);
+    }
+  });
+  app.put("/api/ai/order", (req, res) => {
+    if (!loopbackOnly(req, res)) return;
+    const order = (req.body as { order?: unknown } | undefined)?.order;
+    if (!Array.isArray(order) || order.length > 100) return apiError(res, 400, "badRequest");
+    d.hub.setOrder(order);
+    d.audit.append("ai.order", "user", { count: order.length });
+    res.json({ ok: true });
+  });
+  app.put("/api/ai/strategy", (req, res) => {
+    if (!loopbackOnly(req, res)) return;
+    try {
+      const strategy = (req.body as { strategy?: unknown } | undefined)?.strategy;
+      d.hub.setStrategy(strategy);
+      d.audit.append("ai.strategy", "user", { strategy: String(strategy) });
+      res.json({ ok: true, strategy: d.hub.strategy() });
     } catch (e) {
       fail(res, e);
     }
@@ -295,7 +349,7 @@ export function registerBusinessRoutes(app: Express, d: BusinessDeps): void {
       emergency: d.emergency(),
       lan: d.lan,
       db: { ok: dbOk },
-      ai: { ready: ready.length > 0, providers: ready.map((p) => p.id), total: providers.length },
+      ai: { ready: ready.length > 0, providers: ready.map((p) => p.id), names: ready.map((p) => p.label), total: providers.length },
       pendingActions: d.gate.list().length,
     });
   });

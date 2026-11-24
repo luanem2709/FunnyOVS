@@ -12,6 +12,7 @@ import { buildRoomDecor, registerNightLight } from "./decor.js";
 import { floorKindFor, floorMaterial } from "./floors.js";
 import type { OfficeEntity } from "../../shared/officeEntity.js";
 import { paintBadge, type BadgeInfo } from "./workboard.js";
+import { buildWorkstation, type DeskStyle } from "./workstation.js";
 
 export interface RoomDef {
   id: string;
@@ -95,8 +96,15 @@ export function buildRoomShell(parent: THREE.Object3D, room: RoomDef, manifest: 
   return floor;
 }
 
-/** Bàn + ghế + màn hình đặt tại vị trí ngồi của một agent. */
-export function buildAgentDesk(parent: THREE.Object3D, at: { x: number; z: number }, manifest: Manifest | null): void {
+/**
+ * Bàn + ghế + màn hình đặt tại vị trí ngồi của một agent. Có `style` → bàn CHIBI (assets/workstation.ts: bo tròn mềm, màu phòng, món đồ riêng,
+ * gộp theo vật liệu); không có → bản hộp cũ (giao diện cổ điển và model Kenney).
+ */
+export function buildAgentDesk(parent: THREE.Object3D, at: { x: number; z: number }, manifest: Manifest | null, style?: DeskStyle): void {
+  if (style) {
+    buildWorkstation(parent, at, style);
+    return;
+  }
   const l = deskLayout(1, 7)[0];
   const group = new THREE.Group();
   group.position.set(at.x, 0, at.z);

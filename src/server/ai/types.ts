@@ -80,6 +80,8 @@ export interface ProviderDef {
   /** Số nhỏ = ưu tiên cao. */
   priority: number;
   signupUrl?: string;
+  /** Do người dùng thêm (không thuộc danh mục dựng sẵn). */
+  custom?: boolean;
 }
 
 /** Nhà cung cấp đã được phân giải sẵn sàng để gọi. */

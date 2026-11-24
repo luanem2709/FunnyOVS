@@ -8,7 +8,7 @@
  * Xem NOTICE.md.
  */
 
-import { FACILITIES, solidRects, type FacilityDef } from "../../shared/facilities.js";
+import { BUILDING, FACILITIES, solidRects, type FacilityDef } from "../../shared/facilities.js";
 
 export type Point = [number, number];
 
@@ -245,6 +245,18 @@ export function buildOfficeNavGrid(
     for (const r of solidRects(f)) grid.blockRect(r.x, r.z, r.w, r.d, 0, 0.1);
   }
   for (const seat of seats) grid.blockRect(seat.x, seat.z + 0.62, 1.7, 0.86, 0, 0.1);
+  // tường ngoài toà nhà (chừa cửa chính ở tường nam)
+  const T = BUILDING.wall;
+  const dl = BUILDING.door.x - BUILDING.door.w / 2;
+  const dr = BUILDING.door.x + BUILDING.door.w / 2;
+  const wallRects: Array<[number, number, number, number]> = [
+    [(BUILDING.x0 + BUILDING.x1) / 2, BUILDING.z0, BUILDING.x1 - BUILDING.x0 + T, T],
+    [(BUILDING.x0 + dl) / 2, BUILDING.z1, dl - BUILDING.x0 + T, T],
+    [(dr + BUILDING.x1) / 2, BUILDING.z1, BUILDING.x1 - dr + T, T],
+    [BUILDING.x0, (BUILDING.z0 + BUILDING.z1) / 2, T, BUILDING.z1 - BUILDING.z0 + T],
+    [BUILDING.x1, (BUILDING.z0 + BUILDING.z1) / 2, T, BUILDING.z1 - BUILDING.z0 + T],
+  ];
+  for (const [x, z, w, d] of wallRects) grid.blockRect(x, z, w, d, 0, 0.1);
   grid.blockRect(PLAZA.fountain.x, PLAZA.fountain.z, PLAZA.fountain.half * 2, PLAZA.fountain.half * 2, 0, 0.1);
   for (const b of PLAZA.benches) grid.blockRect(b.x, b.z, b.w, b.d, b.rot, 0.1);
   return grid;
