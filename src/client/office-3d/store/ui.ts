@@ -5,7 +5,7 @@
 import { create } from "zustand";
 import { stepKey } from "../lib/roving.js";
 
-export const TABS = ["org", "ai", "crm", "log", "overview"] as const;
+export const TABS = ["org", "ai", "crm", "log", "overview", "whatif"] as const;
 export type Tab = (typeof TABS)[number];
 
 /**

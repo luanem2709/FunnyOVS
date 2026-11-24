@@ -1,0 +1,315 @@
+{
+ "slug": "copy-paste",
+ "title": "WHAT IF YOU COULD COPY AND PASTE ANYTHING?",
+ "fps": 30,
+ "total": 693,
+ "segments": [
+  {
+   "shot": "S1",
+   "a": 0,
+   "b": 31,
+   "t0": 0,
+   "t1": 31,
+   "line": "Copy a cookie.",
+   "look": "copy"
+  },
+  {
+   "shot": "S2",
+   "a": 31,
+   "b": 55,
+   "t0": 0,
+   "t1": 24,
+   "line": "Paste.",
+   "look": "paste"
+  },
+  {
+   "shot": "S3",
+   "a": 55,
+   "b": 102,
+   "t0": 0,
+   "t1": 47,
+   "line": "Free cookies, forever."
+  },
+  {
+   "shot": "S4",
+   "a": 102,
+   "b": 141,
+   "t0": 0,
+   "t1": 39,
+   "line": "Copy your homework.",
+   "look": "copy"
+  },
+  {
+   "shot": "S5",
+   "a": 141,
+   "b": 187,
+   "t0": 0,
+   "t1": 46,
+   "line": "Paste. Done.",
+   "look": "paste"
+  },
+  {
+   "shot": "S6",
+   "a": 187,
+   "b": 228,
+   "t0": 0,
+   "t1": 41,
+   "line": "Copy your best friend.",
+   "look": "copy"
+  },
+  {
+   "shot": "S7",
+   "a": 228,
+   "b": 253,
+   "t0": 0,
+   "t1": 25,
+   "line": "Paste.",
+   "look": "paste"
+  },
+  {
+   "shot": "S8",
+   "a": 253,
+   "b": 298,
+   "t0": 0,
+   "t1": 45,
+   "line": "Okay, that's weird."
+  },
+  {
+   "shot": "S9",
+   "a": 298,
+   "b": 364,
+   "t0": 0,
+   "t1": 66,
+   "line": "What if you could copy and paste anything?"
+  },
+  {
+   "shot": "S10",
+   "a": 364,
+   "b": 391,
+   "t0": 0,
+   "t1": 27,
+   "line": "One catch:"
+  },
+  {
+   "shot": "S11",
+   "a": 391,
+   "b": 444,
+   "t0": 0,
+   "t1": 53,
+   "line": "a copy can't come from nothing."
+  },
+  {
+   "shot": "S12",
+   "a": 444,
+   "b": 506,
+   "t0": 0,
+   "t1": 62,
+   "line": "One cookie, made from pure energy,"
+  },
+  {
+   "shot": "S13",
+   "a": 506,
+   "b": 595,
+   "t0": 0,
+   "t1": 89,
+   "line": "needs every power plant on Earth running for over ten minutes."
+  },
+  {
+   "shot": "S14",
+   "a": 595,
+   "b": 620,
+   "t0": 0,
+   "t1": 25,
+   "line": "That's real."
+  },
+  {
+   "shot": "S15",
+   "a": 620,
+   "b": 693,
+   "t0": 0,
+   "t1": 73,
+   "line": "So where are yours coming from?"
+  }
+ ],
+ "shots": [
+  {
+   "id": "S1",
+   "size": "medium",
+   "key": 22,
+   "len": 31,
+   "first": 0,
+   "line": "Copy a cookie.",
+   "note": "Pip at the counter points at a cookie on a plate; a selection box draws round it"
+  },
+  {
+   "id": "S2",
+   "size": "macro insert, high angle",
+   "key": 20,
+   "len": 24,
+   "first": 31,
+   "line": "Paste.",
+   "note": "a second cookie pops in beside the first, with a flash ring"
+  },
+  {
+   "id": "S3",
+   "size": "wide",
+   "key": 30,
+   "len": 47,
+   "first": 55,
+   "line": "Free cookies, forever.",
+   "note": "cookies paste themselves along the counter in rows; Pip cheers, the cat looks up"
+  },
+  {
+   "id": "S4",
+   "size": "top-down insert",
+   "key": 22,
+   "len": 39,
+   "first": 102,
+   "line": "Copy your homework.",
+   "note": "a finished worksheet (A+) next to a blank one; the box selects the finished sheet"
+  },
+  {
+   "id": "S5",
+   "size": "medium",
+   "key": 30,
+   "len": 46,
+   "first": 141,
+   "line": "Paste. Done.",
+   "note": "a stack of finished sheets pops onto the desk; Pip leans back, smug"
+  },
+  {
+   "id": "S6",
+   "size": "medium wide",
+   "key": 26,
+   "len": 41,
+   "first": 187,
+   "line": "Copy your best friend.",
+   "note": "Mo waves on the landing by the lit doorway; the box selects Mo"
+  },
+  {
+   "id": "S7",
+   "size": "two-shot",
+   "key": 20,
+   "len": 25,
+   "first": 228,
+   "line": "Paste.",
+   "note": "a second Mo pops in; the two Mos turn and stare at each other"
+  },
+  {
+   "id": "S8",
+   "size": "close-up",
+   "key": 30,
+   "len": 45,
+   "first": 253,
+   "line": "Okay, that's weird.",
+   "note": "Pip, uneasy; both Mos soft behind him, staring at him"
+  },
+  {
+   "id": "S9",
+   "size": "title, wide",
+   "key": 52,
+   "len": 66,
+   "first": 298,
+   "line": "What if you could copy and paste anything?",
+   "note": "the premise over the city at dusk; Pip on the roof with a stack of cookies"
+  },
+  {
+   "id": "S10",
+   "size": "medium, low angle",
+   "key": 18,
+   "len": 27,
+   "first": 364,
+   "line": "One catch:",
+   "note": "Pip stops mid-bite and looks at the cookie"
+  },
+  {
+   "id": "S11",
+   "size": "macro insert",
+   "key": 30,
+   "len": 53,
+   "first": 391,
+   "line": "a copy can't come from nothing.",
+   "note": "the pasted cookie in his mitten: its outline flickers, a ghost of the selection"
+  },
+  {
+   "id": "S12",
+   "size": "schematic",
+   "key": 60,
+   "len": 62,
+   "first": 444,
+   "line": "One cookie, made from pure energy,",
+   "note": "1 cookie, 30 g, to E = mc2, to 2,700,000,000,000,000 joules counting up"
+  },
+  {
+   "id": "S13",
+   "size": "schematic",
+   "key": 84,
+   "len": 89,
+   "first": 506,
+   "line": "needs every power plant on Earth running for over ten minutes.",
+   "note": "every power plant on Earth lights up; a dial runs past ten minutes to 12:42"
+  },
+  {
+   "id": "S14",
+   "size": "extreme close-up",
+   "key": 14,
+   "len": 25,
+   "first": 595,
+   "line": "That's real.",
+   "note": "Pip, worried; the light starts to turn red"
+  },
+  {
+   "id": "S15",
+   "size": "wide, low angle",
+   "key": 50,
+   "len": 73,
+   "first": 620,
+   "line": "So where are yours coming from?",
+   "note": "the city's lights go out in a sweep toward him, the string lights die; the sky goes red"
+  }
+ ],
+ "fx": [
+  {
+   "kind": "flash",
+   "color": "#DDF2FF",
+   "o": 0.45,
+   "f": 43
+  },
+  {
+   "kind": "flash",
+   "color": "#DDF2FF",
+   "o": 0.45,
+   "f": 239
+  },
+  {
+   "kind": "flash",
+   "color": "#FFF3DC",
+   "f": 298
+  },
+  {
+   "kind": "flash",
+   "color": "#FF3344",
+   "f": 620
+  },
+  {
+   "kind": "shake",
+   "len": 10,
+   "amp": 10,
+   "f": 620
+  },
+  {
+   "kind": "flash",
+   "color": "#DDF2FF",
+   "o": 0.35,
+   "f": 153
+  }
+ ],
+ "audio": {
+  "voiceVol": 0.8,
+  "sfxVol": 0.4551,
+  "musicVol": 0.1067,
+  "voice": "copy-paste/voice.mp3",
+  "sfx": "copy-paste/sfx.mp3",
+  "music": "copy-paste/music.mp3"
+ }
+}

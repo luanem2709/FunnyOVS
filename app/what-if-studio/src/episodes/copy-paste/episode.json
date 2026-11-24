@@ -1,0 +1,549 @@
+{
+ "id": "CopyPaste",
+ "slug": "copy-paste",
+ "topic": "What if you could copy and paste anything?",
+ "title": [
+  "WHAT IF YOU COULD",
+  "COPY AND PASTE ANYTHING?"
+ ],
+ "accent": "ANYTHING",
+ "power": {
+  "word": "Copy... Paste.",
+  "rule": "anything you can see, as many times as you like",
+  "look": "a selection box with marching ants and a COPY chip; a pop and a flash ring on PASTE"
+ },
+ "script": [
+  {
+   "beat": "1 cold open, demo 1 (small and selfish)",
+   "text": "Copy a cookie. Paste. Free cookies, forever."
+  },
+  {
+   "beat": "1 cold open, demo 2 (useful)",
+   "text": "Copy your homework. Paste. Done."
+  },
+  {
+   "beat": "1 cold open, demo 3 (a little uncanny)",
+   "text": "Copy your best friend. Paste. Okay, that's weird."
+  },
+  {
+   "beat": "2 the premise (title card)",
+   "text": "What if you could copy and paste anything?"
+  },
+  {
+   "beat": "4 the turn: the cost, one real fact",
+   "text": "One catch: a copy can't come from nothing. One cookie, made from pure energy, needs every power plant on Earth running for over ten minutes. That's real."
+  },
+  {
+   "beat": "5-7 folded into a question",
+   "text": "So where are yours coming from?"
+  }
+ ],
+ "science": [
+  {
+   "claim": "One cookie made from pure energy needs every power plant on Earth running for over ten minutes.",
+   "working": "A 30 g cookie: E = mc^2 = 0.030 kg x (2.998e8 m/s)^2 = 2.70e15 J. The world's power plants generated 29,925 TWh of electricity in 2023 (about 31,000 TWh in 2025), an average output of 3.4 to 3.5e12 W. 2.70e15 J / 3.5e12 W = 760 s, about 12.7 minutes (13.2 at 2023's output). Over ten minutes holds for any cookie heavier than about 24 g. The on-screen schematic states the 30 g.",
+   "source": "E = mc^2 (mass-energy equivalence); Ember, Global Electricity Review 2024 (world generation 2023: 29,925 TWh)"
+  },
+  {
+   "claim": "A copy can't come from nothing.",
+   "working": "Conservation of mass-energy: matter can't be created without the equivalent energy, so every pasted object needs its mass-energy from somewhere.",
+   "source": "Conservation of energy; mass-energy equivalence"
+  }
+ ],
+ "cast": [
+  "pipHood",
+  "mo"
+ ],
+ "shots": [
+  {
+   "id": "S1",
+   "size": "medium",
+   "set": "kitchen",
+   "key": 22,
+   "note": "Pip at the counter points at a cookie on a plate; a selection box draws round it"
+  },
+  {
+   "id": "S2",
+   "size": "macro insert, high angle",
+   "set": "kitchen (worktop)",
+   "key": 20,
+   "note": "a second cookie pops in beside the first, with a flash ring"
+  },
+  {
+   "id": "S3",
+   "size": "wide",
+   "set": "kitchen",
+   "key": 30,
+   "note": "cookies paste themselves along the counter in rows; Pip cheers, the cat looks up"
+  },
+  {
+   "id": "S4",
+   "size": "top-down insert",
+   "set": "study (desk top)",
+   "key": 22,
+   "note": "a finished worksheet (A+) next to a blank one; the box selects the finished sheet"
+  },
+  {
+   "id": "S5",
+   "size": "medium",
+   "set": "study",
+   "key": 30,
+   "note": "a stack of finished sheets pops onto the desk; Pip leans back, smug"
+  },
+  {
+   "id": "S6",
+   "size": "medium wide",
+   "set": "stairwell (upper landing)",
+   "key": 26,
+   "note": "Mo waves on the landing by the lit doorway; the box selects Mo"
+  },
+  {
+   "id": "S7",
+   "size": "two-shot",
+   "set": "stairwell (upper landing)",
+   "key": 20,
+   "note": "a second Mo pops in; the two Mos turn and stare at each other"
+  },
+  {
+   "id": "S8",
+   "size": "close-up",
+   "set": "stairwell",
+   "key": 30,
+   "note": "Pip, uneasy; both Mos soft behind him, staring at him"
+  },
+  {
+   "id": "S9",
+   "size": "title, wide",
+   "set": "rooftop",
+   "key": 52,
+   "note": "the premise over the city at dusk; Pip on the roof with a stack of cookies"
+  },
+  {
+   "id": "S10",
+   "size": "medium, low angle",
+   "set": "rooftop",
+   "key": 18,
+   "note": "Pip stops mid-bite and looks at the cookie"
+  },
+  {
+   "id": "S11",
+   "size": "macro insert",
+   "set": "rooftop",
+   "key": 30,
+   "note": "the pasted cookie in his mitten: its outline flickers, a ghost of the selection"
+  },
+  {
+   "id": "S12",
+   "size": "schematic",
+   "set": "schematic",
+   "key": 60,
+   "note": "1 cookie, 30 g, to E = mc2, to 2,700,000,000,000,000 joules counting up"
+  },
+  {
+   "id": "S13",
+   "size": "schematic",
+   "set": "schematic",
+   "key": 84,
+   "note": "every power plant on Earth lights up; a dial runs past ten minutes to 12:42"
+  },
+  {
+   "id": "S14",
+   "size": "extreme close-up",
+   "set": "rooftop",
+   "key": 14,
+   "note": "Pip, worried; the light starts to turn red"
+  },
+  {
+   "id": "S15",
+   "size": "wide, low angle",
+   "set": "rooftop",
+   "key": 50,
+   "note": "the city's lights go out in a sweep toward him, the string lights die; the sky goes red"
+  }
+ ],
+ "edit": [
+  {
+   "shot": "S1",
+   "at": "Copy",
+   "look": "copy"
+  },
+  {
+   "shot": "S2",
+   "at": "Paste",
+   "look": "paste"
+  },
+  {
+   "shot": "S3",
+   "at": "Free"
+  },
+  {
+   "shot": "S4",
+   "at": "Copy",
+   "look": "copy"
+  },
+  {
+   "shot": "S5",
+   "at": "Paste",
+   "look": "paste"
+  },
+  {
+   "shot": "S6",
+   "at": "Copy",
+   "look": "copy"
+  },
+  {
+   "shot": "S7",
+   "at": "Paste",
+   "look": "paste"
+  },
+  {
+   "shot": "S8",
+   "at": "Okay"
+  },
+  {
+   "shot": "S9",
+   "at": "What"
+  },
+  {
+   "shot": "S10",
+   "at": "One"
+  },
+  {
+   "shot": "S11",
+   "at": "a"
+  },
+  {
+   "shot": "S12",
+   "at": "One"
+  },
+  {
+   "shot": "S13",
+   "at": "needs"
+  },
+  {
+   "shot": "S14",
+   "at": "That's"
+  },
+  {
+   "shot": "S15",
+   "at": "So"
+  }
+ ],
+ "tail": 1.0,
+ "fx": [
+  {
+   "at": "S2+12",
+   "kind": "flash",
+   "color": "#DDF2FF",
+   "o": 0.45
+  },
+  {
+   "at": "S7+11",
+   "kind": "flash",
+   "color": "#DDF2FF",
+   "o": 0.45
+  },
+  {
+   "at": "S9",
+   "kind": "flash",
+   "color": "#FFF3DC"
+  },
+  {
+   "at": "S15",
+   "kind": "flash",
+   "color": "#FF3344"
+  },
+  {
+   "at": "S15",
+   "kind": "shake",
+   "len": 10,
+   "amp": 10
+  },
+  {
+   "at": "S5+12",
+   "kind": "flash",
+   "color": "#DDF2FF",
+   "o": 0.35
+  }
+ ],
+ "sound": {
+  "clips": {
+   "sparkle": [
+    "a short bright magical sparkle twinkle, cartoon",
+    0.8
+   ],
+   "pop": [
+    "a cartoon speech bubble pop, short and bright",
+    0.5
+   ],
+   "cat_chirp": [
+    "a cat making a short curious chirp meow",
+    0.6
+   ],
+   "title_boom": [
+    "a cinematic whoosh rising into a deep boom impact",
+    1.6
+   ],
+   "drone_hit": [
+    "a dark ominous low drone hit, deep cinematic horror sting",
+    2.6
+   ],
+   "bulb_pop": [
+    "a small light bulb popping out, a tiny glass tink and fizz",
+    0.5
+   ],
+   "room_tone": [
+    "quiet indoor room tone in the evening, faint distant city hum, no voices",
+    12.5
+   ],
+   "roof_wind": [
+    "a gentle evening breeze on a city rooftop, distant traffic",
+    7.0
+   ],
+   "music": [
+    "playful quirky cartoon background music, pizzicato strings, glockenspiel and soft bass, light and curious, 110 bpm, no vocals",
+    17.0
+   ],
+   "select_draw": [
+    "a quick digital selection sound, a soft rising electronic shimmer as a box is drawn on screen, short",
+    0.6
+   ],
+   "copy_click": [
+    "a crisp satisfying computer copy click with a tiny soft digital chime, short",
+    0.5
+   ],
+   "paste_pop": [
+    "a bright magical pop as an object appears out of thin air, a soft shimmering whoosh into a pop",
+    0.7
+   ],
+   "paper_land": [
+    "a thick stack of paper sheets dropped flat on a wooden desk, a soft slap and rustle",
+    0.7
+   ],
+   "gasp": [
+    "two young people gasping in surprise at the same moment, cartoon, short",
+    0.8
+   ],
+   "gulp": [
+    "a nervous cartoon gulp, short",
+    0.5
+   ],
+   "cookie_crunch": [
+    "one crunchy bite into a chocolate chip cookie, close up",
+    0.6
+   ],
+   "glitch": [
+    "a short digital glitch, an electric buzz and crackle flickering like an unstable hologram",
+    1.5
+   ],
+   "counter_tick": [
+    "a fast mechanical counter ticking up rapidly, digits rolling over, getting faster",
+    1.6
+   ],
+   "power_hum": [
+    "a deep electrical power grid hum swelling louder, transformers buzzing, rising",
+    3.0
+   ],
+   "power_down": [
+    "a whole city losing power, a deep electrical power-down whine dropping in pitch into silence",
+    2.5
+   ],
+   "switch_off": [
+    "a heavy electrical breaker switching off with a dull clunk",
+    0.5
+   ]
+  },
+  "events": [
+   [
+    "S1",
+    "room_tone",
+    0.12,
+    "onset",
+    "S9"
+   ],
+   [
+    "S1+8",
+    "select_draw",
+    0.3
+   ],
+   [
+    "S1+16",
+    "copy_click",
+    0.45
+   ],
+   [
+    "S2+12",
+    "paste_pop",
+    0.6
+   ],
+   [
+    "S2+15",
+    "sparkle",
+    0.25
+   ],
+   [
+    "S3+7",
+    "cat_chirp",
+    0.25
+   ],
+   [
+    "S4+6",
+    "select_draw",
+    0.3
+   ],
+   [
+    "S4+14",
+    "copy_click",
+    0.45
+   ],
+   [
+    "S5+12",
+    "paste_pop",
+    0.55
+   ],
+   [
+    "S5+14",
+    "paper_land",
+    0.5
+   ],
+   [
+    "S5+16",
+    "sparkle",
+    0.2
+   ],
+   [
+    "S6+10",
+    "select_draw",
+    0.3
+   ],
+   [
+    "S6+18",
+    "copy_click",
+    0.45
+   ],
+   [
+    "S7+11",
+    "paste_pop",
+    0.6
+   ],
+   [
+    "S7+16",
+    "gasp",
+    0.4
+   ],
+   [
+    "S9",
+    "title_boom",
+    0.35,
+    "peak"
+   ],
+   [
+    "S9",
+    "roof_wind",
+    0.16,
+    "onset"
+   ],
+   [
+    "S10",
+    "cookie_crunch",
+    0.3
+   ],
+   [
+    "S11+2",
+    "glitch",
+    0.18,
+    "onset",
+    "S12"
+   ],
+   [
+    "S12+3",
+    "pop",
+    0.18
+   ],
+   [
+    "S12+24",
+    "counter_tick",
+    0.16,
+    "onset",
+    "S13"
+   ],
+   [
+    "S13+4",
+    "power_hum",
+    0.12,
+    "onset",
+    "S14"
+   ],
+   [
+    "S15",
+    "drone_hit",
+    0.3
+   ],
+   [
+    "S15+8",
+    "power_down",
+    0.14
+   ],
+   [
+    "S15+48",
+    "switch_off",
+    0.3
+   ]
+  ],
+  "repeats": [
+   {
+    "at": "S3+2",
+    "clip": "pop",
+    "n": 8,
+    "every": 3,
+    "gain": [
+     0.05,
+     0.1
+    ],
+    "pitch": [
+     0.9,
+     1.3
+    ],
+    "note": "the counter stacks pasting in (COUNTER_COOKIES: at 2 + 3i)"
+   },
+   {
+    "at": "S3+5",
+    "clip": "pop",
+    "n": 7,
+    "every": 3,
+    "gain": [
+     0.05,
+     0.1
+    ],
+    "pitch": [
+     0.8,
+     1.15
+    ],
+    "note": "the island stacks (ISLAND_COOKIES: at 5 + 3i)"
+   },
+   {
+    "at": "S15+48",
+    "clip": "bulb_pop",
+    "n": 10,
+    "every": 2,
+    "gain": [
+     0.14,
+     0.26
+    ],
+    "pitch": [
+     0.85,
+     1.18
+    ],
+    "note": "the string lights die after the last word (lightsOut from t 48 over 20 frames)"
+   }
+  ],
+  "music": {
+   "clip": "music",
+   "until": "S10"
+  },
+  "levels": {
+   "sfx_lu": -1.5,
+   "music_lu": -9.5
+  }
+ }
+}

@@ -19,3 +19,12 @@ studio/**/timing.json
 studio/**/*.mp4
 studio/**/*.wav
 studio/**/*.jpg
+
+# What-If Studio (ShotBuilder engine): bỏ output render, giữ toàn bộ source
+app/what-if-studio/out/
+app/what-if-studio/node_modules/
+app/what-if-studio/.cache/
+whatif/**/frames/
+whatif/**/*.mp4
+whatif/**/*.wav
+whatif/**/*.pyc

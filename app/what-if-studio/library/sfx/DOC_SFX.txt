@@ -1,0 +1,5 @@
+Bo SFX chuyen canh co san cua Shot Builder (dung tu do, ke ca kenh kiem tien):
+  - cac file .wav o thu muc nay va thu muc sb_pack: tu tao bang thuat toan, khong ban quyen.
+  - thu muc whatif_pack: bo SFX cua du an what-if-animation (giay phep MIT, xem LICENSE trong thu muc do).
+Tool chon SFX theo TEN file (whoosh, swoosh, boom, impact, glitch, riser, swell, pop, boing, click, door, ding, sparkle, heart...).
+Them SFX cua ban: bam "+ Them SFX..." trong tool (file duoc chep vao thu muc "them" va duoc uu tien dung truoc).

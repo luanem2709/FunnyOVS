@@ -45,6 +45,7 @@ import { registerEconomyRoutes } from "./routes/economy.js";
 import { StudioService } from "./studio/service.js";
 import { createRunner, findKitDir } from "./studio/runner.js";
 import { registerStudioRoutes } from "./routes/studio.js";
+import { registerWhatIfRoutes } from "./routes/whatif.js";
 import { Scheduler } from "./schedule/scheduler.js";
 import { runCursorAgent } from "./budget/cursorAgent.js";
 import { getCursorAuth } from "./budget/cursorAuth.js";
@@ -995,6 +996,8 @@ registerBusinessRoutes(app, {
 });
 registerEconomyRoutes(app, { economy, isLoopback: (req) => auth.isLoopback(req) });
 if (studio) registerStudioRoutes(app, { studio, isLoopback: (req) => auth.isLoopback(req) });
+// ---- What-If Studio (ShotBuilder engine tích hợp) — render không tốn token AI
+registerWhatIfRoutes(app, { workspace: () => configStore.get().workspace, isLoopback: (req) => auth.isLoopback(req) });
 gate.on("request", (r) => broadcast("action:request", r));
 gate.on("decided", (r) => {
   broadcast("action:decided", r);

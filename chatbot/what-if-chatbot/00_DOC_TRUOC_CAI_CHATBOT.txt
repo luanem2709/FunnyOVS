@@ -1,0 +1,65 @@
+WHAT IF STUDIO - BO TAI LIEU HUAN LUYEN CHATBOT CHO SHOT BUILDER
+================================================================
+
+Chatbot lam duoc gi
+- Bam "Bat dau": chatbot xin file danh sach tool (boi canh, nhan vat, do vat... dang co trong Shot Builder cua ban)
+  va file nhat ky kenh (neu co) de khong lap y tuong.
+- Dua 10 y tuong co cham diem -> ban chon -> viet kich ban theo cau truc giu chan, cham 100 diem, tu sua.
+- Giao 3 file: <ten>_tts.txt (kich ban), <ten>_canh.json (file canh), cai_dat_shot_builder.bat (boi canh / do vat /
+  nhan vat moi ma tool chua co - bam dup la tu cai vao tool, khong can mo tool).
+- Huong dan cach dung 3 file (2 cach lam giong), roi hoi co lam luon tieu de, mo ta, tag, thumbnail khong.
+- Luu nhat ky kenh (file NHAT_KY_KENH.txt) de lan sau khong trung y tuong.
+
+Dung duoc voi moi ban Shot Builder. Rieng boi canh / do vat / nhan vat moi can goi cai Shot Builder ban moi (1.6 tro len).
+Ban cu thi chatbot tu biet (qua file danh sach) va chi dung do co san.
+
+TRONG THU MUC NAY
+  1_HUONG_DAN_CHATBOT_dan_vao_o_Instructions.txt  -> dan vao o "Instructions / Huong dan" cua chatbot
+  2_TAI_LIEU_KNOWLEDGE\  (10 file)                 -> tai len muc "Knowledge / Kien thuc / Files" cua chatbot
+  3_CHO_KHACH\                                     -> file cho nguoi dung tool (khong tai len chatbot)
+      XUAT_DANH_SACH_TOOL.bat         CHI DOC tool, tao file danh sach gui chatbot (gui file nay cho khach cung link chatbot)
+      MAU_bo_sung_san_thuong\cai_dat_shot_builder.bat  goi bo sung mau (san thuong ngay/dem, dong ho cat, 2 nhan vat)
+
+CAI VAO CHATGPT (can goi ChatGPT Plus tro len de tao GPT rieng)
+ 1. chatgpt.com > Explore GPTs (Kham pha GPT) > + Create > tab Configure.
+ 2. Name: What If Studio. Description: Viet kich ban What If + file canh cho Shot Builder.
+ 3. Instructions: mo file 1_HUONG_DAN_CHATBOT_dan_vao_o_Instructions.txt, chep TOAN BO, dan vao.
+ 4. Conversation starters: "Bat dau".
+ 5. Knowledge > Upload files: chon ca 10 file trong 2_TAI_LIEU_KNOWLEDGE.
+ 6. Capabilities: BAT "Code Interpreter & Data Analysis" (de tao file tai ve + kiem tra file canh),
+    BAT "Image Generation" (tao anh thumbnail), BAT "Web Search" (kiem tra su that).
+ 7. Create > chon "Anyone with the link" neu muon gui link cho khach / ban be dung chung.
+    Nguoi dung qua link KHONG can tai lieu nay, chi can Shot Builder + file XUAT_DANH_SACH_TOOL.bat.
+
+CAI VAO GEMINI (Gem)
+ 1. gemini.google.com > Gems (Kham pha Gem) > New Gem.
+ 2. Name: What If Studio. Instructions: dan toan bo file 1_HUONG_DAN...
+ 3. Knowledge: them 10 file trong 2_TAI_LIEU_KNOWLEDGE (Gem nhan toi da 10 file).
+ 4. Save. Mo Gem, go "Bat dau".
+ Luu y: Gemini thuong khong tao duoc file tai ve: no se in tung file trong khung code, ban luu bang Notepad
+ (Save as type: All files, Encoding UTF-8, dung ten file chatbot ghi).
+
+CAI VAO CLAUDE (Project)
+ 1. claude.ai > Projects > Create project: What If Studio.
+ 2. "Set project instructions": dan toan bo file 1_HUONG_DAN...
+ 3. "Add content" / Project knowledge: tai len 10 file trong 2_TAI_LIEU_KNOWLEDGE.
+ 4. Mo chat moi trong project, go "Bat dau". Claude tao duoc file tai ve.
+
+AI KHAC (Grok, DeepSeek, Copilot...)
+ Dau moi cuoc tro chuyen: dan noi dung file 1_HUONG_DAN..., dinh kem cac file K1..K6 + file mau, roi go "Bat dau".
+
+DUNG HANG NGAY (danh cho nguoi dung tool)
+ 1. Bam dup XUAT_DANH_SACH_TOOL.bat (khong can mo tool, file khong sua gi trong tool)
+    -> file DANH_SACH_TOOL_SHOTBUILDER.txt tren Desktop. Chi can lam lai khi cai them boi canh / cap nhat tool.
+ 2. Mo chatbot, go "Bat dau", keo file DANH_SACH vao chat (+ NHAT_KY_KENH.txt neu chatbot khong nho cac tap cu).
+ 3. Chon y tuong, duyet kich ban, nhan 3 file.
+ 4. Bam dup cai_dat_shot_builder.bat chatbot gui (neu co) -> tat/mo lai Shot Builder.
+ 5. Lam giong: tool giong rieng (xuat .wav/.mp3 + .srt) HOAC bat TTS Studio VIP truoc roi mo Shot Builder, chon "Noi API tool giong noi bo".
+ 6. Shot Builder: buoc 1 chon file txt, buoc 4 "Mo file canh (.json)", bam "Tao Video".
+ 7. Chatbot tu ghi nho cac tap da viet; van giu file NHAT_KY_KENH.txt chatbot gui de du phong.
+
+THU NHANH GOI BO SUNG
+ (Can Shot Builder 1.6 tro len.) Bam dup 3_CHO_KHACH\MAU_bo_sung_san_thuong\cai_dat_shot_builder.bat
+ > tat/mo lai Shot Builder > o "Boi canh" co "Bo sung: San thuong thanh pho", do vat "Bo sung: Dong ho cat",
+ nhan vat "Bo sung: Maya...", "Bo sung: Ong bao ve..." (id x_rooftop, x_hourglass, x_maya, x_ong_bao_ve).
+ Bo goi: xoa file mau_san_thuong.json trong C:\ShotBuilder\what-if-studio\library\bo_sung.

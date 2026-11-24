@@ -16,6 +16,7 @@ import { ErrorBoundary } from "./ui/ErrorBoundary.js";
 import { CrmPanel } from "./ui/CrmPanel.js";
 import { OrgPanel } from "./ui/OrgPanel.js";
 import { ApprovalDock, ConnectionBanner, EntityPanel, FlowAnnouncer, LogViewer, OverviewTab, RoomNav } from "./ui/panels.js";
+import { WhatIfPanel } from "./ui/WhatIfPanel.js";
 
 // Cảnh 3D tải lười: máy không có WebGL không phải tải three.js/R3F.
 const OfficeScene = lazy(() => import("./renderer/OfficeScene.js"));
@@ -121,7 +122,7 @@ export function App() {
             </div>
             <div className="tabbody" role="tabpanel" id="tabpanel" aria-labelledby={`tab-${tab}`}>
               <ErrorBoundary inline resetKey={tab}>
-                {tab === "org" ? <OrgPanel /> : tab === "ai" ? <AiPanel /> : tab === "crm" ? <CrmPanel /> : tab === "log" ? <LogViewer /> : <OverviewTab />}
+                {tab === "org" ? <OrgPanel /> : tab === "ai" ? <AiPanel /> : tab === "crm" ? <CrmPanel /> : tab === "log" ? <LogViewer /> : tab === "whatif" ? <WhatIfPanel /> : <OverviewTab />}
               </ErrorBoundary>
             </div>
           </div>

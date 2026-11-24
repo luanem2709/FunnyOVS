@@ -362,3 +362,20 @@ html[data-motion="reduced"] *::after { animation-duration: 0.001ms !important; a
 .studiovideo { width: 100%; max-height: 220px; margin-top: 4px; border-radius: 6px; background: #000; }
 .studiostills { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; margin-top: 6px; }
 .studiostills img { width: 100%; border-radius: 4px; }
+
+/* ---- What-If Studio panel (ShotBuilder tích hợp) ---- */
+.whatif-panel { margin: 10px 0; }
+.whatif-panel h3 { margin: 0 0 4px; font-size: 14px; }
+.whatif-panel h4 { margin: 10px 0 4px; font-size: 12px; opacity: 0.85; }
+.wi-step { cursor: pointer; font-size: 12px; padding: 6px 0; user-select: none; }
+.wi-body { padding: 8px 0 8px 10px; }
+.wi-script { width: 100%; box-sizing: border-box; resize: vertical; min-height: 90px; padding: 6px; border: 1px solid var(--line, #30363d); border-radius: 6px; background: transparent; color: inherit; font-size: 12px; font-family: inherit; }
+.wi-json-preview { margin: 4px 0; }
+.wi-progress { margin: 8px 0; }
+.wi-output { margin-top: 10px; }
+.wi-output video { width: 100%; max-height: 220px; border-radius: 6px; background: #000; }
+.wi-download { display: inline-block; margin-top: 6px; font-size: 12px; }
+details summary::-webkit-details-marker { display: none; }
+details > summary { list-style: none; }
+details > summary::before { content: "▶ "; font-size: 10px; opacity: 0.6; }
+details[open] > summary::before { content: "▼ "; }

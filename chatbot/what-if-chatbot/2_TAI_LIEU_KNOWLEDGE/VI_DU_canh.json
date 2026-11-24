@@ -1,0 +1,1545 @@
+{
+ "title": "What if you could pause time for 10 seconds a day?",
+ "kit": "pop",
+ "grade": "pop",
+ "motion": "muot",
+ "hero": {
+  "cast": "nam",
+  "color": "#FF7A45",
+  "accent": "#FFE3C8"
+ },
+ "shots": [
+  {
+   "stt": 1,
+   "sent": 1,
+   "line": "Your alarm clock freezes in midair.",
+   "set": "bedroom2",
+   "cam": "close",
+   "actors": [
+    {
+     "spot": 0.5,
+     "facing": "front",
+     "pose": "sit",
+     "expr": "sleepy",
+     "expr2": "shock",
+     "at": 0.5
+    }
+   ],
+   "trans": "fade",
+   "move": "crash",
+   "props": [
+    {
+     "type": "alarm",
+     "spot": 0.62,
+     "on": "floor",
+     "dy": 180,
+     "text": "07:00"
+    }
+   ],
+   "power": {
+    "kind": "pause",
+    "label": "PAUSED"
+   },
+   "sfx": "alarm cut off"
+  },
+  {
+   "stt": 2,
+   "sent": 2,
+   "line": "So does your cat.",
+   "set": "bedroom2",
+   "cam": "wide",
+   "actors": [
+    {
+     "spot": 0.3,
+     "facing": "right",
+     "pose": "sit",
+     "expr": "shock"
+    }
+   ],
+   "props": [
+    {
+     "type": "cat",
+     "spot": 0.6,
+     "on": "floor",
+     "dy": 180,
+     "size": 1.3
+    }
+   ],
+   "power": {
+    "kind": "pause",
+    "label": "PAUSED"
+   },
+   "move": "zoom_in",
+   "ui": [
+    {
+     "type": "tag",
+     "text": "FROZEN CAT"
+    }
+   ]
+  },
+  {
+   "stt": 3,
+   "sent": 3,
+   "line": "So does the entire planet.",
+   "set": "street",
+   "cam": "wide",
+   "actors": [],
+   "crowd": 14,
+   "crowdMood": "walk",
+   "power": {
+    "kind": "pause",
+    "label": "PAUSED"
+   },
+   "move": "zoom_out",
+   "trans": "whip",
+   "sfx": "whoosh"
+  },
+  {
+   "stt": 4,
+   "sent": 4,
+   "line": "Everyone except you.",
+   "set": "street",
+   "cam": "medium",
+   "actors": [
+    {
+     "spot": 0.5,
+     "facing": "front",
+     "pose": "look_around",
+     "expr": "wow"
+    }
+   ],
+   "crowd": 10,
+   "crowdMood": "walk",
+   "power": {
+    "kind": "pause",
+    "label": "PAUSED"
+   }
+  },
+  {
+   "stt": 5,
+   "sent": 5,
+   "line": "Ten seconds later,",
+   "set": "bedroom2",
+   "cam": "medium",
+   "actors": [
+    {
+     "spot": 0.5,
+     "facing": "front",
+     "pose": "sit",
+     "expr": "wow"
+    }
+   ],
+   "props": [
+    {
+     "type": "cat",
+     "spot": 0.5,
+     "on": "floor",
+     "dy": 260
+    }
+   ],
+   "ui": [
+    {
+     "type": "toast",
+     "text": "10 SECONDS"
+    }
+   ],
+   "trans": "slideleft"
+  },
+  {
+   "stt": 6,
+   "sent": 5,
+   "line": "the world snaps back.",
+   "set": "bedroom2",
+   "cam": "medium",
+   "actors": [
+    {
+     "spot": 0.5,
+     "facing": "front",
+     "pose": "sit",
+     "expr": "wow",
+     "expr2": "shock",
+     "at": 0.5
+    }
+   ],
+   "move": "handheld",
+   "sfx": "snap"
+  },
+  {
+   "stt": 7,
+   "sent": 6,
+   "line": "Your cat lands on your face.",
+   "set": "bedroom2",
+   "cam": "xclose",
+   "actors": [
+    {
+     "spot": 0.5,
+     "facing": "front",
+     "pose": "fall",
+     "expr": "dizzy"
+    }
+   ],
+   "props": [
+    {
+     "type": "cat",
+     "spot": 0.5,
+     "on": "floor",
+     "dy": 300,
+     "size": 1.4
+    }
+   ],
+   "ui": [
+    {
+     "type": "pow",
+     "text": "FLOMP!"
+    }
+   ],
+   "move": "crash",
+   "trans": "shake",
+   "sfx": "cat yowl"
+  },
+  {
+   "stt": 8,
+   "sent": 7,
+   "line": "So, what if you could pause time",
+   "set": "burst",
+   "cam": "wide",
+   "actors": [
+    {
+     "spot": 0.5,
+     "facing": "front",
+     "pose": "arms_up",
+     "expr": "excited",
+     "glint": true
+    }
+   ],
+   "trans": "flash",
+   "ui": [
+    {
+     "type": "title",
+     "text": "WHAT IF YOU COULD PAUSE TIME",
+     "text2": "FOR 10 SECONDS A DAY?",
+     "accent": "10 SECONDS"
+    }
+   ],
+   "sfx": "title boom"
+  },
+  {
+   "stt": 9,
+   "sent": 7,
+   "line": "for ten seconds a day?",
+   "set": "burst",
+   "cam": "close",
+   "actors": [
+    {
+     "spot": 0.5,
+     "facing": "front",
+     "pose": "cheer",
+     "expr": "grin",
+     "glint": true
+    }
+   ],
+   "power": {
+    "kind": "pause",
+    "label": "PAUSED"
+   }
+  },
+  {
+   "stt": 10,
+   "sent": 8,
+   "line": "Rule one.",
+   "set": "schematic",
+   "cam": "wide",
+   "actors": [],
+   "trans": "glitch",
+   "ui": [
+    {
+     "type": "toast",
+     "text": "RULE 1"
+    },
+    {
+     "type": "label",
+     "text": "PAUSE TIME",
+     "x": 960,
+     "y": 540
+    }
+   ],
+   "sfx": "glitch"
+  },
+  {
+   "stt": 11,
+   "sent": 9,
+   "line": "Ten seconds. Not eleven.",
+   "set": "schematic",
+   "cam": "close",
+   "actors": [],
+   "ui": [
+    {
+     "type": "count",
+     "to": 10,
+     "text": "SECONDS MAX"
+    }
+   ]
+  },
+  {
+   "stt": 12,
+   "sent": 10,
+   "line": "Rule two.",
+   "set": "schematic",
+   "cam": "wide",
+   "actors": [],
+   "ui": [
+    {
+     "type": "toast",
+     "text": "RULE 2"
+    },
+    {
+     "type": "label",
+     "text": "THERE IS A PRICE",
+     "x": 960,
+     "y": 540
+    }
+   ]
+  },
+  {
+   "stt": 13,
+   "sent": 11,
+   "line": "Every time you use it,",
+   "set": "schematic",
+   "cam": "close",
+   "actors": [],
+   "ui": [
+    {
+     "type": "count",
+     "to": 1,
+     "text": "PAUSE"
+    }
+   ]
+  },
+  {
+   "stt": 14,
+   "sent": 11,
+   "line": "you lose one minute of memory.",
+   "set": "schematic",
+   "cam": "wide",
+   "actors": [],
+   "ui": [
+    {
+     "type": "count",
+     "to": 1,
+     "text": "MINUTE OF MEMORY LOST"
+    }
+   ],
+   "move": "zoom_in",
+   "red": 0.3
+  },
+  {
+   "stt": 15,
+   "sent": 12,
+   "line": "You think, that's nothing.",
+   "set": "bedroom2",
+   "cam": "medium",
+   "actors": [
+    {
+     "spot": 0.5,
+     "facing": "front",
+     "pose": "shrug",
+     "expr": "smug"
+    }
+   ],
+   "trans": "glitch"
+  },
+  {
+   "stt": 16,
+   "sent": 13,
+   "line": "Spoiler. It's not nothing.",
+   "set": "bedroom2",
+   "cam": "close",
+   "actors": [
+    {
+     "spot": 0.5,
+     "facing": "front",
+     "pose": "shrug",
+     "expr": "smug",
+     "expr2": "worried",
+     "at": 0.4
+    }
+   ],
+   "move": "crash",
+   "ui": [
+    {
+     "type": "exclaim",
+     "who": 0,
+     "at": 0.4
+    }
+   ],
+   "red": 0.4
+  },
+  {
+   "stt": 17,
+   "sent": 14,
+   "line": "Day one, you test it at school.",
+   "set": "dodgeball",
+   "cam": "wide",
+   "actors": [
+    {
+     "spot": 0.25,
+     "facing": "right",
+     "pose": "walk",
+     "expr": "determined",
+     "to": 0.45
+    }
+   ],
+   "board": "DAY 1",
+   "trans": "fade",
+   "crowd": 10,
+   "crowdMood": "watch",
+   "ui": [
+    {
+     "type": "toast",
+     "text": "DAY 1"
+    }
+   ],
+   "move": "follow"
+  },
+  {
+   "stt": 18,
+   "sent": 15,
+   "line": "Hung throws a basketball",
+   "set": "dodgeball",
+   "cam": "medium",
+   "actors": [
+    {
+     "spot": 0.3,
+     "facing": "right",
+     "pose": "throw",
+     "expr": "evil",
+     "cast": "hung"
+    },
+    {
+     "spot": 0.75,
+     "facing": "left",
+     "pose": "stand",
+     "expr": "oops",
+     "cast": "tuan"
+    }
+   ],
+   "props": [
+    {
+     "type": "basketball",
+     "spot": 0.55,
+     "dy": 200,
+     "at": 0.4
+    }
+   ],
+   "move": "two"
+  },
+  {
+   "stt": 19,
+   "sent": 15,
+   "line": "at Tuan's head.",
+   "set": "dodgeball",
+   "cam": "close",
+   "actors": [
+    {
+     "spot": 0.5,
+     "facing": "front",
+     "pose": "recoil",
+     "expr": "scared",
+     "cast": "tuan"
+    }
+   ],
+   "props": [
+    {
+     "type": "basketball",
+     "spot": 0.42,
+     "dy": 330,
+     "size": 1.6
+    }
+   ],
+   "move": "crash"
+  },
+  {
+   "stt": 20,
+   "sent": 16,
+   "line": "Pause.",
+   "set": "dodgeball",
+   "cam": "wide",
+   "actors": [
+    {
+     "spot": 0.5,
+     "facing": "front",
+     "pose": "hand_up",
+     "expr": "determined",
+     "glint": true
+    },
+    {
+     "spot": 0.2,
+     "facing": "right",
+     "pose": "throw",
+     "expr": "evil",
+     "cast": "hung"
+    },
+    {
+     "spot": 0.82,
+     "facing": "left",
+     "pose": "recoil",
+     "expr": "scared",
+     "cast": "tuan"
+    }
+   ],
+   "power": {
+    "kind": "pause",
+    "label": "PAUSED"
+   },
+   "props": [
+    {
+     "type": "basketball",
+     "spot": 0.68,
+     "dy": 230
+    }
+   ],
+   "sfx": "freeze"
+  },
+  {
+   "stt": 21,
+   "sent": 17,
+   "line": "You walk over,",
+   "set": "dodgeball",
+   "cam": "medium",
+   "actors": [
+    {
+     "spot": 0.3,
+     "facing": "right",
+     "pose": "sneak",
+     "expr": "smug",
+     "to": 0.6
+    }
+   ],
+   "power": {
+    "kind": "pause",
+    "label": "PAUSED"
+   },
+   "props": [
+    {
+     "type": "basketball",
+     "spot": 0.7,
+     "dy": 230
+    }
+   ],
+   "move": "follow"
+  },
+  {
+   "stt": 22,
+   "sent": 17,
+   "line": "turn the ball around,",
+   "set": "dodgeball",
+   "cam": "close",
+   "actors": [
+    {
+     "spot": 0.45,
+     "facing": "front",
+     "pose": "hold",
+     "expr": "smug"
+    }
+   ],
+   "props": [
+    {
+     "type": "basketball",
+     "spot": 0.56,
+     "dy": 250,
+     "size": 1.3
+    }
+   ],
+   "power": {
+    "kind": "pause",
+    "label": "PAUSED"
+   },
+   "move": "zoom_in"
+  },
+  {
+   "stt": 23,
+   "sent": 17,
+   "line": "and point it back at Hung.",
+   "set": "dodgeball",
+   "cam": "medium",
+   "actors": [
+    {
+     "spot": 0.6,
+     "facing": "left",
+     "pose": "point",
+     "expr": "evil"
+    },
+    {
+     "spot": 0.25,
+     "facing": "right",
+     "pose": "throw",
+     "expr": "evil",
+     "cast": "hung"
+    }
+   ],
+   "power": {
+    "kind": "pause",
+    "label": "PAUSED"
+   }
+  },
+  {
+   "stt": 24,
+   "sent": 18,
+   "line": "Play.",
+   "set": "dodgeball",
+   "cam": "close",
+   "actors": [
+    {
+     "spot": 0.5,
+     "facing": "front",
+     "pose": "throw",
+     "expr": "evil",
+     "expr2": "shock",
+     "at": 0.5,
+     "cast": "hung"
+    }
+   ],
+   "sfx": "whoosh"
+  },
+  {
+   "stt": 25,
+   "sent": 19,
+   "line": "Bonk.",
+   "set": "dodgeball",
+   "cam": "close",
+   "actors": [
+    {
+     "spot": 0.5,
+     "facing": "front",
+     "pose": "faint",
+     "expr": "dizzy",
+     "cast": "hung"
+    }
+   ],
+   "ui": [
+    {
+     "type": "pow",
+     "text": "BONK!"
+    },
+    {
+     "type": "dizzy",
+     "who": 0
+    }
+   ],
+   "move": "crash",
+   "trans": "comic",
+   "sfx": "boing"
+  },
+  {
+   "stt": 26,
+   "sent": 20,
+   "line": "Tuan stares at you like you're a wizard.",
+   "set": "dodgeball",
+   "cam": "medium",
+   "actors": [
+    {
+     "spot": 0.65,
+     "facing": "left",
+     "pose": "stand",
+     "expr": "wow",
+     "cast": "tuan"
+    },
+    {
+     "spot": 0.32,
+     "facing": "right",
+     "pose": "hands_hips",
+     "expr": "cool"
+    }
+   ],
+   "move": "two",
+   "ui": [
+    {
+     "type": "sparkle",
+     "who": 1
+    }
+   ]
+  },
+  {
+   "stt": 27,
+   "sent": 21,
+   "line": "Day three, you use it on a math test.",
+   "set": "classroom2",
+   "cam": "wide",
+   "actors": [
+    {
+     "spot": 0.5,
+     "facing": "front",
+     "pose": "sit",
+     "expr": "nervous"
+    }
+   ],
+   "board": "MATH TEST",
+   "crowd": 12,
+   "crowdMood": "idle",
+   "trans": "iris",
+   "ui": [
+    {
+     "type": "toast",
+     "text": "DAY 3"
+    }
+   ]
+  },
+  {
+   "stt": 28,
+   "sent": 22,
+   "line": "Ten seconds is not enough to solve anything.",
+   "set": "classroom2",
+   "cam": "close",
+   "actors": [
+    {
+     "spot": 0.5,
+     "facing": "front",
+     "pose": "think",
+     "expr": "confused",
+     "glint": true
+    }
+   ],
+   "power": {
+    "kind": "pause",
+    "label": "PAUSED"
+   },
+   "ui": [
+    {
+     "type": "question",
+     "who": 0
+    }
+   ],
+   "props": [
+    {
+     "type": "paper",
+     "spot": 0.5,
+     "on": "surface",
+     "text": "Q7 = ?"
+    }
+   ]
+  },
+  {
+   "stt": 29,
+   "sent": 23,
+   "line": "But it is enough to read",
+   "set": "classroom2",
+   "cam": "medium",
+   "actors": [
+    {
+     "spot": 0.35,
+     "facing": "right",
+     "pose": "peek",
+     "expr": "smug"
+    },
+    {
+     "spot": 0.65,
+     "facing": "left",
+     "pose": "sit",
+     "expr": "thinking",
+     "cast": "minh"
+    }
+   ],
+   "power": {
+    "kind": "pause",
+    "label": "PAUSED"
+   },
+   "move": "two"
+  },
+  {
+   "stt": 30,
+   "sent": 23,
+   "line": "Minh's answer for question seven.",
+   "set": "classroom2",
+   "cam": "insert",
+   "actors": [],
+   "props": [
+    {
+     "type": "paper",
+     "spot": 0.5,
+     "text": "Q7: 42",
+     "size": 2
+    }
+   ],
+   "power": {
+    "kind": "pause",
+    "label": "PAUSED"
+   },
+   "move": "zoom_in",
+   "ui": [
+    {
+     "type": "tag",
+     "text": "QUESTION 7"
+    }
+   ]
+  },
+  {
+   "stt": 31,
+   "sent": 24,
+   "line": "You get a ninety-four.",
+   "set": "classroom2",
+   "cam": "close",
+   "actors": [
+    {
+     "spot": 0.5,
+     "facing": "front",
+     "pose": "fist_pump",
+     "expr": "proud"
+    }
+   ],
+   "props": [
+    {
+     "type": "paper",
+     "spot": 0.7,
+     "text": "94 A",
+     "dy": 150
+    }
+   ],
+   "ui": [
+    {
+     "type": "toast",
+     "text": "94 / 100"
+    }
+   ],
+   "sfx": "ding"
+  },
+  {
+   "stt": 32,
+   "sent": 25,
+   "line": "Minh gets a ninety-four too,",
+   "set": "classroom2",
+   "cam": "medium",
+   "actors": [
+    {
+     "spot": 0.5,
+     "facing": "front",
+     "pose": "hold",
+     "expr": "confused",
+     "cast": "minh"
+    }
+   ],
+   "props": [
+    {
+     "type": "paper",
+     "spot": 0.62,
+     "text": "94 A",
+     "dy": 150
+    }
+   ]
+  },
+  {
+   "stt": 33,
+   "sent": 25,
+   "line": "and he looks at you weird.",
+   "set": "classroom2",
+   "cam": "close",
+   "actors": [
+    {
+     "spot": 0.5,
+     "facing": "profile-right",
+     "pose": "stand",
+     "expr": "suspicious",
+     "cast": "minh"
+    }
+   ],
+   "move": "zoom_in"
+  },
+  {
+   "stt": 34,
+   "sent": 26,
+   "line": "Then Linh drops her phone at lunch.",
+   "set": "cafeteria",
+   "cam": "wide",
+   "actors": [
+    {
+     "spot": 0.5,
+     "facing": "front",
+     "pose": "reach",
+     "expr": "shock",
+     "cast": "linh"
+    }
+   ],
+   "props": [
+    {
+     "type": "phone",
+     "spot": 0.52,
+     "dy": 120
+    }
+   ],
+   "crowd": 14,
+   "crowdMood": "talk",
+   "trans": "slide",
+   "fx2": 0
+  },
+  {
+   "stt": 35,
+   "sent": 27,
+   "line": "Pause.",
+   "set": "cafeteria",
+   "cam": "medium",
+   "actors": [
+    {
+     "spot": 0.3,
+     "facing": "right",
+     "pose": "hand_up",
+     "expr": "determined",
+     "glint": true
+    },
+    {
+     "spot": 0.7,
+     "facing": "left",
+     "pose": "reach",
+     "expr": "shock",
+     "cast": "linh"
+    }
+   ],
+   "power": {
+    "kind": "pause",
+    "label": "PAUSED"
+   },
+   "props": [
+    {
+     "type": "phone",
+     "spot": 0.68,
+     "dy": 90
+    }
+   ],
+   "sfx": "freeze"
+  },
+  {
+   "stt": 36,
+   "sent": 28,
+   "line": "You catch it, one inch from the floor.",
+   "set": "cafeteria",
+   "cam": "insert",
+   "actors": [],
+   "props": [
+    {
+     "type": "phone",
+     "spot": 0.5,
+     "dy": 20,
+     "size": 2
+    }
+   ],
+   "power": {
+    "kind": "pause",
+    "label": "PAUSED"
+   },
+   "ui": [
+    {
+     "type": "tag",
+     "text": "1 INCH"
+    }
+   ],
+   "move": "crash"
+  },
+  {
+   "stt": 37,
+   "sent": 29,
+   "line": "Play.",
+   "set": "cafeteria",
+   "cam": "medium",
+   "actors": [
+    {
+     "spot": 0.35,
+     "facing": "right",
+     "pose": "catch",
+     "expr": "cool"
+    },
+    {
+     "spot": 0.65,
+     "facing": "left",
+     "pose": "stand",
+     "expr": "wow",
+     "cast": "linh"
+    }
+   ],
+   "move": "two",
+   "sfx": "whoosh"
+  },
+  {
+   "stt": 38,
+   "sent": 30,
+   "line": "She thinks you have the fastest reflexes on Earth.",
+   "set": "cafeteria",
+   "cam": "close",
+   "actors": [
+    {
+     "spot": 0.5,
+     "facing": "front",
+     "pose": "clap",
+     "expr": "love",
+     "cast": "linh"
+    }
+   ],
+   "ui": [
+    {
+     "type": "hearts",
+     "who": 0
+    }
+   ]
+  },
+  {
+   "stt": 39,
+   "sent": 31,
+   "line": "She says, \"Coffee after school?\"",
+   "set": "cafeteria",
+   "cam": "medium",
+   "actors": [
+    {
+     "spot": 0.65,
+     "facing": "left",
+     "pose": "talk",
+     "expr": "shy",
+     "cast": "linh"
+    },
+    {
+     "spot": 0.35,
+     "facing": "right",
+     "pose": "stand",
+     "expr": "shock"
+    }
+   ],
+   "move": "two",
+   "ui": [
+    {
+     "type": "bubble",
+     "text": "Coffee after school?",
+     "who": 0
+    }
+   ]
+  },
+  {
+   "stt": 40,
+   "sent": 32,
+   "line": "Your heart is louder than the cafeteria.",
+   "set": "cafeteria",
+   "cam": "xclose",
+   "actors": [
+    {
+     "spot": 0.5,
+     "facing": "front",
+     "pose": "stand",
+     "expr": "love"
+    }
+   ],
+   "ui": [
+    {
+     "type": "hearts",
+     "who": 0
+    }
+   ],
+   "move": "zoom_in",
+   "trans": "heart",
+   "sfx": "heartbeat"
+  },
+  {
+   "stt": 41,
+   "sent": 33,
+   "line": "Here's a real fact.",
+   "set": "schematic",
+   "cam": "wide",
+   "actors": [],
+   "trans": "glitch",
+   "ui": [
+    {
+     "type": "toast",
+     "text": "REAL FACT"
+    },
+    {
+     "type": "label",
+     "text": "HUMAN BLINKING",
+     "x": 960,
+     "y": 540
+    }
+   ]
+  },
+  {
+   "stt": 42,
+   "sent": 34,
+   "line": "The average person blinks",
+   "set": "schematic",
+   "cam": "wide",
+   "actors": [],
+   "ui": [
+    {
+     "type": "count",
+     "to": 15,
+     "text": "BLINKS PER MINUTE"
+    }
+   ]
+  },
+  {
+   "stt": 43,
+   "sent": 34,
+   "line": "about fifteen times a minute.",
+   "set": "schematic",
+   "cam": "wide",
+   "actors": [],
+   "ui": [
+    {
+     "type": "count",
+     "to": 15,
+     "text": "BLINKS PER MINUTE"
+    },
+    {
+     "type": "label",
+     "text": "AVERAGE HUMAN",
+     "x": 960,
+     "y": 700
+    }
+   ]
+  },
+  {
+   "stt": 44,
+   "sent": 35,
+   "line": "You've been pausing so much,",
+   "set": "schoolhall",
+   "cam": "medium",
+   "actors": [
+    {
+     "spot": 0.5,
+     "facing": "front",
+     "pose": "stand",
+     "expr": "crazy"
+    }
+   ],
+   "trans": "glitch",
+   "crowd": 8,
+   "crowdMood": "idle"
+  },
+  {
+   "stt": 45,
+   "sent": 35,
+   "line": "you stopped blinking in public.",
+   "set": "schoolhall",
+   "cam": "xclose",
+   "actors": [
+    {
+     "spot": 0.5,
+     "facing": "front",
+     "pose": "stand",
+     "expr": "crazy"
+    }
+   ],
+   "move": "zoom_in",
+   "ui": [
+    {
+     "type": "sweat",
+     "who": 0
+    }
+   ]
+  },
+  {
+   "stt": 46,
+   "sent": 36,
+   "line": "People are starting to notice.",
+   "set": "schoolhall",
+   "cam": "wide",
+   "actors": [
+    {
+     "spot": 0.5,
+     "facing": "front",
+     "pose": "stand",
+     "expr": "crazy"
+    }
+   ],
+   "crowd": 14,
+   "crowdMood": "watch",
+   "move": "zoom_out"
+  },
+  {
+   "stt": 47,
+   "sent": 37,
+   "line": "But that's not the scary part.",
+   "set": "schoolhall",
+   "cam": "close",
+   "actors": [
+    {
+     "spot": 0.5,
+     "facing": "front",
+     "pose": "stand",
+     "expr": "worried"
+    }
+   ],
+   "tod": "sunset",
+   "move": "dutch",
+   "red": 0.3,
+   "sfx": "low drone"
+  },
+  {
+   "stt": 48,
+   "sent": 38,
+   "line": "On day nine, you walk into the cafe.",
+   "set": "cafe",
+   "cam": "wide",
+   "actors": [
+    {
+     "spot": 0.15,
+     "facing": "right",
+     "pose": "walk",
+     "expr": "happy",
+     "to": 0.4
+    }
+   ],
+   "board": "CAFE",
+   "trans": "fade",
+   "ui": [
+    {
+     "type": "toast",
+     "text": "DAY 9"
+    }
+   ],
+   "tod": "sunset",
+   "move": "follow"
+  },
+  {
+   "stt": 49,
+   "sent": 39,
+   "line": "Linh waves at you.",
+   "set": "cafe",
+   "cam": "medium",
+   "actors": [
+    {
+     "spot": 0.65,
+     "facing": "left",
+     "pose": "wave",
+     "expr": "happy",
+     "cast": "linh"
+    },
+    {
+     "spot": 0.35,
+     "facing": "right",
+     "pose": "stand",
+     "expr": "neutral"
+    }
+   ],
+   "tod": "sunset",
+   "move": "two"
+  },
+  {
+   "stt": 50,
+   "sent": 40,
+   "line": "And you have no idea who she is.",
+   "set": "cafe",
+   "cam": "xclose",
+   "actors": [
+    {
+     "spot": 0.5,
+     "facing": "front",
+     "pose": "stand",
+     "expr": "confused"
+    }
+   ],
+   "tod": "sunset",
+   "move": "crash",
+   "ui": [
+    {
+     "type": "question",
+     "who": 0
+    }
+   ],
+   "sfx": "record scratch"
+  },
+  {
+   "stt": 51,
+   "sent": 41,
+   "line": "Nine pauses. Nine minutes. Gone.",
+   "set": "schematic",
+   "cam": "wide",
+   "actors": [],
+   "trans": "pixel",
+   "ui": [
+    {
+     "type": "count",
+     "to": 9,
+     "text": "MINUTES ERASED"
+    }
+   ],
+   "red": 0.5,
+   "sfx": "glitch"
+  },
+  {
+   "stt": 52,
+   "sent": 42,
+   "line": "And one of those minutes",
+   "set": "cafe",
+   "cam": "close",
+   "actors": [
+    {
+     "spot": 0.5,
+     "facing": "front",
+     "pose": "wave",
+     "expr": "happy",
+     "expr2": "sad",
+     "at": 0.6,
+     "cast": "linh"
+    }
+   ],
+   "tod": "sunset"
+  },
+  {
+   "stt": 53,
+   "sent": 42,
+   "line": "was the moment she said yes.",
+   "set": "cafe",
+   "cam": "close",
+   "actors": [
+    {
+     "spot": 0.5,
+     "facing": "front",
+     "pose": "stand",
+     "expr": "sad"
+    }
+   ],
+   "tod": "sunset",
+   "move": "zoom_in",
+   "red": 0.3
+  },
+  {
+   "stt": 54,
+   "sent": 43,
+   "line": "You check your notes app.",
+   "set": "cafe",
+   "cam": "close",
+   "actors": [
+    {
+     "spot": 0.5,
+     "facing": "front",
+     "pose": "hold",
+     "expr": "worried"
+    }
+   ],
+   "props": [
+    {
+     "type": "phone",
+     "spot": 0.6,
+     "dy": 200,
+     "text": "NOTES"
+    }
+   ],
+   "tod": "sunset",
+   "move": "zoom_in"
+  },
+  {
+   "stt": 55,
+   "sent": 44,
+   "line": "Past you wrote one line.",
+   "set": "cafe",
+   "cam": "medium",
+   "actors": [
+    {
+     "spot": 0.5,
+     "facing": "front",
+     "pose": "hold",
+     "expr": "surprised"
+    }
+   ],
+   "tod": "sunset",
+   "ui": [
+    {
+     "type": "tag",
+     "text": "1 NOTE FROM YOU",
+     "who": 0
+    }
+   ]
+  },
+  {
+   "stt": 56,
+   "sent": 45,
+   "line": "\"Don't pause today. Just listen.\"",
+   "set": "cafe",
+   "cam": "close",
+   "actors": [
+    {
+     "spot": 0.5,
+     "facing": "front",
+     "pose": "hold",
+     "expr": "sad",
+     "expr2": "relieved",
+     "at": 0.6
+    }
+   ],
+   "tod": "sunset",
+   "ui": [
+    {
+     "type": "thought",
+     "text": "Don't pause. Just listen.",
+     "who": 0
+    }
+   ]
+  },
+  {
+   "stt": 57,
+   "sent": 46,
+   "line": "So you sit down.",
+   "set": "cafe",
+   "cam": "medium",
+   "actors": [
+    {
+     "spot": 0.35,
+     "facing": "right",
+     "pose": "sit",
+     "expr": "shy"
+    },
+    {
+     "spot": 0.65,
+     "facing": "left",
+     "pose": "sit",
+     "expr": "happy",
+     "cast": "linh"
+    }
+   ],
+   "tod": "sunset",
+   "move": "two"
+  },
+  {
+   "stt": 58,
+   "sent": 47,
+   "line": "You don't pause anything.",
+   "set": "cafe",
+   "cam": "close",
+   "actors": [
+    {
+     "spot": 0.5,
+     "facing": "front",
+     "pose": "sit",
+     "expr": "relieved"
+    }
+   ],
+   "tod": "sunset"
+  },
+  {
+   "stt": 59,
+   "sent": 48,
+   "line": "And for the first time all week,",
+   "set": "cafe",
+   "cam": "medium",
+   "actors": [
+    {
+     "spot": 0.35,
+     "facing": "right",
+     "pose": "sit",
+     "expr": "happy"
+    },
+    {
+     "spot": 0.65,
+     "facing": "left",
+     "pose": "laugh",
+     "expr": "laugh",
+     "cast": "linh"
+    }
+   ],
+   "tod": "night",
+   "move": "two",
+   "trans": "dipwhite"
+  },
+  {
+   "stt": 60,
+   "sent": 48,
+   "line": "ten seconds feels like forever.",
+   "set": "cafe",
+   "cam": "wide",
+   "actors": [
+    {
+     "spot": 0.35,
+     "facing": "right",
+     "pose": "sit",
+     "expr": "love"
+    },
+    {
+     "spot": 0.65,
+     "facing": "left",
+     "pose": "sit",
+     "expr": "love",
+     "cast": "linh"
+    }
+   ],
+   "tod": "night",
+   "move": "zoom_out",
+   "ui": [
+    {
+     "type": "hearts",
+     "who": 0
+    }
+   ]
+  },
+  {
+   "stt": 61,
+   "sent": 49,
+   "line": "Be honest.",
+   "set": "burst",
+   "cam": "close",
+   "actors": [
+    {
+     "spot": 0.5,
+     "facing": "front",
+     "pose": "point",
+     "expr": "smug"
+    }
+   ],
+   "trans": "flash"
+  },
+  {
+   "stt": 62,
+   "sent": 49,
+   "line": "Would you take the power,",
+   "set": "burst",
+   "cam": "medium",
+   "actors": [
+    {
+     "spot": 0.5,
+     "facing": "front",
+     "pose": "shrug",
+     "expr": "thinking",
+     "glint": true
+    }
+   ],
+   "power": {
+    "kind": "pause",
+    "label": "PAUSED"
+   }
+  },
+  {
+   "stt": 63,
+   "sent": 49,
+   "line": "if it cost you your best memories?",
+   "set": "burst",
+   "cam": "medium",
+   "actors": [
+    {
+     "spot": 0.5,
+     "facing": "front",
+     "pose": "shrug",
+     "expr": "thinking"
+    }
+   ],
+   "ui": [
+    {
+     "type": "question",
+     "who": 0
+    }
+   ]
+  },
+  {
+   "stt": 64,
+   "sent": 50,
+   "line": "Comment below.",
+   "set": "burst",
+   "cam": "wide",
+   "actors": [
+    {
+     "spot": 0.5,
+     "facing": "front",
+     "pose": "wave",
+     "expr": "grin"
+    }
+   ],
+   "ui": [
+    {
+     "type": "toast",
+     "text": "COMMENT BELOW"
+    }
+   ]
+  }
+ ]
+}

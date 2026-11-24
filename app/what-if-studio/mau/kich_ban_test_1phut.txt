@@ -1,0 +1,127 @@
+# KICH BAN TEST ~1 PHUT: "What if you could hear everyone's thoughts?"
+# Cach dung: keo file nay vao "Chay hang loat (keo file vao day).bat" (hoac dan vao Shot Builder,
+# bam "Moi dong 1 canh / JSON"). Dong bat dau bang # la ghi chu, tool bo qua.
+# Moi canh co: thoi diem bat dau | LOI DOC (giong doc thu trong CapCut) | CHU TREN MAN HINH (tool tu ve) | SFX (them trong CapCut).
+# Su that dung o canh 14: nghien cuu cua Dai hoc Queen's (Canada), Nature Communications 2020, uoc tinh
+# trung binh ~6.200 "thought worms" (luot chuyen y nghi) moi ngay.
+# Tong: 24 canh, ~59.7 giay. Nhac nen goi y: nhac vui nhe (ukulele/pizzicato) den canh 13, chuyen tram tu canh 14.
+
+# [01] 0:00  |  LOI DOC: Every morning starts the same.
+#      CHU: —
+#      SFX: Tiếng ồn lớp học (room tone, nói chuyện lao xao) suốt cảnh; tiếng ngáp dài ở 1.0s
+Classroom in the morning, crowd talking, hero yawns, sleepy, dur=2.8
+
+# [02] 0:03  |  LOI DOC: Until today.
+#      CHU: Dấu ! trên đầu
+#      SFX: Tiếng 'ding' cao + whoosh ngắn khớp lúc zoom giật (0.0s); nhạc nền tắt đột ngột
+Close-up, hero shocked, exclamation, crash zoom, dur=1.8
+
+# [03] 0:04  |  LOI DOC: Your best friend smiles at you…
+#      CHU: Bóng suy nghĩ: "I ate his cookie"
+#      SFX: Tiếng 'pop' khi bóng suy nghĩ hiện (0.4s); tiếng nhai bánh nhỏ
+Classroom, best friend smiles, thinks "I ate his cookie", hero suspicious, arms crossed, two shot, dur=2.6
+
+# [04] 0:07  |  LOI DOC: …but you hear something else.
+#      CHU: —
+#      SFX: Nhạc nghi ngờ 2 nốt pizzicato; tiếng 'sus' (sting ngắn)
+Extreme close-up, hero suspicious, side eye, dur=1.5
+
+# [05] 0:09  |  LOI DOC: The teacher looks confident…
+#      CHU: Bảng: 7 x 8 = ?  |  Bóng: "I forgot the answer"
+#      SFX: Tiếng phấn viết bảng; 'pop' bóng suy nghĩ (0.5s); tiếng dế kêu (im lặng ngượng)
+Classroom, board: "7 x 8 = ?", teacher points at the board, thinks "I forgot the answer", hero smug, pose=stand, cam=wide, dur=2.6
+
+# [06] 0:11  |  LOI DOC: And the girl you like…
+#      CHU: Bóng: "He's cute"  |  Tim bay
+#      SFX: Tiếng vẫy tay 'swish'; 'pop' bóng; tiếng tim đập 'thump-thump' + chuông nhỏ lấp lánh
+Classroom, crush waves, thinks "He's cute", hero blushes, hearts, pose=stand, dur=2.6
+
+# [07] 0:14  |  LOI DOC: …thinks you're cute.
+#      CHU: —
+#      SFX: Tiếng 'boing' khi đổi sang cười (0.6s)
+Close-up, hero embarrassed, then happy, dur=1.8
+
+# [08] 0:16  |  LOI DOC: What if you could hear everyone's thoughts?
+#      CHU: Tiêu đề lớn
+#      SFX: Whoosh + 'impact' trầm khi chữ hiện; tiếng pháo giấy; nhạc chủ đề vào mạnh
+Reaction shot, title: "What if you could hear everyone's thoughts?", hero cheers, confetti, dur=3.6
+
+# [09] 0:19  |  LOI DOC: At first, it's amazing.
+#      CHU: Nốt nhạc
+#      SFX: Ồn phố, xe chạy ngang (whoosh xe ở 1.0s); tiếng bước chân nhịp đi
+Busy street, people walking by, hero walks to the right, happy, music, pan right, dur=2.8
+
+# [10] 0:22  |  LOI DOC: You know who's bored,
+#      CHU: Bóng: "5 more minutes..."
+#      SFX: Tiếng máy quét mã vạch 'beep' x2; tiếng ngáp; tiếng cười khúc khích
+Supermarket, cashier yawns, thinks "5 more minutes...", hero laughs, pose=laugh, dur=2.4
+
+# [11] 0:24  |  LOI DOC: who's lying,
+#      CHU: Bóng: "Easy money"  |  Dấu !
+#      SFX: Nhạc rón rén (tiptoe pizzicato); 'pop' bóng; sting 'dun!' khi dấu ! hiện
+Supermarket, thief sneaks, thinks "Easy money", hero shocked, pose=stand, exclamation, cam=medium, dur=2.4
+
+# [12] 0:27  |  LOI DOC: and who's about to steal.
+#      CHU: —
+#      SFX: Còi cảnh sát; tiếng chạy dồn dập; đám đông la hét
+Street, the thief runs away, police chases him, crowd panics, hero points, pose=point, expr=shock, dur=2.6
+
+# [13] 0:29  |  LOI DOC: You're a hero.
+#      CHU: —
+#      SFX: Đám đông reo hò, vỗ tay; tiếng 'flex' (căng cơ kiểu hoạt hình) ở 0.5s
+Park, huge crowd cheers, hero flexes, proud, dur=2.6
+
+# [14] 0:32  |  LOI DOC: But the average person has about 6,200 thoughts a day.
+#      CHU: Số đếm 6,200 + nhãn
+#      SFX: Tiếng số chạy 'tick-tick' nhanh rồi 'ding' khi dừng; nhạc chuyển sang tông nghiêm
+Diagram, count 6200 thoughts per day, dur=3.6
+
+# [15] 0:35  |  LOI DOC: And you hear all of them.
+#      CHU: —
+#      SFX: Lớp lớp tiếng thì thầm chồng lên nhau, to dần; tiếng ù tai cao
+Street at sunset, crowd talking, hero hides, nervous, sweat, handheld, dur=2.6
+
+# [16] 0:38  |  LOI DOC: All. The. Time.
+#      CHU: Dấu tức giận
+#      SFX: Tiếng hét méo + rung; tiếng 'tea kettle' rít (bốc khói)
+Close-up, hero rage, shake, red, dur=1.8
+
+# [17] 0:40  |  LOI DOC: You can't sleep.
+#      CHU: —
+#      SFX: Tiếng mưa rơi, sấm xa; đồng hồ tích tắc to
+Bedroom at night, rain, hero lies down in bed, tired, dur=2.8
+
+# [18] 0:43  |  LOI DOC: Even the people who love you…
+#      CHU: Bóng: "Is he okay?"
+#      SFX: Tiếng mưa nhỏ dần qua cửa sổ; piano buồn 1 nốt
+Living room at night, mom looks worried, thinks "Is he okay?", hero sad, pose=stand, dur=2.4
+
+# [19] 0:45  |  LOI DOC: …are worried about you.
+#      CHU: —
+#      SFX: Tiếng sụt sịt; piano buồn tiếp
+Close-up, hero cries, dur=1.8
+
+# [20] 0:47  |  LOI DOC: So you go somewhere quiet.
+#      CHU: Lá rơi
+#      SFX: Gió nhẹ, chim sáng sớm, lá xào xạc; nhạc gần như im
+Park at dawn, leaves falling, hero sits on the bench, sad, zoom out, dur=3
+
+# [21] 0:50  |  LOI DOC: Then she sits next to you.
+#      CHU: Bóng thoại: "Are you okay?"
+#      SFX: Bước chân trên cỏ; 'pop' mềm khi bóng thoại hiện
+Park at dawn, hero sits on the bench, crush walks in and says "Are you okay?", dur=2.8
+
+# [22] 0:53  |  LOI DOC: And you try to listen…
+#      CHU: Dấu ?
+#      SFX: Im lặng hoàn toàn 0.5s (cắt hết tiếng nền) — rất quan trọng; rồi 'hmm?' sting nhỏ
+Close-up, hero confused, question, dur=2
+
+# [23] 0:55  |  LOI DOC: …
+#      CHU: —
+#      SFX: Tiếng 'ting' lấp lánh khi nháy mắt
+Extreme close-up, cast=linh, winks, dur=1.6
+
+# [24] 0:56  |  LOI DOC: Her mind is completely silent.
+#      CHU: Tiêu đề lớn
+#      SFX: Sting 'DUN DUN' + whoosh zoom giật; nhạc cliffhanger dừng gắt; 0.3s im lặng cuối
+Reaction shot, title: "Her mind is completely silent...", hero shocked, crash zoom, dur=3.2
